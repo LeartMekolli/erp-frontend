@@ -44,6 +44,11 @@ yarn-error.log*
 /.superpowers/
 /.impeccable/
 
+# playwright
+/playwright-report/
+/test-results/
+/blob-report/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
