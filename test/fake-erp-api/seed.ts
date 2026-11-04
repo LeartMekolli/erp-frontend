@@ -9,6 +9,8 @@ import type { MeResponse } from "../../src/lib/api/schema-types";
 export const FAKE_API_URL = "http://localhost:4010";
 export const WORKSPACE = "demo";
 export const TENANT_ID = "8d3a6a1e-4f5b-4c2d-9a7e-1b2c3d4e5f60";
+/** The demo workspace as erp-api's seed creates it (`src/cli/seed.ts:37-44`). */
+export const WORKSPACE_INFO = { id: TENANT_ID, slug: WORKSPACE, name: "Demo", default_currency: "EUR", timezone: "UTC" };
 export const FAKE_PASSWORD = "fake-password-1";
 
 export const NORTHCAST_ID = "2f1c5d7e-0a9b-4e3c-8d2f-6a5b4c3d2e10";

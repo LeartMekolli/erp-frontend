@@ -9,6 +9,7 @@ import {
   USED_TOKEN,
   USERS,
   WORKSPACE,
+  WORKSPACE_INFO,
   type FakeUser,
 } from "./seed";
 
@@ -137,7 +138,9 @@ export function createFakeState(now: () => number = Date.now) {
 
     me(user: FakeUser): MeResponse {
       return {
+        kind: user.kind,
         user: { id: user.id, email: user.email, name: user.name, status: "active", locale: "en", created_at: "2026-01-05T09:00:00.000Z" },
+        workspace: WORKSPACE_INFO,
         roles: user.permissions.length ? [{ id: "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a80", name: "Owner" }] : [],
         permissions: user.permissions,
         memberships:

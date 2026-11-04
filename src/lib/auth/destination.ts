@@ -10,22 +10,25 @@ export type Destination =
 const partnerHome = (partnerId: string) => `/partner-portal/${partnerId}`;
 
 /**
- * Where someone goes after sign-in, from `GET /me` (spec §4b).
- *
- * erp-api's `/me` doesn't return the user's kind yet (`backend-todos.md`), so
- * this reads it from memberships. Switch to `kind` when the API adds it.
+ * Where someone goes after sign-in, from `GET /me` (spec §4b). `kind` decides
+ * the area; a partner with no workshops left, or staff with no permissions,
+ * has no access.
  */
 export function resolveDestination(me: MeResponse): Destination {
-  const partnerIds = me.memberships
-    .filter((m) => m.organisation_type === "partner")
-    .map((m) => m.organisation_id);
-  const isCustomer = me.memberships.some((m) => m.organisation_type === "customer");
-
-  if (partnerIds.length === 1) return { kind: "partner", partnerId: partnerIds[0]!, path: partnerHome(partnerIds[0]!) };
-  if (partnerIds.length > 1) return { kind: "choose-partner", partnerIds, path: "/partner-portal" };
-  if (isCustomer) return { kind: "customer" };
-  if (me.memberships.length === 0 && me.permissions.length > 0) return { kind: "staff", path: "/" };
-  return { kind: "no-access" };
+  switch (me.kind) {
+    case "customer":
+      return { kind: "customer" };
+    case "partner": {
+      const partnerIds = me.memberships
+        .filter((m) => m.organisation_type === "partner")
+        .map((m) => m.organisation_id);
+      if (partnerIds.length === 1) return { kind: "partner", partnerId: partnerIds[0]!, path: partnerHome(partnerIds[0]!) };
+      if (partnerIds.length > 1) return { kind: "choose-partner", partnerIds, path: "/partner-portal" };
+      return { kind: "no-access" };
+    }
+    case "staff":
+      return me.permissions.length > 0 ? { kind: "staff", path: "/" } : { kind: "no-access" };
+  }
 }
 
 /** The destination's page, or null for someone who can't use AMI. */

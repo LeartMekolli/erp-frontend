@@ -100,8 +100,16 @@ describe("fake erp-api state", () => {
   it("describes each kind of user on /me", () => {
     const s = createFakeState();
     const staff = s.authenticate(tokens(s.login(WORKSPACE, STAFF.email, FAKE_PASSWORD)).access_token)!;
-    expect(s.me(staff)).toMatchObject({ memberships: [], permissions: expect.arrayContaining(["order.read"]) });
+    expect(s.me(staff)).toMatchObject({
+      kind: "staff",
+      workspace: { slug: WORKSPACE, name: "Demo", default_currency: "EUR", timezone: "UTC" },
+      memberships: [],
+      permissions: expect.arrayContaining(["order.read"]),
+    });
+    const partner = s.authenticate(tokens(s.login(WORKSPACE, PARTNER.email, FAKE_PASSWORD)).access_token)!;
+    expect(s.me(partner).kind).toBe("partner");
     const customer = s.authenticate(tokens(s.login(WORKSPACE, CUSTOMER.email, FAKE_PASSWORD)).access_token)!;
+    expect(s.me(customer)).toMatchObject({ kind: "customer" });
     expect(s.me(customer).memberships).toEqual([expect.objectContaining({ organisation_type: "customer" })]);
   });
 

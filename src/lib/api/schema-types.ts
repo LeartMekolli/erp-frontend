@@ -8,7 +8,7 @@ type JsonOk<P extends keyof paths, M extends "get" | "post"> = paths[P][M] exten
   ? Body
   : never;
 
-/** `GET /me`: the signed-in user, roles, permissions and memberships. */
+/** `GET /me`: the signed-in user's kind, workspace, roles, permissions and memberships. */
 export type MeResponse = JsonOk<"/me", "get">;
 
 /** `GET /partner-portal/me`: a partner person and the partners they act for. */

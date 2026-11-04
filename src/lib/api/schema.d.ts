@@ -114,6 +114,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/invitations/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What an invitation link is: staff, partner or customer, who it is for, and what it joins.
+         * @description The token is the one in the invitation email link; `kind` says which accept route takes it. An accepted or expired invitation still answers, with its `status`. A token the API never issued, or one of a suspended workspace, answers 404.
+         *
+         *     Access: public.
+         */
+        get: operations["AuthController_previewInvitation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/customer-invitations/accept": {
         parameters: {
             query?: never;
@@ -4240,8 +4262,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The caller's own user, roles, permissions and memberships.
-         * @description Access: any signed-in user.
+         * The caller's own kind, user, workspace, roles, permissions and memberships.
+         * @description `kind` says where the caller works (staff, partner or customer), whatever memberships they have left. `workspace` gives the name, currency and time zone screens show dates and money in.
+         *
+         *     Access: any signed-in user.
          */
         get: operations["MeController_me"];
         put?: never;
@@ -6728,6 +6752,51 @@ export interface operations {
             };
             /** @description Conflict with the current state */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    AuthController_previewInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        kind: "staff" | "partner" | "customer";
+                        /** @enum {string} */
+                        status: "pending" | "accepted" | "expired";
+                        email: string;
+                        role: string;
+                        workspace: {
+                            name: string;
+                        };
+                        organisation: {
+                            name: string;
+                        } | null;
+                        has_account: boolean;
+                    };
+                };
+            };
+            /** @description Not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -27193,6 +27262,8 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        /** @enum {string} */
+                        kind: "staff" | "partner" | "customer";
                         user: {
                             /** Format: uuid */
                             id: string;
@@ -27201,6 +27272,14 @@ export interface operations {
                             status: string;
                             locale: string;
                             created_at: string;
+                        };
+                        workspace: {
+                            /** Format: uuid */
+                            id: string;
+                            slug: string;
+                            name: string;
+                            default_currency: string;
+                            timezone: string;
                         };
                         roles: {
                             /** Format: uuid */

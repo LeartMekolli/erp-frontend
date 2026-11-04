@@ -8,11 +8,14 @@ const A = "2f1c5d7e-0a9b-4e3c-8d2f-6a5b4c3d2e10";
 const B = "7b6a5c4d-3e2f-4a1b-9c8d-0e1f2a3b4c20";
 
 function me(
+  kind: MeResponse["kind"],
   memberships: { organisation_type: string; organisation_id: string }[],
   permissions: MeResponse["permissions"] = [],
 ): MeResponse {
   return {
+    kind,
     user: { id: "u", email: "e@x.test", name: "N", status: "active", locale: "en", created_at: "2026-01-01T00:00:00.000Z" },
+    workspace: { id: "8d3a6a1e-4f5b-4c2d-9a7e-1b2c3d4e5f60", slug: "demo", name: "Demo", default_currency: "EUR", timezone: "UTC" },
     roles: [],
     permissions,
     memberships: memberships.map((m) => ({ ...m, role: "owner" })),
@@ -20,12 +23,18 @@ function me(
 }
 
 describe("resolveDestination", () => {
-  it("turns away someone with only customer memberships", () => {
-    expect(resolveDestination(me([{ organisation_type: "customer", organisation_id: A }]))).toEqual({ kind: "customer" });
+  it("turns away a customer person", () => {
+    expect(resolveDestination(me("customer", [{ organisation_type: "customer", organisation_id: A }]))).toEqual({
+      kind: "customer",
+    });
+  });
+
+  it("turns away a customer person whose memberships were all removed", () => {
+    expect(resolveDestination(me("customer", []))).toEqual({ kind: "customer" });
   });
 
   it("sends a partner with one workshop to its portal", () => {
-    expect(resolveDestination(me([{ organisation_type: "partner", organisation_id: A }]))).toEqual({
+    expect(resolveDestination(me("partner", [{ organisation_type: "partner", organisation_id: A }]))).toEqual({
       kind: "partner",
       partnerId: A,
       path: `/partner-portal/${A}`,
@@ -35,7 +44,7 @@ describe("resolveDestination", () => {
   it("asks a partner with several workshops to choose", () => {
     expect(
       resolveDestination(
-        me([
+        me("partner", [
           { organisation_type: "partner", organisation_id: A },
           { organisation_type: "partner", organisation_id: B },
         ]),
@@ -43,23 +52,16 @@ describe("resolveDestination", () => {
     ).toEqual({ kind: "choose-partner", partnerIds: [A, B], path: "/partner-portal" });
   });
 
-  it("sends someone with no memberships and a permission to the staff home", () => {
-    expect(resolveDestination(me([], ["order.read"]))).toEqual({ kind: "staff", path: "/" });
+  it("gives a partner with no workshops left no access, not the staff area", () => {
+    expect(resolveDestination(me("partner", [], []))).toEqual({ kind: "no-access" });
   });
 
-  it("has no access with no memberships and no permissions", () => {
-    expect(resolveDestination(me([], []))).toEqual({ kind: "no-access" });
+  it("sends staff with a permission to the staff home", () => {
+    expect(resolveDestination(me("staff", [], ["order.read"]))).toEqual({ kind: "staff", path: "/" });
   });
 
-  it("treats someone with a customer and a partner membership as a partner", () => {
-    expect(
-      resolveDestination(
-        me([
-          { organisation_type: "customer", organisation_id: B },
-          { organisation_type: "partner", organisation_id: A },
-        ]),
-      ),
-    ).toMatchObject({ kind: "partner", partnerId: A });
+  it("gives staff with no permissions no access", () => {
+    expect(resolveDestination(me("staff", [], []))).toEqual({ kind: "no-access" });
   });
 });
 
