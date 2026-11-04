@@ -1,36 +1,32 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AMI
 
-## Getting Started
+AMI is the operations app for made-to-order production: staff, workspace admins and partner workshops run quotes, orders, production and payouts on the same live data. It is a Next.js app on top of erp-api. Customers never sign in here; they use the workspace's own customer site.
 
-First, run the development server:
+## Environment
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Put these in `.env.local`:
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| Variable | What it is |
+|---|---|
+| `ERP_API_URL` | erp-api's address, used by AMI's server. Local: `http://localhost:3000` |
+| `NEXT_PUBLIC_ERP_API_URL` | The same address, used by the browser |
+| `SESSION_SECRET` | Key that seals the session cookie: `openssl rand -base64 32` |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+erp-api's `CORS_ORIGINS` must include AMI's origin (`http://localhost:3001` locally).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Scripts
 
-## Learn More
+| Command | What it does |
+|---|---|
+| `npm run dev` | AMI on http://localhost:3001 |
+| `npm run build` / `npm start` | Production build and server |
+| `npm test` | Unit and component tests (Vitest) |
+| `npm run e2e` | Browser tests (Playwright) against the fake erp-api |
+| `npm run typecheck` | TypeScript, no output |
+| `npm run lint` | ESLint |
+| `npm run api:types` | Regenerate `src/lib/api/schema.d.ts` from a local erp-api started with `API_DOCS=true` |
+| `npm run fake-api` | The fake erp-api on http://localhost:4010 |
 
-To learn more about Next.js, take a look at the following resources:
+## Against a local erp-api
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Start erp-api on port 3000 with AMI's origin in `CORS_ORIGINS`, keep both URLs above at `http://localhost:3000` and run `npm run dev`. To run the browser tests against it instead of the fake, set `E2E_API_URL=http://localhost:3000` before `npm run e2e`.
