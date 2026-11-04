@@ -34,12 +34,12 @@ export function Field({
       <Label htmlFor={id}>{label}</Label>
       {children({ id, "aria-invalid": Boolean(error), "aria-describedby": describedBy })}
       {error && (
-        <p id={errorId} className="text-[13px] text-late">
+        <p id={errorId} className="text-caption text-late">
           {error}
         </p>
       )}
       {hint && (
-        <p id={hintId} className="text-[13px] text-ink-2">
+        <p id={hintId} className="text-caption text-ink-2">
           {hint}
         </p>
       )}

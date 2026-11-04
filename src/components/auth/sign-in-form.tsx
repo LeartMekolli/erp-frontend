@@ -97,7 +97,7 @@ export function SignInForm({
 
   return (
     <form onSubmit={(event) => handleSubmit(onSubmit)(event)} noValidate className="flex flex-col gap-5">
-      <h1 className="text-[26px] font-semibold tracking-[-0.7px]">Sign in</h1>
+      <h1 className="text-title font-semibold">Sign in</h1>
 
       {error ? <FormMessage tone="error">{error}</FormMessage> : notice && <FormMessage tone="info">{notice}</FormMessage>}
 
@@ -126,7 +126,7 @@ export function SignInForm({
           after={
             <Link
               href={workspace ? `/forgot-password?workspace=${encodeURIComponent(workspace)}` : "/forgot-password"}
-              className="inline-flex min-h-11 items-center self-end text-[13px] font-medium underline underline-offset-[3px]"
+              className="inline-flex min-h-11 items-center self-end text-caption font-medium underline underline-offset-[3px]"
             >
               Forgot password?
             </Link>

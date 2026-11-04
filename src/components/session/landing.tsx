@@ -36,9 +36,9 @@ function SignOutButton() {
 function Landing({ workspace, title, children }: { workspace: string; title: string; children: ReactNode }) {
   return (
     <main className="flex flex-1 justify-center p-3.5 sm:p-6">
-      <section className="flex w-full max-w-[560px] flex-col gap-5 self-start rounded-[20px] bg-card px-6 py-7 sm:px-10">
-        <p className="text-[13px] font-medium text-ink-2">{workspace}</p>
-        <h1 className="text-[26px] font-semibold tracking-[-0.7px]">{title}</h1>
+      <section className="flex w-full max-w-[560px] flex-col gap-5 self-start rounded-2xl bg-card px-6 py-7 sm:px-10">
+        <p className="text-caption font-medium text-ink-2">{workspace}</p>
+        <h1 className="text-title font-semibold">{title}</h1>
         {children}
         <SignOutButton />
       </section>

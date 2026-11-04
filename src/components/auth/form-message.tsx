@@ -9,7 +9,7 @@ export function FormMessage({ tone, children }: { tone: "error" | "info"; childr
       role={tone === "error" ? "alert" : "status"}
       className={cn(
         "rounded-lg px-3.5 py-3 text-sm",
-        tone === "error" ? "bg-late/8 text-late" : "bg-lilac text-violet-ink",
+        tone === "error" ? "bg-late/8 text-late-ink" : "bg-lilac text-violet-ink",
       )}
     >
       {children}

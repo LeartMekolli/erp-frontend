@@ -68,7 +68,7 @@ export function ForgotPasswordForm({ initialWorkspace }: { initialWorkspace: str
 
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="text-[26px] font-semibold tracking-[-0.7px]">Reset your password</h1>
+      <h1 className="text-title font-semibold">Reset your password</h1>
 
       {sent ? (
         <FormMessage tone="info">{SENT}</FormMessage>

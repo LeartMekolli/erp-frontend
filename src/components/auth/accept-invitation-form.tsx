@@ -40,7 +40,7 @@ export function AcceptInvitationForm() {
 function Layout({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="text-[26px] font-semibold tracking-[-0.7px]">{title}</h1>
+      <h1 className="text-title font-semibold">{title}</h1>
       {children}
     </div>
   );

@@ -21,9 +21,19 @@
   --color-violet: #6d5ae6;
   --color-violet-ink: #3b2f8f;
   --color-late: #d0303a;
+  /* `late` text on a `late` tint: #d0303a there is 4.47:1, under AA's 4.5:1 */
+  --color-late-ink: #b3262f;
   --color-panel-soft: #faf9ff;
   --color-panel-soft-ink: #5c5873;
   --color-placeholder: #706d80;
+
+  /* AMI type scale: hints, labels and small print; page titles; the sign-in headline */
+  --text-caption: 13px;
+  --text-title: 26px;
+  --text-title--letter-spacing: -0.7px;
+  --text-display: 40px;
+  --text-display--line-height: 1.08;
+  --text-display--letter-spacing: -1.4px;
 
   /* shadcn's names, pointed at AMI's tokens so added components fit */
   --color-background: var(--color-ground);

@@ -1,39 +1,43 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { takeFragmentToken } from "./fragment-token";
+import { clearFragment, readFragmentToken } from "./fragment-token";
 
 const goTo = (url: string) => window.history.replaceState(null, "", url);
 const here = () => window.location.pathname + window.location.search + window.location.hash;
 
 afterEach(() => goTo("/"));
 
-describe("takeFragmentToken", () => {
-  it("returns the token and removes it from the address, keeping the path and query", () => {
+describe("readFragmentToken", () => {
+  it("returns the token without touching the address", () => {
     goTo("/reset-password?from=email#token=abc.def");
-    expect(takeFragmentToken()).toBe("abc.def");
-    expect(here()).toBe("/reset-password?from=email");
+    expect(readFragmentToken()).toBe("abc.def");
+    expect(here()).toBe("/reset-password?from=email#token=abc.def");
   });
 
   it("decodes a percent-encoded token", () => {
     goTo("/reset-password#token=a%2Bb");
-    expect(takeFragmentToken()).toBe("a+b");
+    expect(readFragmentToken()).toBe("a+b");
   });
 
-  it("returns null and leaves the address alone without a fragment", () => {
-    goTo("/reset-password?from=email");
-    expect(takeFragmentToken()).toBeNull();
-    expect(here()).toBe("/reset-password?from=email");
-  });
-
-  it("returns null for an empty token, and still clears the fragment", () => {
+  it("returns null without a fragment, or with an empty token", () => {
+    goTo("/reset-password");
+    expect(readFragmentToken()).toBeNull();
     goTo("/reset-password#token=");
-    expect(takeFragmentToken()).toBeNull();
-    expect(here()).toBe("/reset-password");
+    expect(readFragmentToken()).toBeNull();
+  });
+});
+
+describe("clearFragment", () => {
+  it("removes the fragment, keeping the path and query", () => {
+    goTo("/reset-password?from=email#token=abc.def");
+    clearFragment();
+    expect(here()).toBe("/reset-password?from=email");
+    expect(readFragmentToken()).toBeNull();
   });
 
-  it("returns null once the token has been taken", () => {
-    goTo("/reset-password#token=abc.def");
-    takeFragmentToken();
-    expect(takeFragmentToken()).toBeNull();
+  it("leaves an address without a fragment alone", () => {
+    goTo("/reset-password?from=email");
+    clearFragment();
+    expect(here()).toBe("/reset-password?from=email");
   });
 });

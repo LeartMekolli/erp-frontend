@@ -27,7 +27,7 @@ const EXPIRED = "This link has expired or was already used. Ask for a new one.";
 export function ResetPasswordForm() {
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="text-[26px] font-semibold tracking-[-0.7px]">Set a new password</h1>
+      <h1 className="text-title font-semibold">Set a new password</h1>
       <WithLinkToken>{(token) => <ResetSteps token={token} />}</WithLinkToken>
     </div>
   );
