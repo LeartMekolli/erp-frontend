@@ -5,6 +5,9 @@ import { afterAll, afterEach, beforeAll } from "vitest";
 import { FAKE_API_URL } from "./fake-erp-api/seed";
 import { resetFakeState } from "./fake-erp-api/state";
 import { server } from "./msw";
+import { installWebLocks } from "./web-locks";
+
+if (typeof navigator !== "undefined") installWebLocks();
 
 process.env.ERP_API_URL = FAKE_API_URL;
 process.env.NEXT_PUBLIC_ERP_API_URL = FAKE_API_URL;
