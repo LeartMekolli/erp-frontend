@@ -24,6 +24,10 @@ Agents suggest commit messages; the user commits. Keep them minimal and written 
 Good: `feat: add login page with workspace field`
 Good: `fix: turn away customer accounts after login` with the body `Customers use their own storefront, not AMI.`
 
+## Branch names
+
+`<type>/<one to three words>`, using the commit types: `feat/login`, `feat/orders-list`, `fix/token-refresh`, `docs/product-notes`, `ci/pr-checks`. Lowercase, words joined by hyphens, no name prefix, no ticket or task numbers, never `master`.
+
 ## Ignored files
 
 `docs/`, `.superpowers/`, `.impeccable/`, `heads-up.md`, `todos.md`, `backend-todos.md` and `.env*` are gitignored, so they don't travel with commits. New workspaces copy them from the main checkout (`~/Desktop/erp-frontend`) in the Conductor setup script, so the main checkout must always hold the latest versions.
