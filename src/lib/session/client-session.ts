@@ -46,7 +46,8 @@ export interface ClientSession {
   startSession(started: StartedSession): void;
   /** A valid access token, refreshing (once, across tabs) when needed. */
   getAccessToken(options?: { force?: boolean }): Promise<string>;
-  signOut(reason?: SignOutReason): Promise<void>;
+  /** `quiet`: this tab moves on by itself, so its own listeners aren't called. Other tabs still hear. */
+  signOut(reason?: SignOutReason, options?: { quiet?: boolean }): Promise<void>;
   onSessionEnded(listener: (reason: SignOutReason) => void): () => void;
   /** The person did something: pointer, keys or navigation. Never background work. */
   recordActivity(): void;
@@ -102,12 +103,12 @@ export function createClientSession({
     else void signOut(state);
   }
 
-  function end(reason: EndReason, announce: boolean): void {
+  function end(reason: EndReason, announce: boolean, notify = true): void {
     token = null;
     clearTimeout(timer);
     if (reason === "none") return;
     if (announce) post({ type: "signed-out", reason });
-    for (const listener of listeners) listener(reason);
+    if (notify) for (const listener of listeners) listener(reason);
   }
 
   function adopt(next: { accessToken: string; expiresAt: string; signedInAt: number; lastActiveAt?: number }): void {
@@ -149,9 +150,9 @@ export function createClientSession({
     return body.accessToken;
   }
 
-  async function signOut(reason: SignOutReason = "signed-out"): Promise<void> {
+  async function signOut(reason: SignOutReason = "signed-out", { quiet = false } = {}): Promise<void> {
     const accessToken = token?.accessToken;
-    end(reason, true);
+    end(reason, true, !quiet);
     try {
       await send(url("/session/logout"), {
         method: "POST",

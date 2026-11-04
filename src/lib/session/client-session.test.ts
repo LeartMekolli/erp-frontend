@@ -158,6 +158,19 @@ describe("signOut", () => {
     expect((await received).data).toEqual({ type: "signed-out", reason: "signed-out" });
   });
 
+  it("can sign out without calling this tab's listeners, while still telling the other tabs", async () => {
+    const ended = vi.fn();
+    session.onSessionEnded(ended);
+    session.startSession({ accessToken: "a1", expiresAt: new Date(Date.now() + 15 * MIN).toISOString(), signedInAt: Date.now() });
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    await settle();
+    const received = new Promise<MessageEvent>((resolve) => (otherTab.onmessage = resolve));
+    await session.signOut("signed-out", { quiet: true });
+    expect(ended).not.toHaveBeenCalled();
+    expect((await received).data).toEqual({ type: "signed-out", reason: "signed-out" });
+    expect(calledPaths()).toEqual(["/session/logout"]);
+  });
+
   it("signs this tab out when another tab signs out", async () => {
     const ended = vi.fn();
     session.onSessionEnded(ended);

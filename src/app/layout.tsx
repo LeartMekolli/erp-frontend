@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Albert_Sans } from "next/font/google";
+import { SessionProvider } from "@/lib/session/session-provider";
+
 import "./globals.css";
 
 const albertSans = Albert_Sans({
@@ -15,7 +17,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${albertSans.variable} h-full`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <SessionProvider>{children}</SessionProvider>
+      </body>
     </html>
   );
 }
