@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { safeNext } from "@/lib/auth/safe-next";
 import { clientSession } from "@/lib/session/client-session";
 
+import { OFFLINE, UNKNOWN, UNREACHABLE } from "./copy";
 import { Field } from "./field";
 import { FormMessage } from "./form-message";
 
@@ -27,10 +28,8 @@ const ERRORS: Record<string, string> = {
   too_many_attempts: "Too many attempts. Try again in 15 minutes.",
   customer: "This account is for ordering. Use your supplier's customer site to sign in.",
   no_access: "Your account has no access yet. Ask your workspace admin.",
-  api_unreachable: "AMI can't reach the server right now. Try again in a moment.",
+  api_unreachable: UNREACHABLE,
 };
-const OFFLINE = "You're offline. Check your connection and try again.";
-const UNKNOWN = "Something went wrong. Try again.";
 
 const REASONS: Record<string, string> = {
   idle: "You were signed out after 3 hours without activity.",
