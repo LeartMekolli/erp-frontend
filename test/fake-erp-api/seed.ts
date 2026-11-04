@@ -90,16 +90,41 @@ export const PARTNER_NAMES: Record<string, string> = {
   [LAYERLINE_ID]: "Layerline Prints",
 };
 
+/** Partners and customers by id, as an invitation names what it joins. */
+export const ORGANISATION_NAMES: Record<string, string> = { ...PARTNER_NAMES, [LUNA_ID]: "Luna" };
+
 // Email-link tokens have erp-api's shape: `<tenantId>.<43 base64url characters>`.
 const token = (fill: string) => `${TENANT_ID}.${fill.repeat(43).slice(0, 43)}`;
 
 export const STAFF_INVITE_TOKEN = token("s");
+/** A staff invitation to an email that already has an account: accepting answers 409. */
+export const STAFF_EXISTING_INVITE_TOKEN = token("a");
 export const PARTNER_INVITE_TOKEN = token("p");
+/** Invites Layerline's owner to Northcast too: they accept with the token only. */
+export const PARTNER_EXISTING_INVITE_TOKEN = token("e");
+export const CUSTOMER_INVITE_TOKEN = token("c");
+export const EXPIRED_INVITE_TOKEN = token("x");
 export const RESET_TOKEN = token("r");
+/** Already spent: an accepted invitation, and a used reset link. */
 export const USED_TOKEN = token("u");
 
+export interface FakeInvitation {
+  kind: "staff" | "partner" | "customer";
+  email: string;
+  /** The staff role's name, or the partner or customer role. */
+  role: string;
+  /** The partner or customer it joins; none for staff. */
+  organisationId?: string;
+  expired?: boolean;
+}
+
 /** Who each invitation is for, and what it joins. */
-export const INVITATIONS = {
-  [STAFF_INVITE_TOKEN]: { kind: "staff", email: "invited@demo.example.test" },
-  [PARTNER_INVITE_TOKEN]: { kind: "partner", email: "invited@northcast.example.test", partnerId: NORTHCAST_ID },
-} as const;
+export const INVITATIONS: Record<string, FakeInvitation> = {
+  [STAFF_INVITE_TOKEN]: { kind: "staff", email: "invited@demo.example.test", role: "Sales" },
+  [STAFF_EXISTING_INVITE_TOKEN]: { kind: "staff", email: STAFF.email, role: "Sales" },
+  [PARTNER_INVITE_TOKEN]: { kind: "partner", email: "invited@northcast.example.test", role: "member", organisationId: NORTHCAST_ID },
+  [PARTNER_EXISTING_INVITE_TOKEN]: { kind: "partner", email: LAYERLINE_OWNER.email, role: "admin", organisationId: NORTHCAST_ID },
+  [CUSTOMER_INVITE_TOKEN]: { kind: "customer", email: "buyer@luna.example.test", role: "member", organisationId: LUNA_ID },
+  [EXPIRED_INVITE_TOKEN]: { kind: "staff", email: "late@demo.example.test", role: "Sales", expired: true },
+  [USED_TOKEN]: { kind: "staff", email: "joined@demo.example.test", role: "Sales" },
+};

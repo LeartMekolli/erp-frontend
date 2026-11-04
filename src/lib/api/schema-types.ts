@@ -13,3 +13,6 @@ export type MeResponse = JsonOk<"/me", "get">;
 
 /** `GET /partner-portal/me`: a partner person and the partners they act for. */
 export type PartnerMeResponse = JsonOk<"/partner-portal/me", "get">;
+
+/** `POST /auth/invitations/preview`: what an invitation link is, before the page shows a form. */
+export type InvitationPreview = JsonOk<"/auth/invitations/preview", "post">;

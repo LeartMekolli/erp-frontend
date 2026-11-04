@@ -8,6 +8,8 @@ const TITLES: Record<number, string> = {
   400: "Bad Request",
   401: "Unauthorized",
   403: "Forbidden",
+  404: "Not Found",
+  409: "Conflict",
   429: "Too Many Requests",
 };
 
@@ -82,7 +84,15 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       if (errors.length) return response.untyped(validation(errors));
       const result = fakeState().acceptStaffInvitation(body.token, body.name, body.password);
       if (result.status === 400) return response.untyped(problem(400, "Invitation is invalid or expired"));
+      if (result.status === 409) return response.untyped(problem(409, "A user with this email already exists"));
       return response(204).empty();
+    }),
+
+    http.post("/auth/invitations/preview", async ({ request, response }) => {
+      const body = await request.json();
+      const result = fakeState().previewInvitation(body.token);
+      if (!("kind" in result)) return response.untyped(problem(404, "Invitation not found"));
+      return response(200).json(result);
     }),
 
     http.post("/auth/partner-invitations/accept", async ({ request, response }) => {
@@ -93,6 +103,7 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       }
       const result = fakeState().acceptPartnerInvitation(body.token, body.name, body.password);
       if (result.status === 400) return response.untyped(problem(400, "Invitation is invalid or expired"));
+      if (result.status === 409) return response.untyped(problem(409, "This person already acts for the partner"));
       return response(204).empty();
     }),
 

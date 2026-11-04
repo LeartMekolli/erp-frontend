@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -10,11 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api/client";
 import { applyFieldErrors, isApiProblem } from "@/lib/api/problem";
-import { takeFragmentToken } from "@/lib/auth/fragment-token";
 
 import { UNKNOWN, noAnswer } from "./copy";
 import { Field } from "./field";
 import { FormMessage } from "./form-message";
+import { WithLinkToken } from "./link-token";
 
 // erp-api's password rule (`passwords.ts:20`).
 const schema = z.object({
@@ -24,24 +24,16 @@ type Values = z.infer<typeof schema>;
 
 const EXPIRED = "This link has expired or was already used. Ask for a new one.";
 
-const noSubscribe = () => () => {};
-
 export function ResetPasswordForm() {
-  // The token is only in the browser's address bar, so the rest renders in the browser only.
-  const inBrowser = useSyncExternalStore(noSubscribe, () => true, () => false);
-
   return (
     <div className="flex flex-col gap-5">
       <h1 className="text-[26px] font-semibold tracking-[-0.7px]">Set a new password</h1>
-      {inBrowser && <WithToken />}
+      <WithLinkToken>{(token) => <ResetSteps token={token} />}</WithLinkToken>
     </div>
   );
 }
 
-function WithToken() {
-  // Taken on the first render, before any request. React keeps the first
-  // result when Strict Mode calls the initialiser twice.
-  const [token] = useState(takeFragmentToken);
+function ResetSteps({ token }: { token: string | null }) {
   const [status, setStatus] = useState<"form" | "done" | "expired">(token ? "form" : "expired");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);

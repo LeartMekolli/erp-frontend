@@ -2,11 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   CUSTOMER,
+  EXPIRED_INVITE_TOKEN,
   FAKE_PASSWORD,
+  LAYERLINE_OWNER,
   PARTNER,
+  PARTNER_EXISTING_INVITE_TOKEN,
   PARTNER_INVITE_TOKEN,
   RESET_TOKEN,
   STAFF,
+  STAFF_EXISTING_INVITE_TOKEN,
   STAFF_INVITE_TOKEN,
   USED_TOKEN,
   WORKSPACE,
@@ -87,6 +91,45 @@ describe("fake erp-api state", () => {
     const s = createFakeState();
     s.acceptPartnerInvitation(PARTNER_INVITE_TOKEN, "Pia", "pia-long-password");
     expect("access_token" in s.login(WORKSPACE, "invited@northcast.example.test", "pia-long-password")).toBe(true);
+  });
+
+  it("previews each kind of invitation and its state", () => {
+    const s = createFakeState();
+    expect(s.previewInvitation(STAFF_INVITE_TOKEN)).toEqual({
+      kind: "staff",
+      status: "pending",
+      email: "invited@demo.example.test",
+      role: "Sales",
+      workspace: { name: "Demo" },
+      organisation: null,
+      has_account: false,
+    });
+    expect(s.previewInvitation(PARTNER_EXISTING_INVITE_TOKEN)).toMatchObject({
+      kind: "partner",
+      organisation: { name: "Northcast Foundry" },
+      has_account: true,
+    });
+    expect(s.previewInvitation(USED_TOKEN)).toMatchObject({ status: "accepted" });
+    expect(s.previewInvitation(EXPIRED_INVITE_TOKEN)).toMatchObject({ status: "expired" });
+    expect(s.previewInvitation("not-a-token")).toEqual({ status: 404 });
+  });
+
+  it("refuses an expired invitation", () => {
+    const s = createFakeState();
+    expect(s.acceptStaffInvitation(EXPIRED_INVITE_TOKEN, "Ana", "a-long-password")).toEqual({ status: 400 });
+  });
+
+  it("answers 409 to a staff invitation for an existing account, and keeps it pending", () => {
+    const s = createFakeState();
+    expect(s.acceptStaffInvitation(STAFF_EXISTING_INVITE_TOKEN, "Dana", "a-long-password")).toEqual({ status: 409 });
+    expect(s.previewInvitation(STAFF_EXISTING_INVITE_TOKEN)).toMatchObject({ status: "pending" });
+  });
+
+  it("adds a workshop to an existing partner account with the token only", () => {
+    const s = createFakeState();
+    expect(s.acceptPartnerInvitation(PARTNER_EXISTING_INVITE_TOKEN)).toEqual({ status: 204 });
+    const leo = s.authenticate(tokens(s.login(WORKSPACE, LAYERLINE_OWNER.email, FAKE_PASSWORD)).access_token)!;
+    expect(s.me(leo).memberships).toHaveLength(2);
   });
 
   it("resets a password once with the reset token", () => {

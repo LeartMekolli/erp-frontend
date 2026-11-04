@@ -114,22 +114,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/auth/invitations/{token}": {
+    "/auth/invitations/preview": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
+        get?: never;
+        put?: never;
         /**
          * What an invitation link is: staff, partner or customer, who it is for, and what it joins.
          * @description The token is the one in the invitation email link; `kind` says which accept route takes it. An accepted or expired invitation still answers, with its `status`. A token the API never issued, or one of a suspended workspace, answers 404.
          *
          *     Access: public.
          */
-        get: operations["AuthController_previewInvitation"];
-        put?: never;
-        post?: never;
+        post: operations["AuthController_previewInvitation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4896,6 +4896,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/payment-return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The page a customer lands on after paying, when the workspace has no customer site.
+         * @description Plain HTML, the same for every workspace: it says whether the payment went through, and that the tab can be closed.
+         *
+         *     Access: public.
+         */
+        get: operations["PaymentReturnController_page"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orders/{id}/release": {
         parameters: {
             query?: never;
@@ -6479,9 +6501,16 @@ export interface components {
             status: number;
             detail?: string;
             errors?: {
-                path?: string;
-                message?: string;
+                path: string;
+                message: string;
             }[];
+            /**
+             * @description Names a refusal clients act on, such as `price_changed`.
+             * @example price_changed
+             */
+            code?: string;
+        } & {
+            [key: string]: unknown;
         };
     };
     responses: never;
@@ -6765,12 +6794,16 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                token: string;
-            };
+            path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                };
+            };
+        };
         responses: {
             /** @description Success */
             200: {
@@ -6793,6 +6826,15 @@ export interface operations {
                         } | null;
                         has_account: boolean;
                     };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
             /** @description Not found */
@@ -29417,6 +29459,35 @@ export interface operations {
             };
             /** @description Not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    PaymentReturnController_page: {
+        parameters: {
+            query: {
+                outcome: "paid" | "cancelled" | "back";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

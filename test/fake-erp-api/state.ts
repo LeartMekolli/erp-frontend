@@ -1,7 +1,8 @@
-import type { MeResponse, PartnerMeResponse } from "../../src/lib/api/schema-types";
+import type { InvitationPreview, MeResponse, PartnerMeResponse } from "../../src/lib/api/schema-types";
 import {
   FAKE_PASSWORD,
   INVITATIONS,
+  ORGANISATION_NAMES,
   PARTNER_NAMES,
   RESET_TOKEN,
   STAFF,
@@ -10,6 +11,7 @@ import {
   USERS,
   WORKSPACE,
   WORKSPACE_INFO,
+  type FakeInvitation,
   type FakeUser,
 } from "./seed";
 
@@ -48,6 +50,13 @@ export function createFakeState(now: () => number = Date.now) {
     accessTokens.set(access, { email, expiresAt, denied: false });
     refreshTokens.set(refresh, { email, session, used: false });
     return { access_token: access, refresh_token: refresh, expires_at: new Date(expiresAt).toISOString() };
+  }
+
+  /** An invitation of this kind that can still be accepted. */
+  function pending(token: string, kind: FakeInvitation["kind"]): FakeInvitation | null {
+    const invitation = INVITATIONS[token];
+    if (!invitation || invitation.kind !== kind || invitation.expired || spentTokens.has(token)) return null;
+    return invitation;
   }
 
   function authenticate(accessToken: string): FakeUser | null {
@@ -96,9 +105,26 @@ export function createFakeState(now: () => number = Date.now) {
 
     authenticate,
 
-    acceptStaffInvitation(token: string, name: string, password: string): Status<204 | 400> {
-      const invitation = INVITATIONS[token as keyof typeof INVITATIONS];
-      if (!invitation || invitation.kind !== "staff" || spentTokens.has(token)) return { status: 400 };
+    /** `POST /auth/invitations/preview` (`invitation-preview.service.ts`). */
+    previewInvitation(token: string): InvitationPreview | Status<404> {
+      const invitation = INVITATIONS[token];
+      if (!invitation) return { status: 404 };
+      return {
+        kind: invitation.kind,
+        status: spentTokens.has(token) ? "accepted" : invitation.expired ? "expired" : "pending",
+        email: invitation.email,
+        role: invitation.role,
+        workspace: { name: WORKSPACE_INFO.name },
+        organisation: invitation.organisationId ? { name: ORGANISATION_NAMES[invitation.organisationId] ?? "" } : null,
+        has_account: accounts.has(invitation.email),
+      };
+    },
+
+    /** 409 for an email that already has an account; the invitation stays pending (erp-api rolls back). */
+    acceptStaffInvitation(token: string, name: string, password: string): Status<204 | 400 | 409> {
+      const invitation = pending(token, "staff");
+      if (!invitation) return { status: 400 };
+      if (accounts.has(invitation.email)) return { status: 409 };
       spentTokens.add(token);
       accounts.set(invitation.email, {
         user: { id: crypto.randomUUID(), email: invitation.email, name, kind: "staff", permissions: ["order.read"], organisations: [] },
@@ -107,17 +133,20 @@ export function createFakeState(now: () => number = Date.now) {
       return { status: 204 };
     },
 
-    acceptPartnerInvitation(token: string, name?: string, password?: string): Status<204 | 400> {
-      const invitation = INVITATIONS[token as keyof typeof INVITATIONS];
-      if (!invitation || invitation.kind !== "partner" || spentTokens.has(token)) return { status: 400 };
+    /** 409 for an email of another kind, or someone already acting for the partner (`partner-invitations.service.ts:173-179`). */
+    acceptPartnerInvitation(token: string, name?: string, password?: string): Status<204 | 400 | 409> {
+      const invitation = pending(token, "partner");
+      if (!invitation?.organisationId) return { status: 400 };
       const existing = accounts.get(invitation.email);
       if (existing) {
+        if (existing.user.kind !== "partner" || existing.user.organisations.includes(invitation.organisationId))
+          return { status: 409 };
         // erp-api ignores the name and password of someone who already has an account.
-        existing.user.organisations.push(invitation.partnerId);
+        existing.user.organisations.push(invitation.organisationId);
       } else {
         if (!name || !password) return { status: 400 };
         accounts.set(invitation.email, {
-          user: { id: crypto.randomUUID(), email: invitation.email, name, kind: "partner", permissions: [], organisations: [invitation.partnerId] },
+          user: { id: crypto.randomUUID(), email: invitation.email, name, kind: "partner", permissions: [], organisations: [invitation.organisationId] },
           password,
         });
       }
