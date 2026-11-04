@@ -36,6 +36,14 @@ yarn-error.log*
 # vercel
 .vercel
 
+# personal notes, plans and design tooling (kept in the main checkout, never committed)
+/heads-up.md
+/backend-todos.md
+/todos.md
+/docs/
+/.superpowers/
+/.impeccable/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
