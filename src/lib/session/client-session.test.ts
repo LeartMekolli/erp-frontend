@@ -229,6 +229,47 @@ describe("limits", () => {
     expect(ended).toHaveBeenCalledWith("idle");
   });
 
+  it("signs out as idle, without refreshing, when a token is asked for past the idle limit", async () => {
+    const ended = vi.fn();
+    session.onSessionEnded(ended);
+    start();
+    vi.setSystemTime(3 * H + MIN); // a background refetch ran before the idle timer did
+    await expect(session.getAccessToken()).rejects.toMatchObject({ reason: "idle" });
+    expect(ended.mock.calls).toEqual([["idle"]]);
+    expect(calledPaths()).toEqual(["/session/logout"]);
+  });
+
+  it("keeps the sign-out reason when a refresh answers after the session ended", async () => {
+    const ended = vi.fn();
+    session.onSessionEnded(ended);
+    start();
+    vi.setSystemTime(20 * MIN); // the access token has run out
+    let answer!: (response: Response) => void;
+    fetchMock.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+    const pending = session.getAccessToken();
+    await vi.waitFor(() => expect(calledPaths()).toEqual(["/session/refresh"]));
+
+    void session.signOut("idle");
+    answer(json(401, { reason: "revoked" }));
+    await expect(pending).rejects.toMatchObject({ reason: "idle" });
+    expect(ended.mock.calls).toEqual([["idle"]]);
+  });
+
+  it("does not bring back a session that ended while its refresh was out", async () => {
+    start();
+    vi.setSystemTime(20 * MIN);
+    let answer!: (response: Response) => void;
+    fetchMock.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+    const pending = session.getAccessToken();
+    await vi.waitFor(() => expect(calledPaths()).toEqual(["/session/refresh"]));
+
+    void session.signOut();
+    answer(refreshed("a2"));
+    await expect(pending).rejects.toBeInstanceOf(SessionEndedError);
+    fetchMock.mockResolvedValue(json(401, { reason: "none" }));
+    await expect(session.getAccessToken()).rejects.toBeInstanceOf(SessionEndedError);
+  });
+
   it("does not count background refreshes as activity", async () => {
     start();
     await vi.advanceTimersByTimeAsync(H);

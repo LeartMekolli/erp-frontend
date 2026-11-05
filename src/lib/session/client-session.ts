@@ -70,6 +70,9 @@ export function createClientSession({
   let activityShared = -Infinity;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let localLock: Promise<unknown> = Promise.resolve();
+  /** Counts endings, so a refresh can tell the session ended while it was out. */
+  let endings = 0;
+  let endedWith: EndReason = "none";
   const listeners = new Set<(reason: SignOutReason) => void>();
   const stops = new Set<() => void>();
   const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(channelName);
@@ -96,15 +99,22 @@ export function createClientSession({
     timer = setTimeout(check, Math.max(0, deadline - Date.now()));
   }
 
-  function check(): void {
-    if (!token) return;
+  /** Signs out once a limit has passed. False then; true otherwise, also before there's a token. */
+  function check(): boolean {
+    if (!token) return true;
     const state = checkLimits({ signedInAt: token.signedInAt, lastActiveAt: activity }, Date.now());
-    if (state === "ok") schedule();
-    else void signOut(state);
+    if (state === "ok") {
+      schedule();
+      return true;
+    }
+    void signOut(state);
+    return false;
   }
 
   function end(reason: EndReason, announce: boolean, notify = true): void {
     token = null;
+    endings++;
+    endedWith = reason;
     clearTimeout(timer);
     if (reason === "none") return;
     if (announce) post({ type: "signed-out", reason });
@@ -119,6 +129,7 @@ export function createClientSession({
   }
 
   async function refresh(): Promise<string> {
+    const sentAt = endings;
     let response: Response;
     try {
       response = await send(url("/session/refresh"), {
@@ -129,6 +140,9 @@ export function createClientSession({
     } catch {
       throw new OfflineError();
     }
+
+    // Signed out while this was out: its answer neither ends the session again nor brings it back.
+    if (endings !== sentAt) throw new SessionEndedError(endedWith);
 
     if (response.status === 401) {
       const body = (await response.json().catch(() => ({}))) as { reason?: EndReason };
@@ -194,6 +208,8 @@ export function createClientSession({
     },
 
     async getAccessToken({ force = false } = {}) {
+      // A refetch can run before the limit timer after a clock jump or a sleep: sign out with the right reason.
+      if (!check()) throw new SessionEndedError(endedWith);
       if (!force) {
         const current = freshToken();
         if (current) return current;
