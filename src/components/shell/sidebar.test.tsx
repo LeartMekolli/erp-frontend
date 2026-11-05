@@ -39,7 +39,7 @@ describe("Sidebar", () => {
     renderAs(CLERK, <Sidebar />);
     const nav = await screen.findByRole("navigation", { name: "Main" });
     await within(nav).findByRole("link", { name: /^Orders/ });
-    expect(within(nav).getAllByRole("link").map((link) => link.textContent?.replace(/\d+$/, ""))).toEqual(["Orders", "Claims"]);
+    expect(within(nav).getAllByRole("link").map((link) => link.textContent?.replace(/\s*\d+$/, ""))).toEqual(["Orders", "Claims"]);
     expect(screen.queryByText("Setup")).not.toBeInTheDocument();
   });
 

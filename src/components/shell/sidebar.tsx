@@ -55,6 +55,8 @@ export function Sidebar({
       >
         <link.icon aria-hidden className="size-[18px] shrink-0" />
         <span className={cn("flex-1 truncate", rail && "lg:max-xl:sr-only")}>{link.label}</span>
+        {/* A space, so the visible text reads "Orders 10", inside the name (WCAG 2.5.3). */}
+        {count !== null && " "}
         {count !== null && (
           <span
             aria-hidden

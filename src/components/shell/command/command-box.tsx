@@ -62,14 +62,15 @@ export function CommandBox() {
       }}
     >
       <DialogTrigger
-        aria-label="Search"
+        // Holds the text it shows (WCAG 2.5.3), so voice control can name it.
+        aria-label={`${PLACEHOLDER} ${mac ? "⌘K" : "Ctrl K"}`}
         aria-keyshortcuts="Meta+K Control+K"
         className="grid size-11 shrink-0 place-items-center rounded-xl text-ink-2 hover:bg-card hover:text-ink focus-visible:outline-2 focus-visible:outline-violet md:flex md:h-10 md:w-72 md:items-center md:gap-2 md:border md:border-line md:bg-card md:px-3 md:text-left md:text-sm"
       >
         <Search aria-hidden className="size-5 md:size-4" />
         <span aria-hidden className="hidden flex-1 truncate md:inline">
           {PLACEHOLDER}
-        </span>
+        </span>{" "}
         <kbd aria-hidden className="hidden rounded-md border border-line px-1.5 font-sans text-caption text-ink-2 md:inline">
           {mac ? "⌘K" : "Ctrl K"}
         </kbd>
@@ -108,6 +109,7 @@ function Panel({ onGo, onClose }: { onGo: (href: string) => void; onClose: () =>
   const tooLong = question.length > MAX_QUESTION_LENGTH;
   const first = (search.data && firstResultKey(search.data)) ?? (mayAsk ? ASK : "");
   const value = picked.for === search.data && picked.value ? picked.value : first;
+  const { message, showResults } = searchState(text, search);
 
   function askNow() {
     if (!mayAsk || tooLong) return;
@@ -139,28 +141,30 @@ function Panel({ onGo, onClose }: { onGo: (href: string) => void; onClose: () =>
       className="rounded-none! md:rounded-xl!"
     >
       <CommandInput value={text} onValueChange={edit} placeholder={PLACEHOLDER} className="text-base md:text-sm" />
-      <CommandList className="max-h-none flex-1 md:max-h-[60vh]">
+      {/* The listbox holds only options; messages and answers sit beside it, as a listbox may hold nothing else. */}
+      <div className="no-scrollbar max-h-none flex-1 overflow-y-auto md:max-h-[60vh]">
         {asked !== null ? (
           <AskAnswer question={asked} ask={ask} onGo={onClose} />
         ) : (
           <>
-            <Results text={text} search={search} onGo={onGo} />
-            {mayAsk && (
-              <CommandGroup>
-                <CommandItem value={ASK} disabled={tooLong} onSelect={askNow} className="min-h-11">
-                  <Sparkles aria-hidden className="text-violet" />
-                  <span className="truncate">{`Ask AI: "${question}"`}</span>
-                </CommandItem>
-                {tooLong && (
-                  <p className="px-2 pb-2 text-caption text-ink-2">
-                    Questions can be up to {MAX_QUESTION_LENGTH} characters.
-                  </p>
-                )}
-              </CommandGroup>
+            {message && <Message>{message}</Message>}
+            <CommandList className="max-h-none overflow-visible">
+              {showResults && search.data && <SearchResults results={search.data} onGo={onGo} />}
+              {mayAsk && (
+                <CommandGroup>
+                  <CommandItem value={ASK} disabled={tooLong} onSelect={askNow} className="min-h-11">
+                    <Sparkles aria-hidden className="text-violet" />
+                    <span className="truncate">{`Ask AI: "${question}"`}</span>
+                  </CommandItem>
+                </CommandGroup>
+              )}
+            </CommandList>
+            {mayAsk && tooLong && (
+              <p className="px-4 pb-2 text-caption text-ink-2">Questions can be up to {MAX_QUESTION_LENGTH} characters.</p>
             )}
           </>
         )}
-      </CommandList>
+      </div>
     </Command>
   );
 }
@@ -169,22 +173,14 @@ function Message({ children }: { children: string }) {
   return <p className="px-3 py-6 text-center text-sm text-ink-2">{children}</p>;
 }
 
-function Results({
-  text,
-  search,
-  onGo,
-}: {
-  text: string;
-  search: ReturnType<typeof useSearch>;
-  onGo: (href: string) => void;
-}) {
-  if (!text.trim()) return <Message>Type to search orders, customers, partners and help.</Message>;
+/** What the search shows for `text`: a message, its results, or nothing yet. */
+function searchState(text: string, search: ReturnType<typeof useSearch>): { message: string | null; showResults: boolean } {
+  const none = { message: null, showResults: false };
+  if (!text.trim()) return { message: "Type to search orders, customers, partners and help.", showResults: false };
   // Past search's limit the text can only be a question.
-  if (searchText(text).length > MAX_SEARCH_LENGTH) return null;
-  if (search.isError && search.settled) return <Message>{errorMessage(search.error)}</Message>;
-  if (!search.data) return null;
-  if (!hasResults(search.data)) {
-    return search.settled ? <Message>{`Nothing matches "${text.trim()}".`}</Message> : null;
-  }
-  return <SearchResults results={search.data} onGo={onGo} />;
+  if (searchText(text).length > MAX_SEARCH_LENGTH) return none;
+  if (search.isError && search.settled) return { message: errorMessage(search.error), showResults: false };
+  if (!search.data) return none;
+  if (!hasResults(search.data)) return search.settled ? { message: `Nothing matches "${text.trim()}".`, showResults: false } : none;
+  return { message: null, showResults: true };
 }

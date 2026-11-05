@@ -52,13 +52,16 @@ export function Toolbar({ view, onChange }: { view: OrdersView; onChange: (chang
           <TabsList
             variant="line"
             aria-label="Orders by state"
-            className="-mb-px h-auto! w-full justify-start overflow-x-auto [scrollbar-width:none] md:overflow-visible"
+            className="-mb-px h-auto! w-full justify-start overflow-x-auto [scrollbar-width:none]"
           >
             {TABS.map((tab) => (
               <TabsTrigger
                 key={tab}
                 value={tab}
-                className="h-11 flex-none px-3 text-ink-2 data-active:font-semibold data-active:text-ink"
+                // Every tab filters the one list below rather than showing a panel of its own.
+                aria-controls="order-list"
+                // The underline sits inside the tab, so the row can scroll sideways at every size without clipping it.
+                className="h-11 flex-none px-3 text-ink-2 group-data-horizontal/tabs:after:bottom-0 data-active:font-semibold data-active:text-ink"
               >
                 {TAB_LABEL[tab]}
                 {counts.data && (

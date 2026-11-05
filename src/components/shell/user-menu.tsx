@@ -26,9 +26,12 @@ export function UserMenu() {
         aria-label={`Account: ${me.user.name}`}
         className="flex min-h-11 items-center gap-2 rounded-xl px-1.5 text-sm font-medium hover:bg-card focus-visible:outline-2 focus-visible:outline-violet xl:pr-3"
       >
-        <span aria-hidden className="grid size-8 place-items-center rounded-full bg-lilac text-caption font-semibold text-violet-ink">
-          {initials(me.user.name)}
-        </span>
+        {/* The initials are drawn by CSS, not text, so the visible text is just the name, as in "Account: Dana" (WCAG 2.5.3). */}
+        <span
+          aria-hidden
+          data-initials={initials(me.user.name)}
+          className="grid size-8 place-items-center rounded-full bg-lilac text-caption font-semibold text-violet-ink before:content-[attr(data-initials)]"
+        />
         <span aria-hidden className="hidden xl:inline">
           {me.user.name}
         </span>

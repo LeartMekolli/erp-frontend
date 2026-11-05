@@ -64,7 +64,7 @@ function Orders({ canCreate, canShipOrders }: { canCreate: boolean; canShipOrder
       <Tiles onPickReason={(reason) => setView({ tab: "needs", reason })} />
 
       {/* On phones the selection bar is fixed to the screen's bottom: room for it under the last row. */}
-      <section aria-label="Order list" className={`flex flex-col rounded-[20px] bg-card ${selectedOrders.length ? "pb-20 md:pb-0" : ""}`}>
+      <section id="order-list" aria-label="Order list" className={`flex flex-col rounded-[20px] bg-card ${selectedOrders.length ? "pb-20 md:pb-0" : ""}`}>
         <Toolbar view={view} onChange={setView} />
         <div className="flex items-center justify-between gap-3 px-4 pt-2">
           <p role="status" className="text-caption font-medium text-ink">

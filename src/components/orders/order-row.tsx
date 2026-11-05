@@ -109,8 +109,8 @@ export function OrderRow({
         </span>
       </Cell>
 
-      {/* Phone: three lines in one cell. */}
-      <Cell className="md:hidden">
+      {/* Phone: three lines in one cell. `w-full max-w-0` gives it only the width left over, so long text is cut, not the table widened. */}
+      <Cell className="w-full max-w-0 md:hidden">
         <span className="flex flex-col gap-0.5">
           <span className="flex items-center justify-between gap-3">
             <span className="truncate font-semibold text-ink" title={order.customer.name}>
@@ -118,7 +118,7 @@ export function OrderRow({
             </span>
             <span className="shrink-0 font-medium tabular-nums">{total}</span>
           </span>
-          <span className="flex items-center gap-2 text-caption">
+          <span className="flex min-w-0 items-center gap-2 overflow-hidden text-caption">
             <span className="text-ink-2 tabular-nums">#{order.number}</span>
             <Status order={order} />
           </span>
@@ -131,7 +131,8 @@ export function OrderRow({
           #{order.number}
         </Link>
       </Cell>
-      <Cell className="hidden max-w-64 md:table-cell">
+      {/* The customer takes the width the other columns leave, cutting a long name rather than widening the table. */}
+      <Cell className="hidden w-full max-w-0 md:table-cell">
         <span className="flex items-center gap-2.5">
           <CustomerInitials customer={order.customer} />
           <span className="flex min-w-0 flex-col">
