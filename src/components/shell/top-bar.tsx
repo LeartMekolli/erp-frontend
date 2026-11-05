@@ -5,6 +5,8 @@ import Link from "next/link";
 
 import { useCan } from "@/lib/auth/permissions";
 
+import { UserMenu } from "./user-menu";
+
 const iconButton =
   "grid size-11 shrink-0 place-items-center rounded-xl text-ink-2 hover:bg-card hover:text-ink focus-visible:outline-2 focus-visible:outline-violet";
 
@@ -24,6 +26,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
           <span className="sr-only">New order</span>
         </Link>
       )}
+      <UserMenu />
     </header>
   );
 }

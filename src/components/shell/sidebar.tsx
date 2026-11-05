@@ -8,20 +8,12 @@ import { usePathname } from "next/navigation";
 import { useMe } from "@/components/session/session-gate";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { can } from "@/lib/auth/permissions";
+import { initials } from "@/lib/format/initials";
 import { useOrderCounts } from "@/lib/orders/queries";
 
 import { visibleNav, type NavLink } from "./nav";
 
 const GROUP_LABEL: Partial<Record<NavLink["group"], string>> = { work: "Work", setup: "Setup" };
-
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase())
-    .join("");
-}
 
 /**
  * The staff sidebar. `expanded` shows labels at every width; otherwise, from
