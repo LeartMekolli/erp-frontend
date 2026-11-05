@@ -13,6 +13,8 @@ import { resetFakeState } from "./state";
  * - `POST /__reset` starts the fake's data over.
  * - `GET /__link?to=<url>` is a page with one link, so a test can follow a
  *   link into AMI from another site.
+ * - `PUT /__storage/uploads/<fileId>/<versionId>` stands in for the bucket a
+ *   signed upload link points at (in `handlers.ts`).
  */
 const port = Number(process.env.FAKE_API_PORT ?? 4010);
 const handlers = createHandlers("");
@@ -33,7 +35,10 @@ async function toRequest(req: IncomingMessage, url: URL): Promise<Request> {
 }
 
 async function send(res: ServerResponse, response: Response): Promise<void> {
-  response.headers.forEach((value, name) => res.appendHeader(name, value));
+  // The server answers CORS itself; a handler's own CORS headers (fake storage's) would repeat them.
+  response.headers.forEach((value, name) => {
+    if (!name.startsWith("access-control-")) res.appendHeader(name, value);
+  });
   res.writeHead(response.status);
   res.end(Buffer.from(await response.arrayBuffer()));
 }

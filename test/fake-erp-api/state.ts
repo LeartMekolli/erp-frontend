@@ -1,4 +1,4 @@
-import type { InvitationPreview, MeResponse, PartnerMeResponse } from "../../src/lib/api/schema-types";
+import type { InvitationPreview, MeResponse, PartnerMeResponse, paths } from "../../src/lib/api/schema-types";
 import {
   FAKE_PASSWORD,
   INVITATIONS,
@@ -24,9 +24,36 @@ export interface SessionTokens {
 
 type Status<S extends number> = { status: S };
 
+type StartFileBody = paths["/files"]["post"]["requestBody"]["content"]["application/json"];
+type StartFileResponse = paths["/files"]["post"]["responses"][201]["content"]["application/json"];
+type FileResponse = paths["/files/{id}"]["get"]["responses"][200]["content"]["application/json"];
+type VersionResponse = StartFileResponse["version"];
+
+/** What reached storage through a signed link. */
+export interface StoredObject {
+  contentType: string;
+  size: number;
+}
+
+interface FakeVersion {
+  view: VersionResponse;
+  measures: FileResponse["versions"][number]["measures"];
+  expiresAt: number;
+  stored?: StoredObject;
+}
+
+interface FakeFile {
+  view: StartFileResponse["file"];
+  versions: FakeVersion[];
+}
+
 const ACCESS_TOKEN_MS = 15 * 60 * 1000;
 const LOGIN_LIMIT = 10;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+/** How long a signed upload link lasts (erp-api `files.service.ts:28`). */
+const UPLOAD_LINK_MS = 15 * 60 * 1000;
+/** A version's next status on each read once its bytes are in: erp-api's measuring job, one step per poll. */
+const MEASURING: Record<string, string> = { uploaded: "measuring", measuring: "measured" };
 
 /**
  * An in-memory erp-api that keeps the rules AMI's session depends on:
@@ -42,6 +69,15 @@ export function createFakeState(now: () => number = Date.now) {
   const revokedSessions = new Set<string>();
   const failures = new Map<string, { count: number; since: number }>();
   const spentTokens = new Set<string>([USED_TOKEN]);
+  const files = new Map<string, FakeFile>();
+
+  /** The file, if the caller may see it: a partner route only sees that workshop's files. */
+  function ownFile(fileId: string, partnerId?: string): FakeFile | null {
+    const file = files.get(fileId);
+    if (!file) return null;
+    if (partnerId !== undefined && (file.view.owner?.type !== "partner" || file.view.owner.id !== partnerId)) return null;
+    return file;
+  }
 
   function issue(email: string, session: string): SessionTokens {
     const access = `fake-access.${crypto.randomUUID()}`;
@@ -189,6 +225,83 @@ export function createFakeState(now: () => number = Date.now) {
           role: "owner" as const,
           status: "approved" as const,
         })),
+      };
+    },
+
+    /** `POST /files`, or the partner route with `partnerId` (`files.service.ts:96`, `:446-453`). */
+    startFile(body: StartFileBody, at: { origin: string; partnerId?: string }): StartFileResponse {
+      const createdAt = new Date(now()).toISOString();
+      const owner = at.partnerId
+        ? { type: "partner", id: at.partnerId }
+        : body.customer_id
+          ? { type: "customer", id: body.customer_id }
+          : null;
+      const file: FakeFile["view"] = {
+        id: crypto.randomUUID(),
+        kind: body.kind,
+        name: body.name,
+        declared_unit: body.declared_unit ?? null,
+        owner,
+        status: "active",
+        created_at: createdAt,
+      };
+      const version: VersionResponse = {
+        id: crypto.randomUUID(),
+        number: 1,
+        original_name: body.name,
+        content_type: body.content_type,
+        size: body.size,
+        checksum: null,
+        status: "pending",
+        created_at: createdAt,
+        completed_at: null,
+      };
+      const expiresAt = now() + UPLOAD_LINK_MS;
+      files.set(file.id, { view: file, versions: [{ view: version, measures: [], expiresAt }] });
+      return {
+        file,
+        version,
+        upload: {
+          url: `${at.origin}/__storage/uploads/${file.id}/${version.id}`,
+          method: "PUT",
+          headers: { "content-type": body.content_type, "content-length": String(body.size) },
+          expires_at: new Date(expiresAt).toISOString(),
+        },
+      };
+    },
+
+    /** A PUT to a signed link: refused once the link has run out. */
+    storeObject(fileId: string, versionId: string, object: StoredObject): Status<200 | 403 | 404> {
+      const version = files.get(fileId)?.versions.find((v) => v.view.id === versionId);
+      if (!version) return { status: 404 };
+      if (now() >= version.expiresAt) return { status: 403 };
+      version.stored = object;
+      return { status: 200 };
+    },
+
+    /** 409 when nothing, or not what was declared, reached storage; completing again answers the version as it is (`files.service.ts:302-321`). */
+    completeFile(fileId: string, versionId: string, partnerId?: string): VersionResponse | Status<404 | 409> {
+      const version = ownFile(fileId, partnerId)?.versions.find((v) => v.view.id === versionId);
+      if (!version) return { status: 404 };
+      if (version.view.status !== "pending") return version.view;
+      const { stored } = version;
+      if (!stored || stored.size !== version.view.size || stored.contentType !== version.view.content_type)
+        return { status: 409 };
+      version.view = { ...version.view, status: "uploaded", completed_at: new Date(now()).toISOString() };
+      return version.view;
+    },
+
+    /** `GET /files/{id}`: each read moves a completed version one step through measuring. */
+    getFile(fileId: string, partnerId?: string): FileResponse | Status<404> {
+      const file = ownFile(fileId, partnerId);
+      if (!file) return { status: 404 };
+      for (const version of file.versions) {
+        const next = MEASURING[version.view.status];
+        if (next) version.view = { ...version.view, status: next };
+      }
+      return {
+        ...file.view,
+        versions: file.versions.toReversed().map((v) => ({ ...v.view, measures: v.measures })),
       };
     },
   };

@@ -1,28 +1,14 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/api/client";
-import type { PartnerMeResponse } from "@/lib/api/schema-types";
 import { clientSession } from "@/lib/session/client-session";
 
 import { useMe } from "./session-gate";
-
-/** `GET /partner-portal/me`: the partners this person works for, by name. */
-function usePartnerMe() {
-  return useQuery({
-    queryKey: ["partner-portal", "me"],
-    queryFn: async (): Promise<PartnerMeResponse> => {
-      const { data, response } = await api.GET("/partner-portal/me");
-      if (!data) throw new Error(`/partner-portal/me answered ${response.status}`);
-      return data;
-    },
-  });
-}
+import { usePartnerMe } from "./use-partner-me";
 
 function SignOutButton() {
   return (

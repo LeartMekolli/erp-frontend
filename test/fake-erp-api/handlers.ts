@@ -1,4 +1,4 @@
-import { HttpResponse, type HttpHandler } from "msw";
+import { HttpResponse, http as rawHttp, type HttpHandler } from "msw";
 import { createOpenApiHttp } from "openapi-msw";
 
 import type { paths } from "../../src/lib/api/schema-types";
@@ -41,6 +41,32 @@ function passwordErrors(password: unknown): { path: string; message: string }[] 
 function bearer(request: Request): string {
   return request.headers.get("authorization")?.replace(/^Bearer /, "") ?? "";
 }
+
+/** The photo types a partner may upload (erp-api `files.controller.ts:31`). */
+const PHOTO_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+/**
+ * Who may call a file route: staff on `/files`, a person acting for that
+ * workshop on its partner routes; anyone else is told the file isn't there.
+ */
+function fileCaller(request: Request, partnerId?: string): 200 | 401 | 404 {
+  const user = fakeState().authenticate(bearer(request));
+  if (!user) return 401;
+  const allowed =
+    partnerId === undefined ? user.kind === "staff" : user.kind === "partner" && user.organisations.includes(partnerId);
+  return allowed ? 200 : 404;
+}
+
+function refused(status: 401 | 404) {
+  return status === 401 ? problem(401, "Unauthorized") : problem(404, "File not found");
+}
+
+/** The bucket's CORS rules: browsers may PUT with `content-type` (erp-api `README.md`, "File storage"). */
+const STORAGE_CORS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "PUT",
+  "access-control-allow-headers": "content-type",
+};
 
 /**
  * Handlers for every erp-api route the foundation calls. Success bodies are
@@ -133,6 +159,86 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       const result = fakeState().partnerMe(user);
       if ("status" in result) return response.untyped(problem(403, "Forbidden"));
       return response(200).json(result);
+    }),
+
+    http.post("/files", async ({ request, response }) => {
+      const caller = fileCaller(request);
+      if (caller !== 200) return response.untyped(refused(caller));
+      const body = await request.json();
+      if (body.kind === "design" && body.declared_unit === undefined)
+        return response.untyped(validation([{ path: "declared_unit", message: "Required for a design file" }]));
+      return response(201).json(fakeState().startFile(body, { origin: new URL(request.url).origin }));
+    }),
+
+    http.get("/files/{id}", ({ request, params, response }) => {
+      const caller = fileCaller(request);
+      if (caller !== 200) return response.untyped(refused(caller));
+      const result = fakeState().getFile(params.id);
+      if (!("id" in result)) return response.untyped(problem(404, "File not found"));
+      return response(200).json(result);
+    }),
+
+    http.post("/files/{id}/versions/{versionId}/complete", ({ request, params, response }) => {
+      const caller = fileCaller(request);
+      if (caller !== 200) return response.untyped(refused(caller));
+      const result = fakeState().completeFile(params.id, params.versionId);
+      if (!("id" in result))
+        return response.untyped(
+          result.status === 409 ? problem(409, "Upload not found") : problem(404, "File version not found"),
+        );
+      return response(200).json(result);
+    }),
+
+    http.post("/partner-portal/partners/{partnerId}/files", async ({ request, params, response }) => {
+      const caller = fileCaller(request, params.partnerId);
+      if (caller !== 200) return response.untyped(refused(caller));
+      const body = await request.json();
+      if (!PHOTO_CONTENT_TYPES.includes(body.content_type))
+        return response.untyped(
+          validation([{ path: "content_type", message: `must be one of ${PHOTO_CONTENT_TYPES.join(", ")}` }]),
+        );
+      const started = fakeState().startFile(
+        { ...body, kind: "image" },
+        { origin: new URL(request.url).origin, partnerId: params.partnerId },
+      );
+      return response(201).json(started);
+    }),
+
+    http.get("/partner-portal/partners/{partnerId}/files/{id}", ({ request, params, response }) => {
+      const caller = fileCaller(request, params.partnerId);
+      if (caller !== 200) return response.untyped(refused(caller));
+      const result = fakeState().getFile(params.id, params.partnerId);
+      if (!("id" in result)) return response.untyped(problem(404, "File not found"));
+      return response(200).json(result);
+    }),
+
+    http.post(
+      "/partner-portal/partners/{partnerId}/files/{id}/versions/{versionId}/complete",
+      ({ request, params, response }) => {
+        const caller = fileCaller(request, params.partnerId);
+        if (caller !== 200) return response.untyped(refused(caller));
+        const result = fakeState().completeFile(params.id, params.versionId, params.partnerId);
+        if (!("id" in result))
+          return response.untyped(
+            result.status === 409 ? problem(409, "Upload not found") : problem(404, "File version not found"),
+          );
+        return response(200).json(result);
+      },
+    ),
+
+    // Object storage, where a signed upload link points: not erp-api, so not typed from its document.
+    rawHttp.options(
+      `${baseUrl}/__storage/uploads/:fileId/:versionId`,
+      () => new HttpResponse(null, { status: 204, headers: STORAGE_CORS }),
+    ),
+
+    rawHttp.put(`${baseUrl}/__storage/uploads/:fileId/:versionId`, async ({ request, params }) => {
+      const bytes = await request.arrayBuffer();
+      const result = fakeState().storeObject(String(params.fileId), String(params.versionId), {
+        contentType: request.headers.get("content-type") ?? "",
+        size: bytes.byteLength,
+      });
+      return new HttpResponse(null, { status: result.status, headers: STORAGE_CORS });
     }),
   ];
 }
