@@ -15,6 +15,7 @@ import { useOrdersList } from "@/lib/orders/queries";
 
 import { OrdersTable } from "./orders-table";
 import { RecordPaymentDialog } from "./record-payment-dialog";
+import { ShipDialog } from "./ship-dialog";
 import { Tiles } from "./tiles";
 import { Toolbar } from "./toolbar";
 import { useOrdersView } from "./use-orders-view";
@@ -30,6 +31,7 @@ export function OrdersPage() {
 function Orders({ canCreate }: { canCreate: boolean }) {
   const [view, setView] = useOrdersView();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [shipping, setShipping] = useState<Order | null>(null);
   const [paying, setPaying] = useState<Order | null>(null);
   // What the last action did, announced politely.
   const [notice, setNotice] = useState<string | null>(null);
@@ -68,6 +70,10 @@ function Orders({ canCreate }: { canCreate: boolean }) {
           onChange={setView}
           selected={selected}
           onSelect={setSelected}
+          onShip={(order) => {
+            setNotice(null);
+            setShipping(order);
+          }}
           onRecordPayment={(order) => {
             setNotice(null);
             setPaying(order);
@@ -75,6 +81,14 @@ function Orders({ canCreate }: { canCreate: boolean }) {
         />
       </section>
 
+      <ShipDialog
+        order={shipping}
+        open={shipping !== null}
+        onOpenChange={(open) => {
+          if (!open) setShipping(null);
+        }}
+        onShipped={setNotice}
+      />
       <RecordPaymentDialog
         order={paying}
         open={paying !== null}
