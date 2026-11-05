@@ -16,6 +16,7 @@ import { TAB_LABEL, workspaceToday } from "@/lib/orders/labels";
 import { useOrdersList } from "@/lib/orders/queries";
 import type { OrdersView } from "@/lib/orders/view";
 import { OfflineError } from "@/lib/session/client-session";
+import { cn } from "@/lib/utils";
 
 import { OrderRow, orderHref } from "./order-row";
 import { OrderRowMenu } from "./order-row-menu";
@@ -49,7 +50,8 @@ export function OrdersTable({
   view: OrdersView;
   onChange: (change: ViewChange) => void;
   selected: ReadonlySet<string>;
-  onSelect: (next: ReadonlySet<string>) => void;
+  /** Ticks (`on`) or unticks these orders. */
+  onSelect: (ids: string[], on: boolean) => void;
   onShip?: (order: Order) => void;
   onRecordPayment?: (order: Order) => void;
 }) {
@@ -57,12 +59,11 @@ export function OrdersTable({
   const { data: me } = useMe();
   const router = useRouter();
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  // Phones show the checkboxes only while selecting; from 768 px they always show.
+  const [selecting, setSelecting] = useState(false);
 
   function toggle(id: string, on = !selected.has(id)) {
-    const next = new Set(selected);
-    if (on) next.add(id);
-    else next.delete(id);
-    onSelect(next);
+    onSelect([id], on);
   }
 
   const keys = useRowKeys({ open: (id) => router.push(orderHref({ id })), toggle: (id) => toggle(id) });
@@ -145,21 +146,24 @@ export function OrdersTable({
   const all = selectedHere === orders.length ? true : selectedHere > 0 ? "indeterminate" : false;
 
   function selectAll(on: boolean) {
-    const next = new Set(selected);
-    for (const order of orders) {
-      if (on) next.add(order.id);
-      else next.delete(order.id);
-    }
-    onSelect(next);
+    onSelect(
+      orders.map((order) => order.id),
+      on,
+    );
   }
 
   return (
     <div>
+      <div className="flex justify-end px-3 pt-1 md:hidden">
+        <Button type="button" variant="ghost" aria-pressed={selecting} onClick={() => setSelecting(!selecting)}>
+          {selecting ? "Done" : "Select"}
+        </Button>
+      </div>
       <table className="w-full border-collapse" onKeyDown={keys.onKeyDown}>
         <caption className="sr-only">Orders</caption>
         <thead>
           <tr>
-            <th scope="col" className={`${th} w-10 pr-0`}>
+            <th scope="col" className={cn(th, "w-10 pr-0", !selecting && "hidden md:table-cell")}>
               <span className="grid size-11 place-items-center md:size-6 pointer-coarse:size-11">
                 <Checkbox checked={all} onCheckedChange={(checked) => selectAll(checked === true)} aria-label="Select all loaded orders" />
               </span>
@@ -200,6 +204,7 @@ export function OrdersTable({
               order={order}
               today={today}
               selected={selected.has(order.id)}
+              selecting={selecting}
               focusable={order.id === activeId}
               onSelect={(on) => toggle(order.id, on)}
               onOpen={() => router.push(orderHref(order))}

@@ -55,6 +55,7 @@ export function OrderRow({
   order,
   today,
   selected,
+  selecting,
   focusable,
   onSelect,
   onOpen,
@@ -64,6 +65,8 @@ export function OrderRow({
   order: Order;
   today: string;
   selected: boolean;
+  /** Phones show the checkbox only while selecting. */
+  selecting: boolean;
   focusable: boolean;
   onSelect: (on: boolean) => void;
   onOpen: () => void;
@@ -96,7 +99,7 @@ export function OrderRow({
         selected && "bg-lilac/50 hover:bg-lilac/60",
       )}
     >
-      <Cell className="w-10 pr-0">
+      <Cell className={cn("w-10 pr-0", !selecting && "hidden md:table-cell")}>
         <span className="grid size-11 place-items-center md:size-6 pointer-coarse:size-11">
           <Checkbox
             checked={selected}

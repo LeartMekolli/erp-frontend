@@ -1,7 +1,6 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { addDays, promisedText, workspaceToday } from "@/lib/orders/labels";
@@ -12,6 +11,7 @@ import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
 import { OrdersTable } from "./orders-table";
+import { useSelection } from "./use-selection";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace: vi.fn() }), usePathname: () => "/orders" }));
@@ -25,11 +25,11 @@ const today = () => workspaceToday("UTC");
 function renderTable(view: Partial<OrdersView> = {}) {
   const onChange = vi.fn();
   function Harness() {
-    const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+    const selection = useSelection("orders");
     return (
       <>
         <input aria-label="Somewhere else" />
-        <OrdersTable view={{ ...DEFAULT_VIEW, ...view }} onChange={onChange} selected={selected} onSelect={setSelected} />
+        <OrdersTable view={{ ...DEFAULT_VIEW, ...view }} onChange={onChange} selected={selection.ids} onSelect={selection.setAll} />
       </>
     );
   }

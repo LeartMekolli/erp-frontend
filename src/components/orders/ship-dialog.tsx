@@ -20,7 +20,8 @@ import type { Order, ShipBody } from "@/lib/api/schema-types";
 import { invalidateOrders } from "@/lib/orders/queries";
 import { useApiMutation } from "@/lib/query/use-api-mutation";
 import { OfflineError } from "@/lib/session/client-session";
-import { cn } from "@/lib/utils";
+
+import { ShipChoice } from "./ship-choice";
 
 // erp-api's rules (`orders.service.ts:199-203`); both optional.
 const schema = z.object({
@@ -201,8 +202,8 @@ function ShipForm({ order, onClose, onShipped }: { order: Order; onClose: () => 
           <fieldset className="flex flex-col gap-2">
             <legend className="sr-only">How to ship</legend>
             <div className="grid grid-cols-2 gap-2">
-              <ChoiceOption value="tracking" label="Enter tracking" choice={choice} onChoose={setChoice} />
-              <ChoiceOption value="label" label="Buy a label" choice={choice} onChoose={setChoice} />
+              <ShipChoice name="ship-choice" value="tracking" label="Enter tracking" choice={choice} onChoose={setChoice} />
+              <ShipChoice name="ship-choice" value="label" label="Buy a label" choice={choice} onChoose={setChoice} />
             </div>
           </fieldset>
           {choice === "tracking" ? (
@@ -221,42 +222,10 @@ function ShipForm({ order, onClose, onShipped }: { order: Order; onClose: () => 
           )}
           <p className="text-caption text-ink-2">The customer gets an email with the tracking number.</p>
           <Button type="submit" className="mt-1">
-            {busy ? (ship.variables?.label ?"Buying the label…" : "Shipping…") : "Ship order"}
+            {busy ? (ship.variables?.label ? "Buying the label…" : "Shipping…") : "Ship order"}
           </Button>
         </fieldset>
       </form>
     </>
-  );
-}
-
-function ChoiceOption({
-  value,
-  label,
-  choice,
-  onChoose,
-}: {
-  value: Choice;
-  label: string;
-  choice: Choice;
-  onChoose: (choice: Choice) => void;
-}) {
-  const checked = choice === value;
-  return (
-    <label
-      className={cn(
-        "flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg border px-3 text-sm font-medium has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-violet",
-        checked ? "border-ink bg-ink/4 text-ink" : "border-line text-ink-2",
-      )}
-    >
-      <input
-        type="radio"
-        name="ship-choice"
-        value={value}
-        checked={checked}
-        onChange={() => onChoose(value)}
-        className="size-4 accent-ink"
-      />
-      {label}
-    </label>
   );
 }
