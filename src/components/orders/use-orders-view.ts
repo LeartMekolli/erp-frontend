@@ -9,13 +9,14 @@ export type ViewChange = Partial<OrdersView>;
 
 /**
  * The view after a change. A new tab starts on its own default sort with no
- * reason (reasons belong to Needs you); a sort equal to the tab's default is
+ * reason unless the change brings one (a tile picks Needs you and a reason
+ * together); reasons belong to Needs you only; a sort equal to the tab's default is
  * left out, so the URL stays short.
  */
 export function applyChange(view: OrdersView, change: ViewChange): OrdersView {
   const next = { ...view, ...change };
   if (change.tab !== undefined && change.tab !== view.tab) {
-    next.reason = null;
+    if (change.reason === undefined) next.reason = null;
     if (change.sort === undefined) next.sort = null;
   }
   if (next.tab !== "needs") next.reason = null;

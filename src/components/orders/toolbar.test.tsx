@@ -142,6 +142,11 @@ describe("applyChange", () => {
     expect(applyChange(view, { q: "luna" }).reason).toBe("late");
   });
 
+  it("keeps a reason that comes with the tab change", () => {
+    const view: OrdersView = { ...DEFAULT_VIEW, tab: "all" };
+    expect(applyChange(view, { tab: "needs", reason: "late" })).toEqual({ ...DEFAULT_VIEW, reason: "late" });
+  });
+
   it("drops a sort that is the tab's default", () => {
     expect(applyChange(DEFAULT_VIEW, { sort: "promised_on" }).sort).toBeNull();
   });
