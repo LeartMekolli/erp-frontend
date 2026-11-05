@@ -1,3 +1,4 @@
+import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FAKE_API_URL, FAKE_PASSWORD, STAFF, WORKSPACE } from "../../../test/fake-erp-api/seed";
@@ -5,6 +6,7 @@ import { fakeState } from "../../../test/fake-erp-api/state";
 import { server } from "../../../test/msw";
 
 import { createApiClient } from "./client";
+import { idempotent } from "./idempotency";
 import type { PartnerPaths } from "./schema-types";
 
 let authHeaders: (string | null)[] = [];
@@ -56,6 +58,25 @@ describe("api client", () => {
     await api.POST("/auth/password-reset", { body: { email: STAFF.email, workspace: WORKSPACE } });
     expect(getAccessToken).not.toHaveBeenCalled();
     expect(authHeaders).toEqual([null]);
+  });
+
+  it("keeps the Idempotency-Key on the 401 retry", async () => {
+    const keys: (string | null)[] = [];
+    server.use(
+      http.post(`${FAKE_API_URL}/roles`, ({ request }) => {
+        keys.push(request.headers.get("idempotency-key"));
+        return request.headers.get("authorization") === "Bearer fresh"
+          ? new HttpResponse(null, { status: 201 })
+          : HttpResponse.json({ type: "about:blank", title: "Unauthorized", status: 401 }, { status: 401 });
+      }),
+    );
+    const api = createApiClient(
+      { getAccessToken: async (options) => (options?.force ? "fresh" : "stale") },
+      FAKE_API_URL,
+    );
+    const { response } = await api.POST("/roles", { body: { name: "Packers", permissions: [] }, ...idempotent("k1") });
+    expect(response.status).toBe(201);
+    expect(keys).toEqual(["k1", "k1"]);
   });
 
   it("gives partner pages no staff routes", () => {

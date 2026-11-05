@@ -51,8 +51,11 @@ describe("useCursorList", () => {
     const cursors = serve();
     const { result } = renderList();
     await waitFor(() => expect(result.current.items).toHaveLength(2));
+    // TanStack hands each new page to React on a 0 ms timer, after fetchNextPage resolves: wait for it.
     await act(() => result.current.fetchNextPage());
+    await waitFor(() => expect(result.current.items).toHaveLength(4));
     await act(() => result.current.fetchNextPage());
+    await waitFor(() => expect(result.current.items).toHaveLength(5));
     expect(result.current.items.map((row) => row.id)).toEqual(["a", "b", "c", "d", "e"]);
     expect(result.current.hasNextPage).toBe(false);
     expect(result.current.pageCount).toBe(3);
@@ -64,7 +67,7 @@ describe("useCursorList", () => {
     const { result } = renderList();
     await waitFor(() => expect(result.current.items).toHaveLength(2));
     await act(() => result.current.fetchNextPage());
+    await waitFor(() => expect(result.current.isFetchNextPageError).toBe(true));
     expect(result.current.items.map((row) => row.id)).toEqual(["a", "b"]);
-    expect(result.current.isFetchNextPageError).toBe(true);
   });
 });
