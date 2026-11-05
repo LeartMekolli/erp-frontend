@@ -29,6 +29,14 @@ Good: `fix: turn away customer accounts after login` with the body `Customers us
 
 `<type>/<one to three words>`, using the commit types: `feat/login`, `feat/orders-list`, `fix/token-refresh`, `docs/product-notes`, `ci/pr-checks`. Lowercase, words joined by hyphens, no name prefix, no ticket or task numbers, never `master`.
 
+Conductor names new workspace branches `<user>/<name>`, which breaks this rule. Agents don't rename branches themselves. Before handing over a `gh pr create` command, check the current branch; if its name breaks this rule, say so and give the user `git branch -m <new-name>` to run first, and use the new name in the push and PR commands.
+
+## Pull requests
+
+- **Title:** a commit subject, following the rules above.
+- **Description:** a few short plain bullets, one per change, in the present tense: `Adds sign-in for staff and partner workshops.` Say what changes for the people using AMI or for the codebase.
+- **Never:** anything the commit-message rules forbid, including the working process ("part 2", plans, tasks, "checked against erp-api"), em dashes, needless ", and", and filler.
+
 ## Ignored files
 
 `docs/`, `.superpowers/`, `.impeccable/`, `heads-up.md`, `todos.md`, `backend-todos.md` and `.env*` are gitignored, so they don't travel with commits. New workspaces copy them from the main checkout (`~/Desktop/erp-frontend`) in the Conductor setup script, so the main checkout must always hold the latest versions.
