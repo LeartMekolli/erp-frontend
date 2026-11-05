@@ -3,7 +3,7 @@ import createClient from "openapi-fetch";
 import { clientSession } from "@/lib/session/client-session";
 
 import { browserApiUrl } from "./config";
-import type { paths } from "./schema-types";
+import type { PartnerPaths, paths } from "./schema-types";
 
 export interface TokenSource {
   getAccessToken(options?: { force?: boolean }): Promise<string>;
@@ -14,10 +14,11 @@ const isPublic = (schemaPath: string) => schemaPath.startsWith("/auth/");
 
 /**
  * The typed erp-api client the browser uses. Adds the access token to every
- * call and, after a 401, retries once with a freshly refreshed token.
+ * call and, after a 401, retries once with a freshly refreshed token. `P`
+ * narrows the routes it can name (see `partnerApi`).
  */
-export function createApiClient(session: TokenSource, baseUrl: string) {
-  const client = createClient<paths>({ baseUrl, fetch: (request) => fetch(request) });
+export function createApiClient<P extends object = paths>(session: TokenSource, baseUrl: string) {
+  const client = createClient<P>({ baseUrl, fetch: (request) => fetch(request) });
   const retries = new WeakMap<Request, Request>();
 
   client.use({
@@ -39,7 +40,13 @@ export function createApiClient(session: TokenSource, baseUrl: string) {
   return client;
 }
 
-export const api = createApiClient(
-  { getAccessToken: (options) => clientSession().getAccessToken(options) },
-  browserApiUrl(),
-);
+const sessionTokens: TokenSource = { getAccessToken: (options) => clientSession().getAccessToken(options) };
+
+export const api = createApiClient(sessionTokens, browserApiUrl());
+
+/**
+ * The client for partner pages: it can only name partner-portal routes and
+ * `/me`, so a partner screen can't call a staff route, and customers or prices
+ * can't reach one by mistake. ESLint keeps `api` out of the partner area.
+ */
+export const partnerApi = createApiClient<PartnerPaths>(sessionTokens, browserApiUrl());

@@ -5,6 +5,7 @@ import { fakeState } from "../../../test/fake-erp-api/state";
 import { server } from "../../../test/msw";
 
 import { createApiClient } from "./client";
+import type { PartnerPaths } from "./schema-types";
 
 let authHeaders: (string | null)[] = [];
 beforeEach(() => {
@@ -55,5 +56,14 @@ describe("api client", () => {
     await api.POST("/auth/password-reset", { body: { email: STAFF.email, workspace: WORKSPACE } });
     expect(getAccessToken).not.toHaveBeenCalled();
     expect(authHeaders).toEqual([null]);
+  });
+
+  it("gives partner pages no staff routes", () => {
+    const partner = createApiClient<PartnerPaths>({ getAccessToken: async () => "unused" }, FAKE_API_URL);
+    // Never called: the check is the type error below, which `npm run typecheck` enforces.
+    const staffCall = () =>
+      // @ts-expect-error: /orders is a staff route
+      partner.GET("/orders");
+    expect(typeof staffCall).toBe("function");
   });
 });
