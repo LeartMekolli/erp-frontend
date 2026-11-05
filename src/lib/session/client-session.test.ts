@@ -98,10 +98,12 @@ describe("getAccessToken", () => {
 
   it("sends the last activity with the refresh", async () => {
     session.recordActivity();
+    // Read before the refresh: adopting its answer can move lastActivity() on by a millisecond.
+    const activeAt = session.lastActivity();
     fetchMock.mockResolvedValue(refreshed("t1"));
     await session.getAccessToken();
     const init = fetchMock.mock.calls[0]![1]!;
-    expect(JSON.parse(String(init.body))).toEqual({ activeAt: session.lastActivity() });
+    expect(JSON.parse(String(init.body))).toEqual({ activeAt });
   });
 
   it("does not sign out when offline", async () => {
