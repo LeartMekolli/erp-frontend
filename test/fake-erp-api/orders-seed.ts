@@ -8,7 +8,7 @@ import type { Order, OrderState, PaymentState } from "../../src/lib/api/schema-t
 
 export type StoredOrder = Omit<Order, "needs">;
 
-const CUSTOMERS = {
+export const CUSTOMERS = {
   fieldnote: { id: "11111111-0000-4000-8000-000000000001", name: "Fieldnote Studio" },
   luna: { id: "11111111-0000-4000-8000-000000000002", name: "Luna Jewels" },
   orbit: { id: "11111111-0000-4000-8000-000000000003", name: "Orbit Dental" },

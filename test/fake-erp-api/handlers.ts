@@ -4,6 +4,7 @@ import { createOpenApiHttp } from "openapi-msw";
 import type { paths, Permission } from "../../src/lib/api/schema-types";
 import type { Answer } from "./orders";
 import type { FakeUser } from "./seed";
+import { search } from "./search";
 import { fakeState } from "./state";
 
 const TITLES: Record<number, string> = {
@@ -268,6 +269,16 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       if (caller instanceof Response) return response.untyped(caller);
       const answer = fakeState().orders.paidByHand(params.id, await request.json(), request.headers.get("idempotency-key"));
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/search", ({ request, response }) => {
+      const user = fakeState().authenticate(bearer(request));
+      if (!user) return response.untyped(problem(401, "Unauthorized"));
+      const q = new URL(request.url).searchParams.get("q")?.trim() ?? "";
+      if (q.length < 1 || q.length > 100)
+        return response.untyped(validation([{ path: "q", message: "must be 1 to 100 characters" }]));
+      if (user.kind !== "staff") return response.untyped(problem(403, "Search is for staff"));
+      return response(200).json(search(user, q, fakeState().orders.all()));
     }),
 
     // Anyone signed in reads their own feed; no permission (`feed.controller.ts:33-37`).

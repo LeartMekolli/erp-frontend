@@ -282,6 +282,11 @@ export function createOrdersStore(now: () => number) {
       });
     },
 
+    /** Every order as staff see it, for search. */
+    all(): Order[] {
+      return [...orders.values()].map(view);
+    },
+
     /** The courier service refuses this order's next label with a 503. */
     failNextLabel(id: string): void {
       failingLabels.add(id);

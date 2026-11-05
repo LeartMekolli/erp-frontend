@@ -4,16 +4,14 @@ import { Bell as BellIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 
-import { UNKNOWN, noAnswer } from "@/components/auth/copy";
 import { ListEnd } from "@/components/data/list-end";
 import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { isApiProblem } from "@/lib/api/problem";
+import { errorMessage } from "@/lib/api/error-message";
 import type { FeedEntry } from "@/lib/api/schema-types";
 import { useFormat } from "@/lib/format/use-format";
-import { OfflineError } from "@/lib/session/client-session";
 import { useMediaQuery } from "@/lib/use-media-query";
 
 import { useFeed, useMarkRead, useUnreadDot } from "./queries";
@@ -97,11 +95,6 @@ export function Bell() {
   );
 }
 
-function failure(error: unknown): string {
-  if (error instanceof OfflineError) return noAnswer();
-  return (isApiProblem(error) && error.detail) || UNKNOWN;
-}
-
 function Feed({ onChoose }: { onChoose: (entry: FeedEntry) => void }) {
   const feed = useFeed();
   const format = useFormat();
@@ -117,7 +110,7 @@ function Feed({ onChoose }: { onChoose: (entry: FeedEntry) => void }) {
   if (feed.items.length === 0 && feed.isError) {
     return (
       <div className="flex flex-col items-start gap-3 px-4 py-6">
-        <p className="text-sm text-ink-2">{failure(feed.error)}</p>
+        <p className="text-sm text-ink-2">{errorMessage(feed.error)}</p>
         <Button variant="secondary" onClick={() => void feed.refetch()}>
           Try again
         </Button>

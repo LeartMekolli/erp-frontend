@@ -9,6 +9,14 @@ import { installWebLocks } from "./web-locks";
 
 if (typeof navigator !== "undefined") installWebLocks();
 
+// jsdom has no layout: cmdk scrolls the chosen option into view and measures its list.
+if (typeof Element !== "undefined") Element.prototype.scrollIntoView ??= () => {};
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
 process.env.ERP_API_URL = FAKE_API_URL;
 process.env.NEXT_PUBLIC_ERP_API_URL = FAKE_API_URL;
 // 32 bytes of 0x01, base64: a fixed key for tests only.

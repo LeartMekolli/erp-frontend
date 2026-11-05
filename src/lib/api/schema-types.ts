@@ -54,6 +54,9 @@ export type ShipBody = JsonBody<"/orders/{id}/ship", "post">;
 /** `POST /orders/{id}/paid-by-hand`: a payment made outside the payment provider. */
 export type PaidByHandBody = JsonBody<"/orders/{id}/paid-by-hand", "post">;
 
+/** `GET /search`: ⌘K's orders, customers, partners and help articles, at most 5 of each. */
+export type SearchResponse = JsonOk<"/search", "get">;
+
 /** One in-app notification, from `GET /notifications`. */
 export type FeedEntry = JsonOk<"/notifications", "get">["data"][number];
 

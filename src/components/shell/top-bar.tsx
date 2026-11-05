@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { useCan } from "@/lib/auth/permissions";
 
+import { CommandBox } from "./command/command-box";
 import { Bell } from "./notifications/bell";
 import { UserMenu } from "./user-menu";
 
@@ -20,6 +21,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
         <Menu aria-hidden className="size-5" />
         <span className="sr-only">Open menu</span>
       </button>
+      <CommandBox />
       <div className="flex-1" />
       {canCreate && (
         <Link href="/orders/new" className={`${iconButton} md:hidden`}>
