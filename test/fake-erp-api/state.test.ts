@@ -4,7 +4,9 @@ import {
   CUSTOMER,
   EXPIRED_INVITE_TOKEN,
   FAKE_PASSWORD,
+  LAYERLINE_ID,
   LAYERLINE_OWNER,
+  NORTHCAST_ID,
   PARTNER,
   PARTNER_EXISTING_INVITE_TOKEN,
   PARTNER_INVITE_TOKEN,
@@ -162,5 +164,61 @@ describe("fake erp-api state", () => {
     expect(s.partnerMe(partner)).toMatchObject({ partners: [{ display_name: "Northcast Foundry" }] });
     const staff = s.authenticate(tokens(s.login(WORKSPACE, STAFF.email, FAKE_PASSWORD)).access_token)!;
     expect(s.partnerMe(staff)).toEqual({ status: 403 });
+  });
+});
+
+describe("fake file uploads", () => {
+  const ORIGIN = "http://storage.test";
+  const design = { kind: "design", name: "part.stl", content_type: "model/stl", size: 10, declared_unit: "mm" } as const;
+  const photo = { kind: "image", name: "qc.png", content_type: "image/png", size: 3 } as const;
+
+  it("signs a storage link 15 minutes ahead", () => {
+    const s = createFakeState(() => 0);
+    const { file, version, upload } = s.startFile(design, { origin: ORIGIN });
+    expect(upload.url).toBe(`${ORIGIN}/__storage/uploads/${file.id}/${version.id}`);
+    expect(upload.headers).toEqual({ "content-type": "model/stl", "content-length": "10" });
+    expect(upload.expires_at).toBe(new Date(15 * 60 * 1000).toISOString());
+    expect(version.status).toBe("pending");
+  });
+
+  it("advances a completed version one step per read", () => {
+    const s = createFakeState();
+    const { file, version } = s.startFile(design, { origin: ORIGIN });
+    expect(s.storeObject(file.id, version.id, { contentType: "model/stl", size: 10 })).toEqual({ status: 200 });
+    expect(s.completeFile(file.id, version.id)).toMatchObject({ id: version.id, status: "uploaded" });
+    const status = () => {
+      const read = s.getFile(file.id);
+      if (!("id" in read)) throw new Error(`expected the file, got ${read.status}`);
+      return read.versions[0]!.status;
+    };
+    expect(status()).toBe("measuring");
+    expect(status()).toBe("measured");
+    expect(status()).toBe("measured");
+  });
+
+  it("answers 409 to complete when nothing, or something else, reached storage", () => {
+    const s = createFakeState();
+    const first = s.startFile(design, { origin: ORIGIN });
+    expect(s.completeFile(first.file.id, first.version.id)).toEqual({ status: 409 });
+    const second = s.startFile(design, { origin: ORIGIN });
+    s.storeObject(second.file.id, second.version.id, { contentType: "model/stl", size: 11 });
+    expect(s.completeFile(second.file.id, second.version.id)).toEqual({ status: 409 });
+  });
+
+  it("refuses the storage PUT once the link has run out", () => {
+    let now = 0;
+    const s = createFakeState(() => now);
+    const { file, version } = s.startFile(design, { origin: ORIGIN });
+    now += 15 * 60 * 1000;
+    expect(s.storeObject(file.id, version.id, { contentType: "model/stl", size: 10 })).toEqual({ status: 403 });
+  });
+
+  it("hides a workshop's files from another workshop", () => {
+    const s = createFakeState();
+    const { file, version } = s.startFile(photo, { origin: ORIGIN, partnerId: NORTHCAST_ID });
+    expect(file.owner).toEqual({ type: "partner", id: NORTHCAST_ID });
+    expect(s.getFile(file.id, NORTHCAST_ID)).toMatchObject({ id: file.id });
+    expect(s.getFile(file.id, LAYERLINE_ID)).toEqual({ status: 404 });
+    expect(s.completeFile(file.id, version.id, LAYERLINE_ID)).toEqual({ status: 404 });
   });
 });
