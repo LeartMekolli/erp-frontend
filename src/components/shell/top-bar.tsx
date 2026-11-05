@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { useCan } from "@/lib/auth/permissions";
 
+import { Bell } from "./notifications/bell";
 import { UserMenu } from "./user-menu";
 
 const iconButton =
@@ -26,6 +27,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
           <span className="sr-only">New order</span>
         </Link>
       )}
+      <Bell />
       <UserMenu />
     </header>
   );

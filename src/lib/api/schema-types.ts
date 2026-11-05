@@ -54,5 +54,8 @@ export type ShipBody = JsonBody<"/orders/{id}/ship", "post">;
 /** `POST /orders/{id}/paid-by-hand`: a payment made outside the payment provider. */
 export type PaidByHandBody = JsonBody<"/orders/{id}/paid-by-hand", "post">;
 
+/** One in-app notification, from `GET /notifications`. */
+export type FeedEntry = JsonOk<"/notifications", "get">["data"][number];
+
 /** `POST /auth/invitations/preview`: what an invitation link is, before the page shows a form. */
 export type InvitationPreview = JsonOk<"/auth/invitations/preview", "post">;

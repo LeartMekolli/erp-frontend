@@ -270,6 +270,21 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
+    // Anyone signed in reads their own feed; no permission (`feed.controller.ts:33-37`).
+    http.get("/notifications", ({ request, response }) => {
+      const user = fakeState().authenticate(bearer(request));
+      if (!user) return response.untyped(problem(401, "Unauthorized"));
+      const answer = fakeState().notifications.list(user.id, new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/notifications/{id}/read", ({ request, params, response }) => {
+      const user = fakeState().authenticate(bearer(request));
+      if (!user) return response.untyped(problem(401, "Unauthorized"));
+      const answer = fakeState().notifications.markRead(user.id, params.id);
+      return answer.ok ? response(204).empty() : response.untyped(refusal(answer));
+    }),
+
     // Object storage, where a signed upload link points: not erp-api, so not typed from its document.
     rawHttp.options(
       `${baseUrl}/__storage/uploads/:fileId/:versionId`,
