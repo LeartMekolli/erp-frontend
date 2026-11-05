@@ -57,6 +57,11 @@ export type PaidByHandBody = JsonBody<"/orders/{id}/paid-by-hand", "post">;
 /** `GET /search`: ⌘K's orders, customers, partners and help articles, at most 5 of each. */
 export type SearchResponse = JsonOk<"/search", "get">;
 
+/** `GET /ai/runs/{id}`: one of your AI runs, with its answer once done. */
+export type AiRun = JsonOk<"/ai/runs/{id}", "get">;
+export type AiRef = NonNullable<AiRun["answer"]>["refs"][number];
+export type SuggestionKind = NonNullable<NonNullable<AiRun["answer"]>["action"]>["kind"];
+
 /** One in-app notification, from `GET /notifications`. */
 export type FeedEntry = JsonOk<"/notifications", "get">["data"][number];
 

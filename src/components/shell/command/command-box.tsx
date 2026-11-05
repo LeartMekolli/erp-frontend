@@ -1,36 +1,43 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { Search, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 
-import { Command, CommandInput, CommandList } from "@/components/ui/command";
+import { useMe } from "@/components/session/session-gate";
+import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { errorMessage } from "@/lib/api/error-message";
+import type { SearchResponse } from "@/lib/api/schema-types";
+import { can } from "@/lib/auth/permissions";
 
-import { SearchResults, hasResults } from "./search-results";
-import { MAX_SEARCH_LENGTH, useSearch } from "./use-search";
+import { AskAnswer } from "./ask-answer";
+import { SearchResults, firstResultKey, hasResults } from "./search-results";
+import { MAX_QUESTION_LENGTH, useAsk } from "./use-ask";
+import { MAX_SEARCH_LENGTH, searchText, useSearch } from "./use-search";
 
 const PLACEHOLDER = "Search or ask a question";
+/** The Ask AI row's value in cmdk's selection. */
+const ASK = "ask-ai";
 
 const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform);
 const never = () => () => {};
 
 /**
  * ⌘K: one box that finds orders, customers, partners and help articles as
- * you type. Opens from the top bar's search button, or with ⌘K / Ctrl+K
- * anywhere unless another dialog is already open. Full screen below 768 px.
+ * you type, and asks the AI a question. Opens from the top bar's search
+ * button, or with ⌘K / Ctrl+K anywhere unless another dialog is already
+ * open. Full screen below 768 px.
  */
 export function CommandBox() {
   const [open, setOpen] = useState(false);
-  const [text, setText] = useState("");
   const router = useRouter();
   const mac = useSyncExternalStore(never, isMac, () => true);
   // Where focus was when ⌘K opened the box, to go back to on close.
   const returnTo = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
+    function onKeyDown(event: globalThis.KeyboardEvent) {
       if (event.key.toLowerCase() !== "k" || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
       if (!open && document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
       event.preventDefault();
@@ -41,13 +48,8 @@ export function CommandBox() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
-  function change(next: boolean) {
-    setOpen(next);
-    if (!next) setText("");
-  }
-
   function go(href: string) {
-    change(false);
+    setOpen(false);
     router.push(href);
   }
 
@@ -56,7 +58,7 @@ export function CommandBox() {
       open={open}
       onOpenChange={(next) => {
         if (next) returnTo.current = null;
-        change(next);
+        setOpen(next);
       }}
     >
       <DialogTrigger
@@ -83,22 +85,83 @@ export function CommandBox() {
       >
         <DialogTitle className="sr-only">Search</DialogTitle>
         <DialogDescription className="sr-only">
-          Find orders, customers, partners and help articles.
+          Find orders, customers, partners and help articles, or ask a question.
         </DialogDescription>
-        <Command shouldFilter={false} className="rounded-none! md:rounded-xl!">
-          <CommandInput
-            value={text}
-            onValueChange={setText}
-            placeholder={PLACEHOLDER}
-            maxLength={MAX_SEARCH_LENGTH}
-            className="text-base md:text-sm"
-          />
-          <CommandList className="max-h-none flex-1 md:max-h-[60vh]">
-            <Answer text={text} onGo={go} />
-          </CommandList>
-        </Command>
+        <Panel onGo={go} onClose={() => setOpen(false)} />
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** The box's contents; mounted only while it's open, so closing starts afresh. */
+function Panel({ onGo, onClose }: { onGo: (href: string) => void; onClose: () => void }) {
+  const [text, setText] = useState("");
+  const [asked, setAsked] = useState<string | null>(null);
+  const { data: me } = useMe();
+  const search = useSearch(text);
+  const ask = useAsk();
+  // The person's pick among these results; a new answer selects its first row again.
+  const [picked, setPicked] = useState<{ value: string; for: SearchResponse | undefined }>({ value: "", for: undefined });
+
+  const question = text.trim();
+  const mayAsk = can(me, "ai.use") && question.length > 0;
+  const tooLong = question.length > MAX_QUESTION_LENGTH;
+  const first = (search.data && firstResultKey(search.data)) ?? (mayAsk ? ASK : "");
+  const value = picked.for === search.data && picked.value ? picked.value : first;
+
+  function askNow() {
+    if (!mayAsk || tooLong) return;
+    setAsked(question);
+    ask.ask(question);
+  }
+
+  function edit(next: string) {
+    setText(next);
+    if (asked !== null) {
+      setAsked(null);
+      ask.reset();
+    }
+  }
+
+  function onKeyDown(event: KeyboardEvent) {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      askNow();
+    }
+  }
+
+  return (
+    <Command
+      shouldFilter={false}
+      value={value}
+      onValueChange={(next) => setPicked({ value: next, for: search.data })}
+      onKeyDown={onKeyDown}
+      className="rounded-none! md:rounded-xl!"
+    >
+      <CommandInput value={text} onValueChange={edit} placeholder={PLACEHOLDER} className="text-base md:text-sm" />
+      <CommandList className="max-h-none flex-1 md:max-h-[60vh]">
+        {asked !== null ? (
+          <AskAnswer question={asked} ask={ask} onGo={onClose} />
+        ) : (
+          <>
+            <Results text={text} search={search} onGo={onGo} />
+            {mayAsk && (
+              <CommandGroup>
+                <CommandItem value={ASK} disabled={tooLong} onSelect={askNow} className="min-h-11">
+                  <Sparkles aria-hidden className="text-violet" />
+                  <span className="truncate">{`Ask AI: "${question}"`}</span>
+                </CommandItem>
+                {tooLong && (
+                  <p className="px-2 pb-2 text-caption text-ink-2">
+                    Questions can be up to {MAX_QUESTION_LENGTH} characters.
+                  </p>
+                )}
+              </CommandGroup>
+            )}
+          </>
+        )}
+      </CommandList>
+    </Command>
   );
 }
 
@@ -106,10 +169,18 @@ function Message({ children }: { children: string }) {
   return <p className="px-3 py-6 text-center text-sm text-ink-2">{children}</p>;
 }
 
-function Answer({ text, onGo }: { text: string; onGo: (href: string) => void }) {
-  const search = useSearch(text);
-
+function Results({
+  text,
+  search,
+  onGo,
+}: {
+  text: string;
+  search: ReturnType<typeof useSearch>;
+  onGo: (href: string) => void;
+}) {
   if (!text.trim()) return <Message>Type to search orders, customers, partners and help.</Message>;
+  // Past search's limit the text can only be a question.
+  if (searchText(text).length > MAX_SEARCH_LENGTH) return null;
   if (search.isError && search.settled) return <Message>{errorMessage(search.error)}</Message>;
   if (!search.data) return null;
   if (!hasResults(search.data)) {

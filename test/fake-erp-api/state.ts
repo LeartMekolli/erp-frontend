@@ -14,6 +14,7 @@ import {
   type FakeInvitation,
   type FakeUser,
 } from "./seed";
+import { createAiStore } from "./ai";
 import { createNotificationsStore } from "./notifications";
 import { createOrdersStore } from "./orders";
 
@@ -74,6 +75,7 @@ export function createFakeState(now: () => number = Date.now) {
   const files = new Map<string, FakeFile>();
   const orders = createOrdersStore(now);
   const notifications = createNotificationsStore(now);
+  const ai = createAiStore(now);
 
   /** The file, if the caller may see it: a partner route only sees that workshop's files. */
   function ownFile(fileId: string, partnerId?: string): FakeFile | null {
@@ -108,6 +110,7 @@ export function createFakeState(now: () => number = Date.now) {
   return {
     orders,
     notifications,
+    ai,
 
     login(workspace: string | undefined, email: string, password: string): SessionTokens | Status<401 | 429> {
       if (workspace !== WORKSPACE) return { status: 401 };

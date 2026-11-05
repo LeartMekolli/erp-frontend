@@ -281,6 +281,20 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return response(200).json(search(user, q, fakeState().orders.all()));
     }),
 
+    http.post("/ai/ask", async ({ request, response }) => {
+      const caller = staffWith(request, "ai.use");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().ai.ask(caller.id, (await request.json()).question);
+      return answer.ok ? response(202).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/ai/runs/{id}", ({ request, params, response }) => {
+      const caller = staffWith(request, "ai.use");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().ai.run(caller.id, params.id);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
     // Anyone signed in reads their own feed; no permission (`feed.controller.ts:33-37`).
     http.get("/notifications", ({ request, response }) => {
       const user = fakeState().authenticate(bearer(request));

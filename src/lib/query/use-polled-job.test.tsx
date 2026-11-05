@@ -30,12 +30,14 @@ function job(states: (JobState | Error)[]) {
   return { queryFn, times };
 }
 
-function renderJob(queryFn: () => Promise<{ status: JobState }>) {
+function renderJob(queryFn: () => Promise<{ status: JobState }>, delays?: readonly number[]) {
   const client = createQueryClient();
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  return renderHook(() => usePolledJob({ queryKey: ["job"], queryFn, stateOf: (data) => data.status }), { wrapper });
+  return renderHook(() => usePolledJob({ queryKey: ["job"], queryFn, stateOf: (data) => data.status, delays }), {
+    wrapper,
+  });
 }
 
 const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
@@ -57,6 +59,16 @@ describe("usePolledJob", () => {
     await advance(30_000);
     expect(times).toEqual([0, 1_000, 3_000, 7_000]);
     expect(result.current.state).toBe("done");
+  });
+
+  it("polls with the delays it is given", async () => {
+    const { queryFn, times } = job(["pending"]);
+    renderJob(queryFn, [...Array<number>(20).fill(500), 1_000]);
+    await advance(9_999);
+    expect(times).toHaveLength(20);
+    expect(times.at(-1)).toBe(9_500);
+    await advance(2_000);
+    expect(times.slice(20)).toEqual([10_000, 11_000]);
   });
 
   it("caps the delay at 10 seconds", async () => {

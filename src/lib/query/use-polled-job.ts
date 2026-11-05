@@ -28,8 +28,10 @@ export function usePolledJob<T>(options: {
   queryFn: () => Promise<T>;
   stateOf: (data: T) => JobState;
   enabled?: boolean;
+  /** Overrides `POLL_DELAYS_MS`, for work worth checking sooner. */
+  delays?: readonly number[];
 }) {
-  const { stateOf } = options;
+  const { stateOf, delays = POLL_DELAYS_MS } = options;
   const [startedAt] = useState(Date.now);
   const online = useOnline();
   const query = useQuery({
@@ -40,11 +42,11 @@ export function usePolledJob<T>(options: {
       const data = q.state.data;
       if (data !== undefined && FINISHED.has(stateOf(data))) return false;
       const polls = Math.max(q.state.dataUpdateCount, 1);
-      return POLL_DELAYS_MS[Math.min(polls, POLL_DELAYS_MS.length) - 1];
+      return delays[Math.min(polls, delays.length) - 1];
     },
   });
 
-  const state = query.data === undefined ? "loading" : stateOf(query.data);
+  const state: JobState | "loading" = query.data === undefined ? "loading" : stateOf(query.data);
   const finished = state !== "loading" && FINISHED.has(state);
   return {
     state,

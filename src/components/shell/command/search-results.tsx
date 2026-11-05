@@ -37,7 +37,12 @@ function groups(results: SearchResponse): { heading: string; icon: LucideIcon; i
 }
 
 export function hasResults(results: SearchResponse): boolean {
-  return groups(results).some((group) => group.items.length > 0);
+  return firstResultKey(results) !== undefined;
+}
+
+/** The first row's value, which a new answer selects. */
+export function firstResultKey(results: SearchResponse): string | undefined {
+  return groups(results).flatMap((group) => group.items)[0]?.key;
 }
 
 /** ⌘K's results, one group per kind; a kind with nothing found isn't shown. */
