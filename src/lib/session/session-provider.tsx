@@ -1,10 +1,12 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { OfflineError, SessionEndedError, clientSession } from "./client-session";
+import { createQueryClient } from "@/lib/query/query-client";
+
+import { clientSession } from "./client-session";
 
 /**
  * Wraps the app: TanStack Query, activity tracking, and the move to the
@@ -13,17 +15,7 @@ import { OfflineError, SessionEndedError, clientSession } from "./client-session
 export function SessionProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            retry: (count, error) =>
-              !(error instanceof SessionEndedError) && !(error instanceof OfflineError) && count < 2,
-          },
-        },
-      }),
-  );
+  const [queryClient] = useState(createQueryClient);
 
   useEffect(() => {
     const session = clientSession();
