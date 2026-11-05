@@ -17,6 +17,8 @@ function isTyping(target: EventTarget): boolean {
 export function useRowKeys(actions: { open(id: string): void; toggle(id: string): void }) {
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
+    // Keys in a row's menu or a dialog arrive through React's tree from a portal: theirs, not the table's.
+    if (!event.currentTarget.contains(event.target as Node)) return;
     const row = (event.target as HTMLElement).closest<HTMLElement>("[data-row-id]");
     const rows = Array.from(event.currentTarget.querySelectorAll<HTMLElement>("[data-row-id]"));
     const index = row ? rows.indexOf(row) : -1;

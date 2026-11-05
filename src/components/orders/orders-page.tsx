@@ -8,11 +8,13 @@ import { useState } from "react";
 import { Freshness } from "@/components/data/freshness";
 import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
+import type { Order } from "@/lib/api/schema-types";
 import { can } from "@/lib/auth/permissions";
 import { useFormat } from "@/lib/format/use-format";
 import { useOrdersList } from "@/lib/orders/queries";
 
 import { OrdersTable } from "./orders-table";
+import { RecordPaymentDialog } from "./record-payment-dialog";
 import { Tiles } from "./tiles";
 import { Toolbar } from "./toolbar";
 import { useOrdersView } from "./use-orders-view";
@@ -28,6 +30,9 @@ export function OrdersPage() {
 function Orders({ canCreate }: { canCreate: boolean }) {
   const [view, setView] = useOrdersView();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [paying, setPaying] = useState<Order | null>(null);
+  // What the last action did, announced politely.
+  const [notice, setNotice] = useState<string | null>(null);
   const { date } = useFormat();
   const [today] = useState(() => new Date().toISOString());
   // The table's query, shared through the cache: Freshness reports on it.
@@ -52,11 +57,32 @@ function Orders({ canCreate }: { canCreate: boolean }) {
 
       <section aria-label="Order list" className="flex flex-col rounded-[20px] bg-card">
         <Toolbar view={view} onChange={setView} />
-        <div className="flex justify-end px-4 pt-2">
+        <div className="flex items-center justify-between gap-3 px-4 pt-2">
+          <p role="status" className="text-caption font-medium text-ink">
+            {notice}
+          </p>
           {list.dataUpdatedAt > 0 && <Freshness query={list} />}
         </div>
-        <OrdersTable view={view} onChange={setView} selected={selected} onSelect={setSelected} />
+        <OrdersTable
+          view={view}
+          onChange={setView}
+          selected={selected}
+          onSelect={setSelected}
+          onRecordPayment={(order) => {
+            setNotice(null);
+            setPaying(order);
+          }}
+        />
       </section>
+
+      <RecordPaymentDialog
+        order={paying}
+        open={paying !== null}
+        onOpenChange={(open) => {
+          if (!open) setPaying(null);
+        }}
+        onRecorded={setNotice}
+      />
     </>
   );
 }

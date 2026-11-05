@@ -59,6 +59,7 @@ export function OrderRow({
   onSelect,
   onOpen,
   onFocus,
+  menu,
 }: {
   order: Order;
   today: string;
@@ -67,6 +68,8 @@ export function OrderRow({
   onSelect: (on: boolean) => void;
   onOpen: () => void;
   onFocus: () => void;
+  /** The row's actions, in the last column. */
+  menu: ReactNode;
 }) {
   const late = order.needs.includes("late");
   const promised = promisedText(order.promised_on, today, late);
@@ -74,7 +77,9 @@ export function OrderRow({
   const lines = linesSummary(order.lines);
 
   function click(event: MouseEvent<HTMLTableRowElement>) {
-    if ((event.target as HTMLElement).closest(OWN_CLICK)) return;
+    const target = event.target as HTMLElement;
+    // Clicks inside the row's menu or sheet arrive through React's tree from a portal: not the row's.
+    if (!event.currentTarget.contains(target) || target.closest(OWN_CLICK)) return;
     onOpen();
   }
 
@@ -148,6 +153,7 @@ export function OrderRow({
       </Cell>
       <Cell className={cn("hidden whitespace-nowrap md:table-cell", late ? "font-semibold text-late" : "text-ink")}>{promised}</Cell>
       <Cell className="hidden text-right font-medium whitespace-nowrap tabular-nums md:table-cell">{total}</Cell>
+      <Cell className="w-12 px-1 text-right">{menu}</Cell>
     </tr>
   );
 }

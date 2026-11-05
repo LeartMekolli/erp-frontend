@@ -10,6 +10,7 @@ import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { isApiProblem } from "@/lib/api/problem";
+import type { Order } from "@/lib/api/schema-types";
 import { can } from "@/lib/auth/permissions";
 import { TAB_LABEL, workspaceToday } from "@/lib/orders/labels";
 import { useOrdersList } from "@/lib/orders/queries";
@@ -17,6 +18,7 @@ import type { OrdersView } from "@/lib/orders/view";
 import { OfflineError } from "@/lib/session/client-session";
 
 import { OrderRow, orderHref } from "./order-row";
+import { OrderRowMenu } from "./order-row-menu";
 import type { ViewChange } from "./use-orders-view";
 import { useRowKeys } from "./use-row-keys";
 
@@ -41,11 +43,15 @@ export function OrdersTable({
   onChange,
   selected,
   onSelect,
+  onShip,
+  onRecordPayment,
 }: {
   view: OrdersView;
   onChange: (change: ViewChange) => void;
   selected: ReadonlySet<string>;
   onSelect: (next: ReadonlySet<string>) => void;
+  onShip?: (order: Order) => void;
+  onRecordPayment?: (order: Order) => void;
 }) {
   const list = useOrdersList(view);
   const { data: me } = useMe();
@@ -182,6 +188,9 @@ export function OrdersTable({
             <th scope="col" className={`${th} hidden text-right md:table-cell`}>
               Total
             </th>
+            <th scope="col" className={`${th} w-12`}>
+              <span className="sr-only">Actions</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -195,6 +204,7 @@ export function OrdersTable({
               onSelect={(on) => toggle(order.id, on)}
               onOpen={() => router.push(orderHref(order))}
               onFocus={() => setFocusedId(order.id)}
+              menu={<OrderRowMenu order={order} onShip={onShip} onRecordPayment={onRecordPayment} />}
             />
           ))}
         </tbody>
