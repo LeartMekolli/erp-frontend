@@ -14,6 +14,7 @@ import {
   type FakeInvitation,
   type FakeUser,
 } from "./seed";
+import { createOrdersStore } from "./orders";
 
 /** What erp-api's login and refresh answer (`session.service.ts:22-26`). */
 export interface SessionTokens {
@@ -70,6 +71,7 @@ export function createFakeState(now: () => number = Date.now) {
   const failures = new Map<string, { count: number; since: number }>();
   const spentTokens = new Set<string>([USED_TOKEN]);
   const files = new Map<string, FakeFile>();
+  const orders = createOrdersStore(now);
 
   /** The file, if the caller may see it: a partner route only sees that workshop's files. */
   function ownFile(fileId: string, partnerId?: string): FakeFile | null {
@@ -102,6 +104,8 @@ export function createFakeState(now: () => number = Date.now) {
   }
 
   return {
+    orders,
+
     login(workspace: string | undefined, email: string, password: string): SessionTokens | Status<401 | 429> {
       if (workspace !== WORKSPACE) return { status: 401 };
       const key = email.trim().toLowerCase();

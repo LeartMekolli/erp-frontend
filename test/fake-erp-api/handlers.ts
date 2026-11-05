@@ -1,7 +1,9 @@
 import { HttpResponse, http as rawHttp, type HttpHandler } from "msw";
 import { createOpenApiHttp } from "openapi-msw";
 
-import type { paths } from "../../src/lib/api/schema-types";
+import type { paths, Permission } from "../../src/lib/api/schema-types";
+import type { Answer } from "./orders";
+import type { FakeUser } from "./seed";
 import { fakeState } from "./state";
 
 const TITLES: Record<number, string> = {
@@ -11,6 +13,7 @@ const TITLES: Record<number, string> = {
   404: "Not Found",
   409: "Conflict",
   429: "Too Many Requests",
+  503: "Service Unavailable",
 };
 
 /** erp-api's error body for a Nest exception (`api-error.ts:108-117`). */
@@ -59,6 +62,19 @@ function fileCaller(request: Request, partnerId?: string): 200 | 401 | 404 {
 
 function refused(status: 401 | 404) {
   return status === 401 ? problem(401, "Unauthorized") : problem(404, "File not found");
+}
+
+/** Staff holding `permission`, or the problem erp-api answers anyone else with. */
+function staffWith(request: Request, permission: Permission): FakeUser | Response {
+  const user = fakeState().authenticate(bearer(request));
+  if (!user) return problem(401, "Unauthorized");
+  if (user.kind !== "staff" || !user.permissions.includes(permission)) return problem(403, "Forbidden");
+  return user;
+}
+
+/** A store's refusal as erp-api would send it. */
+function refusal(answer: Exclude<Answer<unknown>, { ok: true }>): Response {
+  return answer.status === 400 ? validation(answer.errors) : problem(answer.status, answer.detail);
 }
 
 /** The bucket's CORS rules: browsers may PUT with `content-type` (erp-api `README.md`, "File storage"). */
@@ -225,6 +241,34 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
         return response(200).json(result);
       },
     ),
+
+    http.get("/orders", ({ request, response }) => {
+      const caller = staffWith(request, "order.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().orders.list(new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/orders/counts", ({ request, response }) => {
+      const caller = staffWith(request, "order.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().orders.counts(new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/orders/{id}/ship", async ({ request, params, response }) => {
+      const caller = staffWith(request, "order.ship");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().orders.ship(params.id, await request.json(), request.headers.get("idempotency-key"));
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/orders/{id}/paid-by-hand", async ({ request, params, response }) => {
+      const caller = staffWith(request, "payment.write");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().orders.paidByHand(params.id, await request.json(), request.headers.get("idempotency-key"));
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
 
     // Object storage, where a signed upload link points: not erp-api, so not typed from its document.
     rawHttp.options(

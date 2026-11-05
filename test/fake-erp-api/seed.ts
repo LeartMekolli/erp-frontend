@@ -32,7 +32,29 @@ export const STAFF: FakeUser = {
   email: "owner@demo.example.test",
   name: "Dana",
   kind: "staff",
-  permissions: ["order.read", "order.write", "customer.read", "partner.read"],
+  permissions: [
+    "order.read",
+    "order.write",
+    "order.ship",
+    "customer.read",
+    "partner.read",
+    "payment.read",
+    "payment.write",
+    "ai.use",
+    "report.read",
+    "workflow.read",
+    "settings.read",
+  ],
+  organisations: [],
+};
+
+/** Not in erp-api's seed: staff who may only read orders. */
+export const CLERK: FakeUser = {
+  id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c07",
+  email: "clerk@demo.example.test",
+  name: "Kai",
+  kind: "staff",
+  permissions: ["order.read"],
   organisations: [],
 };
 
@@ -83,7 +105,7 @@ export const NO_ACCESS: FakeUser = {
   organisations: [],
 };
 
-export const USERS: readonly FakeUser[] = [STAFF, PARTNER, LAYERLINE_OWNER, PARTNER_TWO_SHOPS, CUSTOMER, NO_ACCESS];
+export const USERS: readonly FakeUser[] = [STAFF, CLERK, PARTNER, LAYERLINE_OWNER, PARTNER_TWO_SHOPS, CUSTOMER, NO_ACCESS];
 
 export const PARTNER_NAMES: Record<string, string> = {
   [NORTHCAST_ID]: "Northcast Foundry",

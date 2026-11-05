@@ -25,5 +25,34 @@ export type PartnerPaths = {
   [P in keyof paths as P extends `/partner-portal/${string}` | "/me" ? P : never]: paths[P];
 };
 
+type JsonBody<P extends keyof paths, M extends "post"> = paths[P][M] extends {
+  requestBody: { content: { "application/json": infer Body } };
+}
+  ? Body
+  : never;
+
+/** One order as staff see it, from `GET /orders`. */
+export type Order = JsonOk<"/orders", "get">["data"][number];
+
+/** `GET /orders/counts`: how many orders each tab and needs-you reason holds. */
+export type OrderCounts = JsonOk<"/orders/counts", "get">;
+
+export type OrderState = Order["state"];
+export type PaymentState = Order["payment"]["state"];
+export type NeedsReason = Order["needs"][number];
+
+/** `GET /orders`'s query: filters, search, sort and paging. */
+export type OrderListQuery = NonNullable<paths["/orders"]["get"]["parameters"]["query"]>;
+export type OrderSort = NonNullable<OrderListQuery["sort"]>;
+
+/** `GET /orders/counts`'s query: the list's filters that don't pick a tab. */
+export type OrderCountsQuery = NonNullable<paths["/orders/counts"]["get"]["parameters"]["query"]>;
+
+/** `POST /orders/{id}/ship`: courier and tracking, or a label to buy. */
+export type ShipBody = JsonBody<"/orders/{id}/ship", "post">;
+
+/** `POST /orders/{id}/paid-by-hand`: a payment made outside the payment provider. */
+export type PaidByHandBody = JsonBody<"/orders/{id}/paid-by-hand", "post">;
+
 /** `POST /auth/invitations/preview`: what an invitation link is, before the page shows a form. */
 export type InvitationPreview = JsonOk<"/auth/invitations/preview", "post">;
