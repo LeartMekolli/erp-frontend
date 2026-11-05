@@ -25,7 +25,7 @@ for (const { name, path, heading } of PAGES) {
 
 test("staff home: accessible and fits the screen", async ({ page }) => {
   await signIn(page, STAFF.email);
-  await expect(page.getByRole("heading", { name: "Hello, Dana" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
   await expectNoAxeViolations(page);
   await expectNoSideScroll(page);
 });
@@ -48,5 +48,5 @@ test("signing in works with the keyboard alone", async ({ page }) => {
   await page.keyboard.press("Tab");
   await page.keyboard.type("fake-password-1");
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { name: "Hello, Dana" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
 });
