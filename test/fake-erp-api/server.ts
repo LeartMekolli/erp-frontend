@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { getResponse } from "msw";
 
 import { createHandlers } from "./handlers";
-import { resetFakeState } from "./state";
+import { fakeState, resetFakeState } from "./state";
 
 /**
  * The fake erp-api over HTTP, for Playwright: AMI's server and the browser
@@ -11,6 +11,8 @@ import { resetFakeState } from "./state";
  *
  * Test-only routes:
  * - `POST /__reset` starts the fake's data over.
+ * - `POST /__fail-next-label/<orderId>` makes the courier service refuse
+ *   that order's next label with a 503.
  * - `GET /__link?to=<url>` is a page with one link, so a test can follow a
  *   link into AMI from another site.
  * - `PUT /__storage/uploads/<fileId>/<versionId>` stands in for the bucket a
@@ -58,6 +60,13 @@ createServer(async (req, res) => {
 
   if (req.method === "POST" && url.pathname === "/__reset") {
     resetFakeState();
+    res.writeHead(204).end();
+    return;
+  }
+
+  const failLabel = /^\/__fail-next-label\/([^/]+)$/.exec(url.pathname);
+  if (req.method === "POST" && failLabel) {
+    fakeState().orders.failNextLabel(decodeURIComponent(failLabel[1]!));
     res.writeHead(204).end();
     return;
   }

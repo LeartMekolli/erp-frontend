@@ -21,7 +21,9 @@ test("a second tab is signed in too, and signing out in one signs out both", asy
   await second.goto("/");
   await expect(second.getByRole("heading", HOME)).toBeVisible();
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  // Sign out lives in the account menu.
+  await page.getByRole("button", { name: /^Account:/ }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("status")).toHaveText("You've signed out.");
   await expect(second.getByRole("status")).toHaveText("You've signed out.");
 });

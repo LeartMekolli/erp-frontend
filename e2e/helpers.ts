@@ -31,6 +31,11 @@ export function alert(page: Page, text: string) {
   return page.getByRole("alert").filter({ hasText: text });
 }
 
+/** Waits for open and close animations to end, so checks see the page at rest rather than mid-fade. */
+export async function settled(page: Page) {
+  await page.waitForFunction(() => document.getAnimations().every((animation) => animation.playState !== "running"));
+}
+
 /** WCAG 2.2 AA, the level the spec commits to. */
 export async function expectNoAxeViolations(page: Page) {
   const { violations } = await new AxeBuilder({ page })
@@ -41,6 +46,26 @@ export async function expectNoAxeViolations(page: Page) {
 
 /** Reflow: nothing wider than the screen (WCAG 1.4.10). */
 export async function expectNoSideScroll(page: Page) {
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(0);
+  const { overflow, culprits } = await page.evaluate(() => {
+    const width = document.documentElement.clientWidth;
+    // The innermost elements reaching past the screen's right edge, to say what to fix.
+    // Content of a box that scrolls or clips sideways (the tabs row) can't widen the page.
+    const clipped = (element: HTMLElement) => {
+      for (let parent = element.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
+        if (getComputedStyle(parent).overflowX !== "visible") return true;
+      }
+      return false;
+    };
+    const past = [...document.body.querySelectorAll<HTMLElement>("*")].filter(
+      (element) => element.getBoundingClientRect().right > width + 0.5 && !clipped(element),
+    );
+    const innermost = past.filter((element) => !past.some((other) => other !== element && element.contains(other)));
+    const describe = (element: HTMLElement) =>
+      `${element.tagName.toLowerCase()}.${(element.getAttribute("class") ?? "").split(" ").slice(0, 4).join(".")} → ${Math.round(element.getBoundingClientRect().right)}px "${(element.textContent ?? "").trim().slice(0, 40)}"`;
+    return {
+      overflow: document.documentElement.scrollWidth - width,
+      culprits: innermost.slice(0, 8).map(describe),
+    };
+  });
+  expect(overflow, `Wider than the screen:\n${culprits.join("\n")}`).toBeLessThanOrEqual(0);
 }

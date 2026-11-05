@@ -83,5 +83,7 @@ test("an invitation link from the email joins, then signs in", async ({ page }) 
   await page.getByRole("link", { name: "Sign in" }).click();
   await expect(page.getByLabel("Workspace")).toHaveValue("demo");
   await signIn(page, "invited@demo.example.test", { password: NEW_PASSWORD });
-  await expect(page.getByRole("heading", { name: "Hello, Ana" })).toBeVisible();
+  // Staff land on Orders, which Ana may read.
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Account: Ana" })).toBeVisible();
 });
