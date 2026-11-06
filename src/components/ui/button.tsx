@@ -10,11 +10,21 @@ const buttonVariants = cva(
       variant: {
         primary: "bg-ink text-white hover:bg-ink/85",
         secondary: "border-line bg-card text-ink hover:bg-ground",
+        // shadcn's names, for the dialog, sheet and command: outline is AMI's secondary.
+        outline: "border-line bg-card text-ink hover:bg-ground",
+        ghost: "text-ink-2 hover:bg-ground hover:text-ink",
         link: "h-auto min-h-11 px-0 font-medium text-ink underline-offset-4 hover:underline",
+      },
+      size: {
+        default: "",
+        icon: "size-11 p-0",
+        // Smaller on a mouse, 44px on a touch screen.
+        "icon-sm": "size-9 p-0 pointer-coarse:size-11",
       },
     },
     defaultVariants: {
       variant: "primary",
+      size: "default",
     },
   }
 )
@@ -22,6 +32,7 @@ const buttonVariants = cva(
 function Button({
   className,
   variant = "primary",
+  size = "default",
   asChild = false,
   ...props
 }: React.ComponentProps<"button"> &
@@ -34,7 +45,8 @@ function Button({
     <Comp
       data-slot="button"
       data-variant={variant}
-      className={cn(buttonVariants({ variant, className }))}
+      data-size={size}
+      className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />
   )

@@ -1,5 +1,5 @@
-import { StaffHome } from "@/components/session/landing";
+import { StaffLanding } from "@/components/shell/staff-landing";
 
 export default function StaffHomePage() {
-  return <StaffHome />;
+  return <StaffLanding />;
 }

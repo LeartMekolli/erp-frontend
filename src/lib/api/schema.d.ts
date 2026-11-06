@@ -3292,8 +3292,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Orders, newest first, optionally of one customer, a page at a time.
-         * @description Access: permission `order.read`.
+         * Orders, filtered, searched and sorted, a page at a time.
+         * @description `state` and `payment_state` take one or more values, comma-separated (`state=ready,in_production`); an unknown value is a 400. `promised_after` includes its day and `promised_before` excludes its day. `q` matches part of the order number (a leading `#` is dropped) or part of the customer's name, case-insensitive. `needs` lists orders matching any of the reasons given: `late` (promised before today, not shipped), `to_ship` (ready), `to_collect` (an overdue invoice, or waiting for payment) and `due_soon` (promised from today to 2 working days on, not made yet); each order's own `needs` says which it matches, by the same rule. Filters combine with AND. An order whose state is not computed yet is in no `state` or `payment_state` filter until the hourly refresh stores it. Newest first unless `sort` says otherwise; send the same filters and sort with each page, and a cursor made for another sort is a 400.
+         *
+         *     Access: permission `order.read`.
          */
         get: operations["OrdersController_list"];
         put?: never;
@@ -3306,6 +3308,28 @@ export interface paths {
          *     Access: permission `order.write`.
          */
         post: operations["OrdersController_place"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orders/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How many orders each tab and each needs-you reason holds, with the list's filters.
+         * @description Takes the list's `customer_id`, `payment_state`, `promised_after`, `promised_before` and `q`, with the same meaning; `state`, `needs`, paging and `sort` pick a tab or a page, and are a 400 here. `all` counts every order the filters pick; `states` and `needs_you` count only orders whose state is computed. `needs_you.total` counts an order matching several reasons once, so it can be less than their sum.
+         *
+         *     Access: permission `order.read`.
+         */
+        get: operations["OrdersController_counts"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -21850,6 +21874,13 @@ export interface operations {
                 limit?: number;
                 cursor?: string;
                 customer_id?: string;
+                state?: string;
+                payment_state?: string;
+                needs?: string;
+                promised_after?: string;
+                promised_before?: string;
+                q?: string;
+                sort?: "placed_at" | "-placed_at" | "promised_on" | "-promised_on";
             };
             header?: never;
             path?: never;
@@ -21879,6 +21910,7 @@ export interface operations {
                             state: "awaiting_payment" | "in_production" | "ready" | "shipped" | "delivered" | "cancelled";
                             /** Format: date */
                             promised_on: string;
+                            needs: ("late" | "to_ship" | "to_collect" | "due_soon")[];
                             delivery_speed: string | null;
                             address: {
                                 name: string;
@@ -22086,6 +22118,7 @@ export interface operations {
                         state: "awaiting_payment" | "in_production" | "ready" | "shipped" | "delivered" | "cancelled";
                         /** Format: date */
                         promised_on: string;
+                        needs: ("late" | "to_ship" | "to_collect" | "due_soon")[];
                         delivery_speed: string | null;
                         address: {
                             name: string;
@@ -22264,6 +22297,76 @@ export interface operations {
             };
         };
     };
+    OrdersController_counts: {
+        parameters: {
+            query?: {
+                customer_id?: string;
+                payment_state?: string;
+                promised_after?: string;
+                promised_before?: string;
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        all: number;
+                        states: {
+                            awaiting_payment: number;
+                            in_production: number;
+                            ready: number;
+                            shipped: number;
+                            delivered: number;
+                            cancelled: number;
+                        };
+                        needs_you: {
+                            total: number;
+                            late: number;
+                            to_ship: number;
+                            to_collect: number;
+                            due_soon: number;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     OrdersController_get: {
         parameters: {
             query?: never;
@@ -22296,6 +22399,7 @@ export interface operations {
                         state: "awaiting_payment" | "in_production" | "ready" | "shipped" | "delivered" | "cancelled";
                         /** Format: date */
                         promised_on: string;
+                        needs: ("late" | "to_ship" | "to_collect" | "due_soon")[];
                         delivery_speed: string | null;
                         address: {
                             name: string;
@@ -22504,6 +22608,7 @@ export interface operations {
                         state: "awaiting_payment" | "in_production" | "ready" | "shipped" | "delivered" | "cancelled";
                         /** Format: date */
                         promised_on: string;
+                        needs: ("late" | "to_ship" | "to_collect" | "due_soon")[];
                         delivery_speed: string | null;
                         address: {
                             name: string;
@@ -22722,6 +22827,7 @@ export interface operations {
                         state: "awaiting_payment" | "in_production" | "ready" | "shipped" | "delivered" | "cancelled";
                         /** Format: date */
                         promised_on: string;
+                        needs: ("late" | "to_ship" | "to_collect" | "due_soon")[];
                         delivery_speed: string | null;
                         address: {
                             name: string;
@@ -22932,6 +23038,7 @@ export interface operations {
                         state: "awaiting_payment" | "in_production" | "ready" | "shipped" | "delivered" | "cancelled";
                         /** Format: date */
                         promised_on: string;
+                        needs: ("late" | "to_ship" | "to_collect" | "due_soon")[];
                         delivery_speed: string | null;
                         address: {
                             name: string;
@@ -29163,6 +29270,7 @@ export interface operations {
                         state: "awaiting_payment" | "in_production" | "ready" | "shipped" | "delivered" | "cancelled";
                         /** Format: date */
                         promised_on: string;
+                        needs: ("late" | "to_ship" | "to_collect" | "due_soon")[];
                         delivery_speed: string | null;
                         address: {
                             name: string;
@@ -29535,6 +29643,7 @@ export interface operations {
                         state: "awaiting_payment" | "in_production" | "ready" | "shipped" | "delivered" | "cancelled";
                         /** Format: date */
                         promised_on: string;
+                        needs: ("late" | "to_ship" | "to_collect" | "due_soon")[];
                         delivery_speed: string | null;
                         address: {
                             name: string;

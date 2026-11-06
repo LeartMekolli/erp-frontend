@@ -12,10 +12,10 @@ import { alert, expect, signIn, test } from "./helpers";
 
 const NEW_PASSWORD = "a-new-password-1";
 
-test("staff sign in and land on the staff home", async ({ page }) => {
+test("staff sign in and land on Orders", async ({ page }) => {
   await signIn(page, STAFF.email);
-  await expect(page.getByRole("heading", { name: "Hello, Dana" })).toBeVisible();
-  await expect(page).toHaveURL("/");
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+  await expect(page).toHaveURL("/orders");
 });
 
 test("a partner lands on their own workshop", async ({ page }) => {
@@ -68,7 +68,7 @@ test("a reset link sets a password that signs in", async ({ page }) => {
   await page.getByRole("button", { name: "Set password" }).click();
   await expect(page.getByRole("status")).toHaveText("Your password is set. Sign in with it now.");
   await signIn(page, STAFF.email, { password: NEW_PASSWORD });
-  await expect(page.getByRole("heading", { name: "Hello, Dana" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
 });
 
 test("an invitation link from the email joins, then signs in", async ({ page }) => {
@@ -83,5 +83,7 @@ test("an invitation link from the email joins, then signs in", async ({ page }) 
   await page.getByRole("link", { name: "Sign in" }).click();
   await expect(page.getByLabel("Workspace")).toHaveValue("demo");
   await signIn(page, "invited@demo.example.test", { password: NEW_PASSWORD });
-  await expect(page.getByRole("heading", { name: "Hello, Ana" })).toBeVisible();
+  // Staff land on Orders, which Ana may read.
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Account: Ana" })).toBeVisible();
 });

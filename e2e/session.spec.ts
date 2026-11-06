@@ -3,7 +3,8 @@ import { NORTHCAST_ID, PARTNER, STAFF } from "../test/fake-erp-api/seed";
 import { expect, signIn, test } from "./helpers";
 import { APP_URL } from "./urls";
 
-const HOME = { name: "Hello, Dana" } as const;
+/** Staff land on Orders. */
+const HOME = { level: 1, name: "Orders" } as const;
 
 test("a reload stays signed in", async ({ page }) => {
   await signIn(page, STAFF.email);
@@ -20,7 +21,9 @@ test("a second tab is signed in too, and signing out in one signs out both", asy
   await second.goto("/");
   await expect(second.getByRole("heading", HOME)).toBeVisible();
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  // Sign out lives in the account menu.
+  await page.getByRole("button", { name: /^Account:/ }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("status")).toHaveText("You've signed out.");
   await expect(second.getByRole("status")).toHaveText("You've signed out.");
 });
@@ -63,14 +66,14 @@ test("someone signed in who opens the sign-in page goes home", async ({ page }) 
   await signIn(page, STAFF.email);
   await expect(page.getByRole("heading", HOME)).toBeVisible();
   await page.goto("/sign-in");
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/orders");
   await expect(page.getByRole("heading", HOME)).toBeVisible();
 });
 
 test("a return link to another site lands at home instead", async ({ page }) => {
   await signIn(page, STAFF.email, { path: "/sign-in?next=%2F%2Fevil.example" });
   await expect(page.getByRole("heading", HOME)).toBeVisible();
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/orders");
 });
 
 test("a page needing a session sends someone signed out to sign in and back", async ({ page }) => {

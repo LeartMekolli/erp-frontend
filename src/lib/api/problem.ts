@@ -21,6 +21,14 @@ export function isApiProblem(value: unknown): value is ApiProblem {
   return typeof v.type === "string" && typeof v.title === "string" && typeof v.status === "number";
 }
 
+/**
+ * The problem in openapi-fetch's `error` (which has already read the body),
+ * or a plain stand-in when the body wasn't one.
+ */
+export function problemFrom(error: unknown, response: Response): ApiProblem {
+  return isApiProblem(error) ? error : { type: "about:blank", title: response.statusText, status: response.status };
+}
+
 /** Reads any failed response as a problem; bodies that aren't one get a plain stand-in. */
 export async function readProblem(response: Response): Promise<ApiProblem> {
   const fallback: ApiProblem = {

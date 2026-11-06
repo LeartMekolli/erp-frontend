@@ -23,6 +23,9 @@
   --color-late: #d0303a;
   /* `late` text on a `late` tint: #d0303a there is 4.47:1, under AA's 4.5:1 */
   --color-late-ink: #b3262f;
+  /* Order status accents: ready to ship, and waiting for payment (never as text colour on white) */
+  --color-ship: #1d8f63;
+  --color-collect: #e0a33a;
   --color-panel-soft: #faf9ff;
   --color-panel-soft-ink: #5c5873;
   --color-placeholder: #706d80;
