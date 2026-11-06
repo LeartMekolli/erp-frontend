@@ -1,7 +1,7 @@
 import { act, renderHook, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_VIEW, type OrdersView } from "@/lib/orders/view";
 
@@ -11,20 +11,7 @@ import { renderAs } from "../../../test/render";
 import { Toolbar } from "./toolbar";
 import { applyChange, useOrdersView } from "./use-orders-view";
 
-const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), search: "" }));
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: navigation.push, replace: navigation.replace }),
-  usePathname: () => "/orders",
-  useSearchParams: () => new URLSearchParams(navigation.search),
-}));
-
-beforeEach(() => {
-  navigation.push.mockReset();
-  navigation.replace.mockReset();
-  navigation.search = "";
-});
-
-/** The toolbar with its view held in state, as the page will hold it in the URL. */
+/** The toolbar with its view held in state, as the page holds it. */
 function renderToolbar(start: Partial<OrdersView> = {}) {
   const changes = vi.fn();
   function Harness() {
@@ -153,25 +140,15 @@ describe("applyChange", () => {
 });
 
 describe("useOrdersView", () => {
-  it("reads the view from the URL", () => {
-    navigation.search = "tab=ready&q=luna";
+  it("starts on the default view", () => {
     const { result } = renderHook(() => useOrdersView());
-    expect(result.current[0]).toEqual({ ...DEFAULT_VIEW, tab: "ready", q: "luna" });
+    expect(result.current[0]).toEqual(DEFAULT_VIEW);
   });
 
-  it("adds a history step for a tab and replaces it for anything else", () => {
-    navigation.search = "reason=late";
+  it("applies each change on top of the last", () => {
     const { result } = renderHook(() => useOrdersView());
-    act(() => result.current[1]({ tab: "all" }));
-    expect(navigation.push).toHaveBeenCalledWith("/orders?tab=all", { scroll: false });
     act(() => result.current[1]({ q: "luna" }));
-    expect(navigation.replace).toHaveBeenCalledWith("/orders?reason=late&q=luna", { scroll: false });
-  });
-
-  it("goes back to the bare path for the default view", () => {
-    navigation.search = "q=luna";
-    const { result } = renderHook(() => useOrdersView());
-    act(() => result.current[1]({ q: null }));
-    expect(navigation.replace).toHaveBeenCalledWith("/orders", { scroll: false });
+    act(() => result.current[1]({ tab: "ready" }));
+    expect(result.current[0]).toEqual({ ...DEFAULT_VIEW, tab: "ready", q: "luna" });
   });
 });

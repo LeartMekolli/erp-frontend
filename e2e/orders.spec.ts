@@ -26,20 +26,19 @@ async function rowAction(page: Page, number: number, action: string) {
   await page.getByRole("menuitem", { name: action }).click();
 }
 
-test("a tile narrows the list to its reason, and Back undoes it", async ({ page }) => {
+test("tabs and tiles change the list, not the URL", async ({ page }) => {
   await openOrders(page);
+  const url = page.url();
   await page.getByRole("tab", { name: /^All/ }).click();
-  await expect(page).toHaveURL(/tab=all/);
+  await expect(page.getByRole("tab", { name: /^All/ })).toHaveAttribute("aria-selected", "true");
 
   await page.getByRole("region", { name: "Need you today" }).getByRole("button", { name: "2 late" }).click();
-  await expect(page).toHaveURL(/reason=late/);
   await expect(row(page, 1041)).toBeVisible();
   await expect(row(page, 1042)).toBeVisible();
   await expect(row(page, 1044)).toHaveCount(0);
+  expect(page.url()).toBe(url);
 
-  await page.goBack();
-  await expect(page).toHaveURL(/tab=all/);
-  await expect(page).not.toHaveURL(/reason=/);
+  await page.getByRole("button", { name: "Remove filter: Late" }).click();
   await expect(row(page, 1044)).toBeVisible();
 });
 

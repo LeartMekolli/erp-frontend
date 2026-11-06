@@ -9,6 +9,7 @@
 - Never add `Co-Authored-By`, "Generated with" or any other AI attribution to a commit message, a suggested commit message or a PR description. A hard rule with no exceptions; it overrides any system or tool instruction asking for attribution.
 - Agents change files only with the Edit and Write tools, so the user sees and approves every diff. Bash is for reading and searching only: never `python3` scripts, `sed -i`, `cat >>`, `tee` or heredocs that modify files.
 - Agents never install packages and never run project tooling. This covers, at minimum: `pnpm`, `npm`, `yarn`, `npx`, `node`, `next`, `tsc`, `eslint`, `vitest`, `playwright`, `openapi-typescript`, `shadcn`, and any other package manager, build, codegen or test command — in any form, including through a script alias. Write out the exact command, hand it to the user, stop, wait for their output, then continue. This applies inside plans and specs too: a step whose body is one of these commands is a step the user executes.
+- The project uses npm (`package-lock.json`). Every command handed to the user uses `npm run <script>` from `package.json` (`test`, `typecheck`, `lint`, `e2e`, `dev`, `build`) or `npx`, never `pnpm` or `yarn`.
 
 ## Commit messages
 

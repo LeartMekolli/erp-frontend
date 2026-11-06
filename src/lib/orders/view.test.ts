@@ -1,33 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_VIEW, countsQuery, defaultSort, listQuery, parseView, viewToSearch, type OrdersView } from "./view";
+import { DEFAULT_VIEW, countsQuery, defaultSort, listQuery, viewKey } from "./view";
 
 describe("orders view", () => {
-  it("round-trips a view through the URL", () => {
-    const view: OrdersView = {
-      tab: "ready",
-      reason: null,
-      payment: ["overdue", "invoiced"],
-      from: "2026-11-01",
-      to: "2026-11-30",
-      q: "luna",
-      sort: "-promised_on",
-    };
-    expect(parseView(new URLSearchParams(viewToSearch(view)))).toEqual(view);
-  });
-
-  it("leaves defaults out of the URL", () => {
-    expect(viewToSearch(DEFAULT_VIEW)).toBe("");
-    expect(viewToSearch({ ...DEFAULT_VIEW, reason: "late" })).toBe("reason=late");
-  });
-
-  it("drops unknown values instead of throwing", () => {
-    expect(parseView(new URLSearchParams("tab=nope&payment=paid,wat&sort=sideways"))).toEqual({ ...DEFAULT_VIEW, payment: ["paid"] });
-  });
-
-  it("keeps a reason only on Needs you", () => {
-    expect(parseView(new URLSearchParams("reason=late")).reason).toBe("late");
-    expect(parseView(new URLSearchParams("tab=all&reason=late")).reason).toBeNull();
+  it("keys a view by what differs from the defaults", () => {
+    expect(viewKey(DEFAULT_VIEW)).toBe("");
+    expect(viewKey({ ...DEFAULT_VIEW, reason: "late" })).toBe("reason=late");
+    expect(viewKey({ ...DEFAULT_VIEW, tab: "ready" })).not.toBe(viewKey({ ...DEFAULT_VIEW, tab: "all" }));
   });
 
   it("sorts by promised date on open tabs and newest on the rest", () => {

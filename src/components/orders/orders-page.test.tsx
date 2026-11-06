@@ -7,11 +7,10 @@ import { renderAs } from "../../../test/render";
 
 import { OrdersPage } from "./orders-page";
 
-const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), notFound: vi.fn(), search: "" }));
+const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), notFound: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: navigation.push, replace: navigation.replace }),
   usePathname: () => "/orders",
-  useSearchParams: () => new URLSearchParams(navigation.search),
   notFound: navigation.notFound,
 }));
 
@@ -19,7 +18,6 @@ beforeEach(() => {
   navigation.push.mockReset();
   navigation.replace.mockReset();
   navigation.notFound.mockReset();
-  navigation.search = "";
 });
 
 describe("OrdersPage", () => {
@@ -32,11 +30,15 @@ describe("OrdersPage", () => {
     expect(screen.getByRole("link", { name: "New order" })).toHaveAttribute("href", "/orders/new");
   });
 
-  it("a tile narrows the list to its reason", async () => {
-    navigation.search = "tab=all";
+  it("a tile narrows the list to its reason without touching the URL", async () => {
     renderAs(STAFF, <OrdersPage />);
+    await userEvent.click(await screen.findByRole("tab", { name: /^All/ }));
+    expect(screen.getByRole("tab", { name: /^All/ })).toHaveAttribute("aria-selected", "true");
     await userEvent.click(await screen.findByRole("button", { name: "2 late" }));
-    expect(navigation.push).toHaveBeenCalledWith("/orders?reason=late", { scroll: false });
+    expect(screen.getByRole("tab", { name: /^Needs you/ })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("button", { name: "Remove filter: Late" })).toBeInTheDocument();
+    expect(navigation.push).not.toHaveBeenCalled();
+    expect(navigation.replace).not.toHaveBeenCalled();
   });
 
   it("leaves out New order without order.write", async () => {

@@ -129,11 +129,12 @@ describe("OrdersTable", () => {
     expect(screen.getByRole("row", { name: /#1042\b/ })).toHaveFocus();
   });
 
-  it("says when nothing needs you, with a link to all orders", async () => {
+  it("says when nothing needs you, with a way to all orders", async () => {
     server.use(http.get(`${FAKE_API_URL}/orders`, () => HttpResponse.json({ data: [], next_cursor: null })));
-    renderTable();
+    const { onChange } = renderTable();
     expect(await screen.findByText("Nothing needs you today")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "See all orders" })).toHaveAttribute("href", "/orders?tab=all");
+    await userEvent.click(screen.getByRole("button", { name: "See all orders" }));
+    expect(onChange).toHaveBeenCalledWith({ tab: "all" });
   });
 
   it("says when no orders match, and clears the filters", async () => {

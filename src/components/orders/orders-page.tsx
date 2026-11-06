@@ -12,7 +12,7 @@ import type { Order } from "@/lib/api/schema-types";
 import { can } from "@/lib/auth/permissions";
 import { useFormat } from "@/lib/format/use-format";
 import { useOrdersList } from "@/lib/orders/queries";
-import { viewToSearch } from "@/lib/orders/view";
+import { viewKey } from "@/lib/orders/view";
 
 import { OrdersTable } from "./orders-table";
 import { BulkShipDialog } from "./bulk-ship-dialog";
@@ -34,7 +34,7 @@ export function OrdersPage() {
 
 function Orders({ canCreate, canShipOrders }: { canCreate: boolean; canShipOrders: boolean }) {
   const [view, setView] = useOrdersView();
-  const selection = useSelection(viewToSearch(view));
+  const selection = useSelection(viewKey(view));
   const [shipping, setShipping] = useState<Order | null>(null);
   const [bulkShipping, setBulkShipping] = useState(false);
   const [paying, setPaying] = useState<Order | null>(null);

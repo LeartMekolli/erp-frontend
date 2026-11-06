@@ -115,8 +115,8 @@ export function OrdersTable({
       return (
         <Empty>
           <p className="text-base font-semibold text-ink">Nothing needs you today</p>
-          <Button asChild variant="link">
-            <Link href="/orders?tab=all">See all orders</Link>
+          <Button variant="link" onClick={() => onChange({ tab: "all" })}>
+            See all orders
           </Button>
         </Empty>
       );

@@ -18,7 +18,7 @@ export const PAYMENT_STATES = [
 ] as const satisfies readonly PaymentState[];
 export const ORDER_SORTS = ["promised_on", "-promised_on", "-placed_at", "placed_at"] as const satisfies readonly OrderSort[];
 
-/** What the Orders list shows: kept in the URL so a view can be shared, reloaded and gone back to. */
+/** What the Orders list shows. */
 export interface OrdersView {
   tab: Tab;
   /** Narrows Needs you to one reason. */
@@ -35,34 +35,8 @@ export interface OrdersView {
 
 export const DEFAULT_VIEW: OrdersView = { tab: "needs", reason: null, payment: [], from: null, to: null, q: null, sort: null };
 
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
-
-const oneOf = <T extends string>(values: readonly T[], value: string | null): T | null =>
-  value !== null && (values as readonly string[]).includes(value) ? (value as T) : null;
-
-/** Reads a view from the URL; unknown values are dropped, never thrown. */
-export function parseView(params: URLSearchParams): OrdersView {
-  const tab = oneOf(TABS, params.get("tab")) ?? "needs";
-  const day = (key: string) => {
-    const value = params.get(key);
-    return value !== null && DAY.test(value) ? value : null;
-  };
-  return {
-    tab,
-    reason: tab === "needs" ? oneOf(NEEDS_REASONS, params.get("reason")) : null,
-    payment: (params.get("payment") ?? "")
-      .split(",")
-      .map((value) => oneOf(PAYMENT_STATES, value))
-      .filter((value): value is PaymentState => value !== null),
-    from: day("from"),
-    to: day("to"),
-    q: params.get("q")?.trim() || null,
-    sort: oneOf(ORDER_SORTS, params.get("sort")),
-  };
-}
-
-/** The view as a query string, defaults left out. */
-export function viewToSearch(view: OrdersView): string {
+/** A short key that changes whenever the view does, defaults left out. */
+export function viewKey(view: OrdersView): string {
   const params = new URLSearchParams();
   if (view.tab !== "needs") params.set("tab", view.tab);
   if (view.reason && view.tab === "needs") params.set("reason", view.reason);

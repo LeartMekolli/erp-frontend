@@ -5,8 +5,8 @@ import { useState } from "react";
 const EMPTY: ReadonlySet<string> = new Set();
 
 /**
- * The ticked orders, by id. Cleared whenever `viewKey` (the view as its
- * address-bar search) changes, so a selection never hides behind another tab
+ * The ticked orders, by id. Cleared whenever `viewKey` (see `viewKey` in
+ * `lib/orders/view`) changes, so a selection never hides behind another tab
  * or filter; a refetch keeps it.
  */
 export function useSelection(viewKey: string) {
