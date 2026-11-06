@@ -152,7 +152,7 @@ function SearchField({ q, onSearch }: { q: string | null; onSearch: (q: string |
   const [seenQ, setSeenQ] = useState(q);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // The URL changed from elsewhere (Back, a tile): show it, unless the person is mid-typing.
+  // The search changed from elsewhere (Clear filters): show it, unless the person is mid-typing.
   if (q !== seenQ) {
     setSeenQ(q);
     if (!pending) setText(q ?? "");
@@ -226,8 +226,14 @@ function FilterButton({ view, onChange }: { view: OrdersView; onChange: (change:
           Filter
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" aria-label="Filter" className="w-72 gap-4 rounded-xl p-4">
-        <fieldset className="flex flex-col gap-1">
+      <PopoverContent
+        align="end"
+        collisionPadding={12}
+        aria-label="Filter"
+        // Never taller than the room left on screen: the panel scrolls instead of running off the edge.
+        className="max-h-(--radix-popover-content-available-height) w-80 max-w-(--radix-popover-content-available-width) gap-4 overflow-y-auto overscroll-contain rounded-xl p-4"
+      >
+        <fieldset className="grid grid-cols-2 gap-x-3 gap-y-1">
           <legend className="mb-1 text-caption font-medium text-ink-2">Payment</legend>
           {PAYMENT_FILTERS.map((state) => (
             <div key={state} className="flex min-h-9 items-center gap-2.5 pointer-coarse:min-h-11">
