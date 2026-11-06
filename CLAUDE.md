@@ -70,12 +70,14 @@ B="$D/.git/kb-backups/$(date +%Y-%m-%d_%H-%M-%S)"
 if [ "$(pwd -P)" = "$D" ] || [ ! -d "$D/.git" ]; then
   echo "Stopped: run this from a workspace, and check that $D exists."
 else
-  for p in docs .superpowers .impeccable heads-up.md todos.md backend-todos.md .env.local; do
+  for p in docs .superpowers .impeccable heads-up.md todos.md backend-todos.md .env .env.local; do
     [ -e "$p" ] && { rsync -aci --backup --backup-dir="$B" "$p" "$D/" || echo "FAILED: $p"; }
   done
   echo "Done. Any Desktop file that was replaced is saved in $B"
 fi
 ```
+
+The command also copies `.env` and `.env.local`. Whenever an agent changes either one, or the user says they changed one, the reply ends with this command too, so the main checkout and every new workspace get the same settings.
 
 Show the command only; never run it.
 
@@ -91,6 +93,7 @@ AMI is the company's own operations app: staff (including workspace admins), its
 
 - Before any work that calls erp-api: `backend-todos.md`.
 - Before planning new work: `todos.md`.
+- When running AMI against erp-api, resetting the local database or testing by hand: `docs/testing/local-environment.md`.
 - When starting or resuming a feature: its brief in `docs/briefs/`, its spec and plan in `docs/superpowers/` and its test checklist in `docs/testing/`, where they exist. Only that feature's files, not the others.
 - Don't open the mockups in `.superpowers/brainstorm/` or `.impeccable/mocks/`, or the progress logs in `.superpowers/sdd/`, unless the user asks or a plan says to resume from one.
 
