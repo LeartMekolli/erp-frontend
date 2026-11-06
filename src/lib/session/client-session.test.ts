@@ -239,6 +239,18 @@ describe("limits", () => {
     expect(calledPaths()).toEqual(["/session/logout"]);
   });
 
+  it("does not refresh for later callers once the session ended in this tab", async () => {
+    const ended = vi.fn();
+    session.onSessionEnded(ended);
+    start();
+    vi.setSystemTime(3 * H + MIN); // several background refetches are due at once
+    await expect(session.getAccessToken()).rejects.toMatchObject({ reason: "idle" });
+    fetchMock.mockResolvedValue(json(401, { reason: "revoked" }));
+    await expect(session.getAccessToken()).rejects.toMatchObject({ reason: "idle" });
+    expect(ended.mock.calls).toEqual([["idle"]]);
+    expect(calledPaths()).toEqual(["/session/logout"]);
+  });
+
   it("keeps the sign-out reason when a refresh answers after the session ended", async () => {
     const ended = vi.fn();
     session.onSessionEnded(ended);

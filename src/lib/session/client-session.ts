@@ -208,6 +208,8 @@ export function createClientSession({
     },
 
     async getAccessToken({ force = false } = {}) {
+      // Ended in this tab: a refresh would race the logout and could end it again as `revoked`. Only sign-in starts a new one.
+      if (!token && endedWith !== "none") throw new SessionEndedError(endedWith);
       // A refetch can run before the limit timer after a clock jump or a sleep: sign out with the right reason.
       if (!check()) throw new SessionEndedError(endedWith);
       if (!force) {
