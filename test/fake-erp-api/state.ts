@@ -15,6 +15,7 @@ import {
   type FakeUser,
 } from "./seed";
 import { createAiStore } from "./ai";
+import { createCommentsStore } from "./comments";
 import { createJobsStore } from "./jobs";
 import { createNotificationsStore } from "./notifications";
 import { createOrdersStore } from "./orders";
@@ -78,6 +79,7 @@ export function createFakeState(now: () => number = Date.now) {
   const orders = createOrdersStore(now);
   const production = createProductionStore(now);
   const jobs = createJobsStore(now, orders);
+  const comments = createCommentsStore(now, orders);
   const notifications = createNotificationsStore(now);
   const ai = createAiStore(now);
 
@@ -115,6 +117,7 @@ export function createFakeState(now: () => number = Date.now) {
     orders,
     production,
     jobs,
+    comments,
     notifications,
     ai,
 

@@ -15,6 +15,8 @@ import { can } from "@/lib/auth/permissions";
 import { useOrder } from "@/lib/orders/queries";
 import { OfflineError } from "@/lib/session/client-session";
 
+import { ClaimsNote } from "./claims-note";
+import { CommentsPanel } from "./comments-panel";
 import { LinePanel } from "./line-panel";
 import { CancelledBanner, OrderHeader } from "./order-header";
 import { PaymentPanel } from "./payment-panel";
@@ -126,6 +128,8 @@ function OrderDetail({ id }: { id: string }) {
           <PaymentPanel order={order} />
           <ShippingPanel order={order} onNotice={setNotice} />
           {order.note && <NotePanel note={order.note} />}
+          <ClaimsNote orderId={order.id} />
+          <CommentsPanel order={order} />
         </div>
       </div>
 

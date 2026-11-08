@@ -357,6 +357,34 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return answer.ok ? response(201).json(answer.body) : response.untyped(refusal(answer));
     }),
 
+    http.get("/orders/{id}/comments", ({ request, params, response }) => {
+      const caller = staffWith(request, "order.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().comments.list(params.id, new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/orders/{id}/comments", async ({ request, params, response }) => {
+      const caller = staffWith(request, "order.write");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().comments.post(params.id, await request.json(), caller, request.headers.get("idempotency-key"));
+      return answer.ok ? response(201).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/orders/{id}/comments/{commentId}/attachments/{fileVersionId}/url", ({ request, params, response }) => {
+      const caller = staffWith(request, "order.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().comments.attachmentUrl(params.id, params.commentId, params.fileVersionId);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/claims", ({ request, response }) => {
+      const caller = staffWith(request, "order.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().comments.claims(new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
     http.get("/search", ({ request, response }) => {
       const user = fakeState().authenticate(bearer(request));
       if (!user) return response.untyped(problem(401, "Unauthorized"));
