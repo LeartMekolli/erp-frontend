@@ -10,6 +10,7 @@ import { useGroup } from "@/lib/production/queries";
 
 import { LoadFailure } from "./load-failure";
 import { PiecesTab } from "./pieces-tab";
+import { QualityTab } from "./quality-tab";
 import { StepStrip } from "./step-strip";
 
 /** How many of an order's lines load their progress without being asked. */
@@ -53,7 +54,9 @@ function Progress({ groupId, index, orderState, partnerName = null }: LineTabsPr
         <TabsContent value="pieces">
           <PiecesTab group={group.data} orderState={orderState} partnerName={partnerName} />
         </TabsContent>
-        <TabsContent value="quality" />
+        <TabsContent value="quality">
+          <QualityTab group={group.data} />
+        </TabsContent>
       </Tabs>
     </>
   );
