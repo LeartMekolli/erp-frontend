@@ -4,7 +4,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { useForm, useWatch, type Path } from "react-hook-form";
 
-import { UNKNOWN, noAnswer } from "@/components/auth/copy";
 import { Field } from "@/components/auth/field";
 import { FormMessage } from "@/components/auth/form-message";
 import { Button } from "@/components/ui/button";
@@ -17,10 +16,10 @@ import { useCan } from "@/lib/auth/permissions";
 import { emptyMoveValues, fieldPath, moveBody, moveSchema, type MoveKind, type MoveValues } from "@/lib/production/move-body";
 import { useMovePieces } from "@/lib/production/queries";
 import { nextStepName } from "@/lib/production/selection";
-import { OfflineError } from "@/lib/session/client-session";
 
 import { ChecklistFields } from "./checklist-fields";
 import { PhotoField, usePhotos } from "./evidence-fields";
+import { submitErrorText } from "./submit-error";
 
 interface MoveDialogProps {
   kind: MoveKind;
@@ -33,9 +32,6 @@ interface MoveDialogProps {
   onOpenChange: (open: boolean) => void;
   onMoved: (message: string) => void;
 }
-
-/** How many problems of a 409 to name: a move can hold a thousand pieces. */
-const NAMED_CONFLICTS = 3;
 
 const nounFor = (count: number) => `${count} ${count === 1 ? "piece" : "pieces"}`;
 
@@ -110,13 +106,10 @@ function MoveForm({ kind, step, path, pieces, partnerName, onDone }: Omit<MoveDi
     try {
       await move.mutateAsync(body);
     } catch (error) {
-      if (error instanceof OfflineError) setMessage(noAnswer());
-      else if (isApiProblem(error) && error.status === 400) {
+      if (isApiProblem(error) && error.status === 400) {
         const named = { ...error, errors: error.errors?.map((e) => ({ ...e, path: fieldPath(e.path, step) })) };
         setMessage(applyFieldErrors(named, setError, fields));
-      } else if (isApiProblem(error)) {
-        setMessage([error.detail, ...(error.errors ?? []).slice(0, NAMED_CONFLICTS).map((e) => e.message)].filter(Boolean).join(" ") || UNKNOWN);
-      } else setMessage(UNKNOWN);
+      } else setMessage(submitErrorText(error));
       return;
     }
     onDone(done);

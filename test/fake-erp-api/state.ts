@@ -15,6 +15,7 @@ import {
   type FakeUser,
 } from "./seed";
 import { createAiStore } from "./ai";
+import { createJobsStore } from "./jobs";
 import { createNotificationsStore } from "./notifications";
 import { createOrdersStore } from "./orders";
 import { createProductionStore } from "./production";
@@ -76,6 +77,7 @@ export function createFakeState(now: () => number = Date.now) {
   const files = new Map<string, FakeFile>();
   const orders = createOrdersStore(now);
   const production = createProductionStore(now);
+  const jobs = createJobsStore(now, orders);
   const notifications = createNotificationsStore(now);
   const ai = createAiStore(now);
 
@@ -112,6 +114,7 @@ export function createFakeState(now: () => number = Date.now) {
   return {
     orders,
     production,
+    jobs,
     notifications,
     ai,
 

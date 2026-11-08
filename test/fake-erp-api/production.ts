@@ -85,6 +85,9 @@ const GROUPS: SeedGroup[] = [
   { number: 1048, position: 0, at: { print: 2, finish: 4, final_qc: 3, packing: 1 }, rework: "finish", finished: 1, scrapped: 1 },
   { number: 1041, position: 0, at: { print: 10, finish: 20, final_qc: 10 } },
   { number: 1045, position: 0, at: { print: 1 } },
+  { number: 1049, position: 0, at: { print: 4 } },
+  { number: 1049, position: 1, at: { print: 1 } },
+  { number: 1049, position: 2, at: { print: 8 } },
 ];
 
 interface StoredPiece {

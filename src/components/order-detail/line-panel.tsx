@@ -5,6 +5,7 @@ import { cn } from "cn";
 import type { Order, OrderLine, OrderPart } from "@/lib/api/schema-types";
 import { useFormat } from "@/lib/format/use-format";
 
+import { LinePartnerActions } from "./line-partner-actions";
 import { LinePartnerTag } from "./line-partner-tag";
 import { LinePicks } from "./line-picks";
 import { LineTabs } from "./line-tabs";
@@ -54,8 +55,9 @@ export function LinePanel({
       </div>
       <LinePicks line={line} />
       {!cancelled && (
-        <div className="pt-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-1">
           <LinePartnerTag partner={line.partner} now={now} />
+          <LinePartnerActions line={line} order={order} now={now} title={title} />
         </div>
       )}
       {!cancelled && line.group_id && (

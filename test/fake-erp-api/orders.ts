@@ -317,6 +317,15 @@ export function createOrdersStore(now: () => number) {
       });
     },
 
+    /** The stored order and line made as this work order group, for the partner hand-over to change. */
+    lineOfGroup(groupId: string) {
+      for (const order of orders.values()) {
+        const line = order.lines.find((candidate) => candidate.group_id === groupId);
+        if (line) return { order, line };
+      }
+      return null;
+    },
+
     /** Every order as staff see it, for search. */
     all(): Order[] {
       return [...orders.values()].map(view);

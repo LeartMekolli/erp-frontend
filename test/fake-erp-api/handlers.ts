@@ -329,6 +329,34 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
+    http.get("/partners/eligible", ({ request, response }) => {
+      const caller = staffWith(request, "partner.assign");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().jobs.eligible(new URL(request.url).searchParams.get("group_id") ?? "");
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/partners/jobs/{groupId}/offer", async ({ request, params, response }) => {
+      const caller = staffWith(request, "partner.assign");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().jobs.offer(params.groupId, await request.json(), request.headers.get("idempotency-key"));
+      return answer.ok ? response(201).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/partners/jobs/{groupId}/withdraw", ({ request, params, response }) => {
+      const caller = staffWith(request, "partner.assign");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().jobs.withdraw(params.groupId, request.headers.get("idempotency-key"));
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/partners/jobs/{groupId}/reassign", async ({ request, params, response }) => {
+      const caller = staffWith(request, "partner.assign");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().jobs.reassign(params.groupId, await request.json(), request.headers.get("idempotency-key"));
+      return answer.ok ? response(201).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
     http.get("/search", ({ request, response }) => {
       const user = fakeState().authenticate(bearer(request));
       if (!user) return response.untyped(problem(401, "Unauthorized"));
