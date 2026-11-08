@@ -88,6 +88,56 @@ test("ship dialog: accessible and fits the screen", async ({ page }) => {
   await expectAccessibleAndFits(page);
 });
 
+/** Signs in as staff and opens an order that has pieces to work with. */
+async function openOrder(page: Page) {
+  await signIn(page, STAFF.email);
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+  await page.goto("/orders/22222222-0000-4000-8000-000000001048");
+  await expect(page.getByRole("heading", { level: 1, name: "#1048" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Progress through the steps" })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "Select 1/12" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Comments" })).toBeVisible();
+}
+
+test("order page: accessible and fits the screen", async ({ page }) => {
+  await openOrder(page);
+  await expectAccessibleAndFits(page);
+});
+
+test("order page, quality tab: accessible and fits the screen", async ({ page }) => {
+  await openOrder(page);
+  await page.getByRole("tab", { name: "Quality" }).click();
+  await expect(page.getByRole("article", { name: "Final QC" })).toBeVisible();
+  await expectAccessibleAndFits(page);
+});
+
+test("move bar and dialog: accessible and fit the screen", async ({ page }) => {
+  await openOrder(page);
+  await page.getByRole("checkbox", { name: "Select 1/12" }).click();
+  const pass = page.getByRole("button", { name: "Pass to Finish" });
+  await expect(pass).toBeEnabled();
+  await expectAccessibleAndFits(page);
+  await pass.click();
+  await expect(page.getByRole("dialog", { name: "Pass 1 piece at Print" })).toBeVisible();
+  await expectAccessibleAndFits(page);
+});
+
+test("piece history: accessible and fits the screen", async ({ page }) => {
+  await openOrder(page);
+  await page.getByRole("link", { name: "History of 1/12" }).click();
+  await expect(page.getByRole("dialog", { name: "Piece 1/12" })).toBeVisible();
+  await expectAccessibleAndFits(page);
+});
+
+test("cancel dialog: accessible and fits the screen", async ({ page }) => {
+  await openOrder(page);
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Cancel order" }).click();
+  await expect(page.getByRole("dialog", { name: "Cancel #1048" })).toBeVisible();
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expectAccessibleAndFits(page);
+});
+
 test("workshop chooser: accessible and fits the screen", async ({ page }) => {
   await signIn(page, PARTNER_TWO_SHOPS.email);
   await expect(page.getByRole("heading", { name: "Choose a workshop" })).toBeVisible();
