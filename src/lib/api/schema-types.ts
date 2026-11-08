@@ -77,6 +77,7 @@ export type WorkflowStep = WorkflowVersion["steps"][number];
 
 /** `POST /workflow/moves`: pass, fail or correct pieces at once. */
 export type MoveBody = JsonBody<"/workflow/moves", "post">;
+export type MoveResponse = JsonOk<"/workflow/moves", "post">;
 
 /** `GET /partners/eligible`: who can take a job, and who can't with why. */
 export type EligiblePartners = JsonOk<"/partners/eligible", "get">;

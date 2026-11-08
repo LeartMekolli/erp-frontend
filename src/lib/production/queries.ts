@@ -1,10 +1,13 @@
 "use client";
 
-import { useQuery, type QueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
+import { idempotent } from "@/lib/api/idempotency";
 import { problemFrom } from "@/lib/api/problem";
-import type { Group, WorkOrderDetail, WorkOrderListItem, WorkflowVersion } from "@/lib/api/schema-types";
+import type { Group, MoveBody, MoveResponse, WorkOrderDetail, WorkOrderListItem, WorkflowVersion } from "@/lib/api/schema-types";
+import { invalidateOrders } from "@/lib/orders/queries";
+import { useApiMutation } from "@/lib/query/use-api-mutation";
 import { useCursorList } from "@/lib/query/use-cursor-list";
 
 /** The pieces a step group can list: active ones at a step, or those off the path. */
@@ -77,6 +80,19 @@ export function usePiece(id: string) {
       return data;
     },
   });
+}
+
+/** Passes, fails or corrects pieces (`POST /workflow/moves`). Finished pieces can change the order's state, so both refresh. */
+export function useMovePieces() {
+  const client = useQueryClient();
+  return useApiMutation<MoveBody, MoveResponse>(
+    async (body, key) => {
+      const { data, error, response } = await api.POST("/workflow/moves", { body, ...idempotent(key) });
+      if (!data) throw problemFrom(error, response);
+      return data;
+    },
+    { onSettled: () => Promise.all([invalidateProduction(client), invalidateOrders(client)]) },
+  );
 }
 
 /** After a move: every line's counts and pieces fetch again. */

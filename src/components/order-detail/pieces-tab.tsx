@@ -9,11 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Group, OrderState } from "@/lib/api/schema-types";
 import { useCan } from "@/lib/auth/permissions";
-import { useStepPieces, type PieceListStatus } from "@/lib/production/queries";
+import type { MoveKind } from "@/lib/production/move-body";
+import { useStepPieces, useWorkflowVersion, type PieceListStatus } from "@/lib/production/queries";
 import { nextStepName } from "@/lib/production/selection";
 
 import { LoadFailure } from "./load-failure";
 import { MoveBar } from "./move-bar";
+import { MoveDialog } from "./move-dialog";
 import { PieceRow } from "./piece-row";
 import { useStepSelection } from "./use-step-selection";
 
@@ -131,10 +133,67 @@ function PieceSection({
   );
 }
 
+/** The bar for the picked pieces, and the dialog its buttons open. */
+function MoveFlow({
+  group,
+  stepKey,
+  orderState,
+  partnerName,
+  onMoved,
+}: {
+  group: Group;
+  stepKey: string;
+  orderState: OrderState;
+  partnerName: string | null;
+  onMoved: (message: string) => void;
+}) {
+  const selection = useStepSelection();
+  const version = useWorkflowVersion(group.workflow.id, group.workflow.version);
+  const loaded = useStepPieces(group.id, stepKey, "active", true);
+  const [kind, setKind] = useState<MoveKind | null>(null);
+  const step = version.data?.steps.find((candidate) => candidate.key === stepKey);
+  const pieces = loaded.items.filter((piece) => selection.ids.has(piece.id));
+
+  let disabledReason: string | null = null;
+  if (orderState === "awaiting_payment") disabledReason = WAITING_FOR_PAYMENT;
+  else if (version.isError) disabledReason = "This step's checks couldn't be loaded.";
+  else if (!step) disabledReason = "Loading this step's checks…";
+
+  return (
+    <>
+      <MoveBar
+        count={selection.ids.size}
+        stepName={group.steps.find((candidate) => candidate.key === stepKey)?.name ?? stepKey}
+        nextName={nextStepName(group.steps, stepKey)}
+        disabledReason={disabledReason}
+        onPass={() => setKind("pass")}
+        onFail={() => setKind("fail")}
+        onCorrect={() => setKind("correction")}
+      />
+      {step && kind && (
+        <MoveDialog
+          open
+          kind={kind}
+          step={step}
+          path={group.steps}
+          pieces={pieces}
+          partnerName={step.done_by === "partner" ? partnerName : null}
+          onOpenChange={(open) => {
+            if (!open) setKind(null);
+          }}
+          onMoved={onMoved}
+        />
+      )}
+    </>
+  );
+}
+
 /** A line's pieces grouped by where they are; each group loads when it's opened. */
-export function PiecesTab({ group, orderState }: { group: Group; orderState: OrderState }) {
+export function PiecesTab({ group, orderState, partnerName }: { group: Group; orderState: OrderState; partnerName: string | null }) {
   // Only what someone has opened or closed; the first group with pieces starts open.
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
+  // What the last move did, announced politely.
+  const [notice, setNotice] = useState<string | null>(null);
   const mayMove = useCan("workflow.move");
   const selection = useStepSelection();
   const sections = sectionsOf(group);
@@ -146,8 +205,6 @@ export function PiecesTab({ group, orderState }: { group: Group; orderState: Ord
   const mine = selection.groupId === group.id;
   const dropped = mine ? selection.dropped : 0;
   const picked = mine && selection.stepKey !== null && selection.ids.size > 0 ? selection.stepKey : null;
-  // The dialogs arrive with the next change to this bar.
-  const notYet = () => undefined;
 
   return (
     <div className="flex flex-col">
@@ -165,17 +222,18 @@ export function PiecesTab({ group, orderState }: { group: Group; orderState: Ord
         );
       })}
       <p role="status" className="px-1 text-caption font-medium text-ink empty:hidden">
-        {dropped > 0 && `${dropped} ${dropped === 1 ? "piece" : "pieces"} moved on and left your selection.`}
+        {dropped > 0 ? `${dropped} ${dropped === 1 ? "piece" : "pieces"} moved on and left your selection.` : notice}
       </p>
       {selectable && picked !== null && (
-        <MoveBar
-          count={selection.ids.size}
-          stepName={group.steps.find((step) => step.key === picked)?.name ?? picked}
-          nextName={nextStepName(group.steps, picked)}
-          disabledReason={orderState === "awaiting_payment" ? WAITING_FOR_PAYMENT : null}
-          onPass={notYet}
-          onFail={notYet}
-          onCorrect={notYet}
+        <MoveFlow
+          group={group}
+          stepKey={picked}
+          orderState={orderState}
+          partnerName={partnerName}
+          onMoved={(message) => {
+            selection.clear();
+            setNotice(message);
+          }}
         />
       )}
     </div>

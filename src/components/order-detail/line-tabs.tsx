@@ -19,9 +19,11 @@ interface LineTabsProps {
   groupId: string;
   index: number;
   orderState: OrderState;
+  /** The partner who has accepted this line, whose steps count for them. */
+  partnerName?: string | null;
 }
 
-function Progress({ groupId, index, orderState }: LineTabsProps) {
+function Progress({ groupId, index, orderState, partnerName = null }: LineTabsProps) {
   const [asked, setAsked] = useState(false);
   const enabled = index < LOADED_UP_FRONT || asked;
   const group = useGroup(groupId, enabled);
@@ -49,7 +51,7 @@ function Progress({ groupId, index, orderState }: LineTabsProps) {
           <TabsTrigger value="quality">Quality</TabsTrigger>
         </TabsList>
         <TabsContent value="pieces">
-          <PiecesTab group={group.data} orderState={orderState} />
+          <PiecesTab group={group.data} orderState={orderState} partnerName={partnerName} />
         </TabsContent>
         <TabsContent value="quality" />
       </Tabs>
