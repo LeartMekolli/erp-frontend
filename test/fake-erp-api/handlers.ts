@@ -195,6 +195,15 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return response(200).json(result);
     }),
 
+    http.get("/files/{id}/versions/{versionId}/url", ({ request, params, response }) => {
+      const caller = staffWith(request, "file.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      return response(200).json({
+        url: `https://storage.example.test/${params.versionId}`,
+        expires_at: new Date(Date.now() + 15 * 60_000).toISOString(),
+      });
+    }),
+
     http.post("/files/{id}/versions/{versionId}/complete", ({ request, params, response }) => {
       const caller = fileCaller(request);
       if (caller !== 200) return response.untyped(refused(caller));
@@ -257,10 +266,24 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
+    http.get("/orders/{id}", ({ request, params, response }) => {
+      const caller = staffWith(request, "order.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().orders.get(params.id);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
     http.post("/orders/{id}/ship", async ({ request, params, response }) => {
       const caller = staffWith(request, "order.ship");
       if (caller instanceof Response) return response.untyped(caller);
       const answer = fakeState().orders.ship(params.id, await request.json(), request.headers.get("idempotency-key"));
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/orders/{id}/deliver", ({ request, params, response }) => {
+      const caller = staffWith(request, "order.ship");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().orders.deliver(params.id, request.headers.get("idempotency-key"));
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 

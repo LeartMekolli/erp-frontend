@@ -72,6 +72,14 @@ describe("createQueryClient", () => {
     expect(retry(2, new Error("500"))).toBe(false);
   });
 
+  it("does not retry a 404", () => {
+    const retry = createQueryClient().getDefaultOptions().queries?.retry;
+    if (typeof retry !== "function") throw new Error("retry should be a function");
+    const problem = (status: number) => Object.assign(new Error("problem"), { type: "about:blank", title: "Problem", status });
+    expect(retry(0, problem(404))).toBe(false);
+    expect(retry(0, problem(500))).toBe(true);
+  });
+
   it("never retries a mutation", () => {
     expect(createQueryClient().getDefaultOptions().mutations?.retry).toBe(false);
   });

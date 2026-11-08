@@ -310,6 +310,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/notifications/unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How many of your in-app notifications are unread.
+         * @description Access: any signed-in user.
+         */
+        get: operations["FeedController_unreadCount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark all your notifications as read.
+         * @description Notifications read before keep their first read time.
+         *
+         *     Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
+         *
+         *     Access: any signed-in user.
+         */
+        post: operations["FeedController_markAllRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notifications/{id}/read": {
         parameters: {
             query?: never;
@@ -3314,6 +3358,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orders/ship": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ship up to 25 orders in one request, each as shipping one order does, and answer each one's result.
+         * @description Each entry is an order and the options shipping it alone takes (`courier` and `tracking`, or `label`). Up to 5 ship at the same time while you wait. One failing never stops or undoes another: its `error` is what shipping it alone would have answered, with its status, its `code` when it has one, and its detail; an order not found is a failed 404. A malformed request, more than 25 entries or an order listed twice is a 400, and nothing ships. A replayed answer includes its failed entries: to try those again, send them in a new request with a new key.
+         *
+         *     Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
+         *
+         *     Access: permission `order.ship`.
+         */
+        post: operations["OrdersController_shipMany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orders/counts": {
         parameters: {
             query?: never;
@@ -3323,7 +3391,7 @@ export interface paths {
         };
         /**
          * How many orders each tab and each needs-you reason holds, with the list's filters.
-         * @description Takes the list's `customer_id`, `payment_state`, `promised_after`, `promised_before` and `q`, with the same meaning; `state`, `needs`, paging and `sort` pick a tab or a page, and are a 400 here. `all` counts every order the filters pick; `states` and `needs_you` count only orders whose state is computed. `needs_you.total` counts an order matching several reasons once, so it can be less than their sum.
+         * @description Takes the list's `customer_id`, `payment_state`, `promised_after`, `promised_before` and `q`, with the same meaning; `state`, `needs`, paging and `sort` pick a tab or a page, and are a 400 here. `all` counts every order the filters pick; `states` and `needs_you` count only orders whose state is computed. `to_collect_amounts` is what is still owed on the orders `needs_you.to_collect` counts, per currency: the open invoice less issued credit notes, or the order total before billing, less what was paid. `needs_you.total` counts an order matching several reasons once, so it can be less than their sum.
          *
          *     Access: permission `order.read`.
          */
@@ -4287,17 +4355,23 @@ export interface paths {
         };
         /**
          * The caller's own kind, user, workspace, roles, permissions and memberships.
-         * @description `kind` says where the caller works (staff, partner or customer), whatever memberships they have left. `workspace` gives the name, currency and time zone screens show dates and money in.
+         * @description `kind` says where the caller works (staff, partner or customer), whatever memberships they have left. `workspace` gives the name, currency and time zone screens show dates and money in, and whether labels can be bought when shipping (`labels_available`), never anything of the courier account.
          *
          *     Access: any signed-in user.
          */
-        get: operations["MeController_me"];
+        get: operations["MeController_view"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Change your own language.
+         * @description The locale is a BCP 47 tag, stored canonical (`de-at` becomes `de-AT`). Nothing else about you can be changed here. Answers `/me` as it is now.
+         *
+         *     Access: any signed-in user.
+         */
+        patch: operations["MeController_update"];
         trace?: never;
     };
     "/skills": {
@@ -5714,7 +5788,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Claims, newest first, by state, fault, workshop at fault or customer, a page at a time.
+         * Claims, newest first, by order, state, fault, workshop at fault or customer, a page at a time.
          * @description Access: permission `order.read`.
          */
         get: operations["ClaimsController_list"];
@@ -6713,7 +6787,9 @@ export interface operations {
     AuthController_logout: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -7180,7 +7256,9 @@ export interface operations {
     TemplatesController_preview: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -7306,10 +7384,99 @@ export interface operations {
             };
         };
     };
-    FeedController_markRead: {
+    FeedController_unreadCount: {
         parameters: {
             query?: never;
             header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                    };
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    FeedController_markAllRead: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Conflict with the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    FeedController_markRead: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -7622,7 +7789,9 @@ export interface operations {
     CustomersController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -7909,7 +8078,9 @@ export interface operations {
     CustomersController_invite: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -8420,7 +8591,9 @@ export interface operations {
     PriorityController_refresh: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -9032,7 +9205,9 @@ export interface operations {
     PortalController_invite: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 customerId: string;
             };
@@ -9365,7 +9540,9 @@ export interface operations {
     PortalCatalogController_save: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 customerId: string;
             };
@@ -9509,7 +9686,8 @@ export interface operations {
                                 type: string;
                                 id: string;
                             } | null;
-                            status: string;
+                            /** @enum {string} */
+                            status: "active" | "removed";
                             created_at: string;
                         }[];
                         next_cursor: string | null;
@@ -9557,7 +9735,9 @@ export interface operations {
     PortalFilesController_start: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 customerId: string;
             };
@@ -9594,7 +9774,8 @@ export interface operations {
                                 type: string;
                                 id: string;
                             } | null;
-                            status: string;
+                            /** @enum {string} */
+                            status: "active" | "removed";
                             created_at: string;
                         };
                         version: {
@@ -9605,7 +9786,8 @@ export interface operations {
                             content_type: string;
                             size: number;
                             checksum: string | null;
-                            status: string;
+                            /** @enum {string} */
+                            status: "pending" | "completing" | "uploaded" | "measuring" | "measured" | "failed";
                             created_at: string;
                             completed_at: string | null;
                         };
@@ -9672,7 +9854,9 @@ export interface operations {
     PortalFilesController_addVersion: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
                 customerId: string;
@@ -9704,7 +9888,8 @@ export interface operations {
                             content_type: string;
                             size: number;
                             checksum: string | null;
-                            status: string;
+                            /** @enum {string} */
+                            status: "pending" | "completing" | "uploaded" | "measuring" | "measured" | "failed";
                             created_at: string;
                             completed_at: string | null;
                         };
@@ -9796,7 +9981,8 @@ export interface operations {
                             type: string;
                             id: string;
                         } | null;
-                        status: string;
+                        /** @enum {string} */
+                        status: "active" | "removed";
                         created_at: string;
                         versions: {
                             /** Format: uuid */
@@ -9806,7 +9992,8 @@ export interface operations {
                             content_type: string;
                             size: number;
                             checksum: string | null;
-                            status: string;
+                            /** @enum {string} */
+                            status: "pending" | "completing" | "uploaded" | "measuring" | "measured" | "failed";
                             created_at: string;
                             completed_at: string | null;
                             measures: {
@@ -9859,7 +10046,9 @@ export interface operations {
     PortalFilesController_complete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
                 versionId: string;
@@ -9883,7 +10072,8 @@ export interface operations {
                         content_type: string;
                         size: number;
                         checksum: string | null;
-                        status: string;
+                        /** @enum {string} */
+                        status: "pending" | "completing" | "uploaded" | "measuring" | "measured" | "failed";
                         created_at: string;
                         completed_at: string | null;
                     };
@@ -10094,7 +10284,9 @@ export interface operations {
     PortalQuotesController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 customerId: string;
             };
@@ -10214,7 +10406,9 @@ export interface operations {
     PortalQuotesController_partners: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 customerId: string;
             };
@@ -10445,7 +10639,9 @@ export interface operations {
     UnitsController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -10604,7 +10800,9 @@ export interface operations {
     MaterialsController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -11117,7 +11315,9 @@ export interface operations {
     OptionsController_createGroup: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -11195,7 +11395,9 @@ export interface operations {
     OptionsController_createValue: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -11403,7 +11605,9 @@ export interface operations {
     OptionsController_createRule: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -11588,7 +11792,9 @@ export interface operations {
     ProductsController_createCategory: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -11770,7 +11976,9 @@ export interface operations {
     ProductsController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -12593,7 +12801,9 @@ export interface operations {
     CheckController_check: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -12714,7 +12924,9 @@ export interface operations {
     FilesController_start: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -12751,7 +12963,8 @@ export interface operations {
                                 type: string;
                                 id: string;
                             } | null;
-                            status: string;
+                            /** @enum {string} */
+                            status: "active" | "removed";
                             created_at: string;
                         };
                         version: {
@@ -12762,7 +12975,8 @@ export interface operations {
                             content_type: string;
                             size: number;
                             checksum: string | null;
-                            status: string;
+                            /** @enum {string} */
+                            status: "pending" | "completing" | "uploaded" | "measuring" | "measured" | "failed";
                             created_at: string;
                             completed_at: string | null;
                         };
@@ -12829,7 +13043,9 @@ export interface operations {
     FilesController_addVersion: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -12860,7 +13076,8 @@ export interface operations {
                             content_type: string;
                             size: number;
                             checksum: string | null;
-                            status: string;
+                            /** @enum {string} */
+                            status: "pending" | "completing" | "uploaded" | "measuring" | "measured" | "failed";
                             created_at: string;
                             completed_at: string | null;
                         };
@@ -12951,7 +13168,8 @@ export interface operations {
                             type: string;
                             id: string;
                         } | null;
-                        status: string;
+                        /** @enum {string} */
+                        status: "active" | "removed";
                         created_at: string;
                         versions: {
                             /** Format: uuid */
@@ -12961,7 +13179,8 @@ export interface operations {
                             content_type: string;
                             size: number;
                             checksum: string | null;
-                            status: string;
+                            /** @enum {string} */
+                            status: "pending" | "completing" | "uploaded" | "measuring" | "measured" | "failed";
                             created_at: string;
                             completed_at: string | null;
                             measures: {
@@ -13014,7 +13233,9 @@ export interface operations {
     FilesController_complete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
                 versionId: string;
@@ -13037,7 +13258,8 @@ export interface operations {
                         content_type: string;
                         size: number;
                         checksum: string | null;
-                        status: string;
+                        /** @enum {string} */
+                        status: "pending" | "completing" | "uploaded" | "measuring" | "measured" | "failed";
                         created_at: string;
                         completed_at: string | null;
                     };
@@ -13213,7 +13435,9 @@ export interface operations {
     StepTypesController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -14798,7 +15022,9 @@ export interface operations {
     AdjustmentsController_createGroup: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -14987,7 +15213,9 @@ export interface operations {
     AdjustmentsController_createSpeed: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -15197,7 +15425,9 @@ export interface operations {
     AdjustmentsController_createSurcharge: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -15493,7 +15723,9 @@ export interface operations {
     QuotesController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -15952,7 +16184,9 @@ export interface operations {
     JobsController_offer: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 groupId: string;
             };
@@ -16055,7 +16289,9 @@ export interface operations {
     JobsController_withdraw: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 groupId: string;
             };
@@ -16149,7 +16385,9 @@ export interface operations {
     JobsController_reassign: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 groupId: string;
             };
@@ -16592,7 +16830,9 @@ export interface operations {
     PartnersController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -16977,7 +17217,9 @@ export interface operations {
     PartnersController_approve: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -17077,7 +17319,9 @@ export interface operations {
     PartnersController_suspend: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -17177,7 +17421,9 @@ export interface operations {
     PartnersController_invite: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -17452,7 +17698,9 @@ export interface operations {
     PartnerPortalController_invite: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 partnerId: string;
             };
@@ -17629,7 +17877,8 @@ export interface operations {
                                 type: string;
                                 id: string;
                             } | null;
-                            status: string;
+                            /** @enum {string} */
+                            status: "active" | "removed";
                             created_at: string;
                         }[];
                         next_cursor: string | null;
@@ -17677,7 +17926,9 @@ export interface operations {
     PartnerFilesController_start: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 partnerId: string;
             };
@@ -17710,7 +17961,8 @@ export interface operations {
                                 type: string;
                                 id: string;
                             } | null;
-                            status: string;
+                            /** @enum {string} */
+                            status: "active" | "removed";
                             created_at: string;
                         };
                         version: {
@@ -17721,7 +17973,8 @@ export interface operations {
                             content_type: string;
                             size: number;
                             checksum: string | null;
-                            status: string;
+                            /** @enum {string} */
+                            status: "pending" | "completing" | "uploaded" | "measuring" | "measured" | "failed";
                             created_at: string;
                             completed_at: string | null;
                         };
@@ -17788,7 +18041,9 @@ export interface operations {
     PartnerFilesController_addVersion: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
                 partnerId: string;
@@ -17820,7 +18075,8 @@ export interface operations {
                             content_type: string;
                             size: number;
                             checksum: string | null;
-                            status: string;
+                            /** @enum {string} */
+                            status: "pending" | "completing" | "uploaded" | "measuring" | "measured" | "failed";
                             created_at: string;
                             completed_at: string | null;
                         };
@@ -17912,7 +18168,8 @@ export interface operations {
                             type: string;
                             id: string;
                         } | null;
-                        status: string;
+                        /** @enum {string} */
+                        status: "active" | "removed";
                         created_at: string;
                         versions: {
                             /** Format: uuid */
@@ -17922,7 +18179,8 @@ export interface operations {
                             content_type: string;
                             size: number;
                             checksum: string | null;
-                            status: string;
+                            /** @enum {string} */
+                            status: "pending" | "completing" | "uploaded" | "measuring" | "measured" | "failed";
                             created_at: string;
                             completed_at: string | null;
                             measures: {
@@ -17975,7 +18233,9 @@ export interface operations {
     PartnerFilesController_complete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
                 versionId: string;
@@ -17999,7 +18259,8 @@ export interface operations {
                         content_type: string;
                         size: number;
                         checksum: string | null;
-                        status: string;
+                        /** @enum {string} */
+                        status: "pending" | "completing" | "uploaded" | "measuring" | "measured" | "failed";
                         created_at: string;
                         completed_at: string | null;
                     };
@@ -19344,7 +19605,9 @@ export interface operations {
     PortalSetupController_submit: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 partnerId: string;
             };
@@ -19789,7 +20052,9 @@ export interface operations {
     PartnerPricesController_copy: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -20293,7 +20558,9 @@ export interface operations {
     PortalJobsController_accept: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 groupId: string;
                 partnerId: string;
@@ -20388,7 +20655,9 @@ export interface operations {
     PortalJobsController_decline: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 groupId: string;
                 partnerId: string;
@@ -20832,7 +21101,9 @@ export interface operations {
     PartnerJobsController_move: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 partnerId: string;
             };
@@ -21025,7 +21296,9 @@ export interface operations {
     JobCommentsController_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 groupId: string;
                 partnerId: string;
@@ -21262,7 +21535,9 @@ export interface operations {
     RatingsController_share: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -21349,7 +21624,9 @@ export interface operations {
     PortalRatingsController_rate: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 groupId: string;
                 customerId: string;
@@ -21571,7 +21848,9 @@ export interface operations {
     OrderSetupController_createMethod: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -21957,6 +22236,28 @@ export interface operations {
                                 quantity: number;
                                 unit_price: string;
                                 total: string;
+                                options: {
+                                    group: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                    value: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                }[];
+                                size: ({
+                                    scale: string;
+                                } | {
+                                    named: string;
+                                }) | null;
+                                design_file: {
+                                    /** Format: uuid */
+                                    file_id: string;
+                                    /** Format: uuid */
+                                    file_version_id: string;
+                                    name: string;
+                                } | null;
                                 /** @enum {string} */
                                 state: "in_production" | "ready" | "cancelled";
                                 /** Format: uuid */
@@ -21965,6 +22266,10 @@ export interface operations {
                                     /** Format: uuid */
                                     id: string;
                                     name: string;
+                                    /** @enum {string} */
+                                    status: "offered" | "accepted";
+                                    /** Format: date-time */
+                                    expires_at: string | null;
                                 } | null;
                                 parts: {
                                     /** Format: uuid */
@@ -21978,6 +22283,28 @@ export interface operations {
                                     quantity: number;
                                     unit_price: string;
                                     total: string;
+                                    options: {
+                                        group: {
+                                            key: string;
+                                            name: string;
+                                        };
+                                        value: {
+                                            key: string;
+                                            name: string;
+                                        };
+                                    }[];
+                                    size: ({
+                                        scale: string;
+                                    } | {
+                                        named: string;
+                                    }) | null;
+                                    design_file: {
+                                        /** Format: uuid */
+                                        file_id: string;
+                                        /** Format: uuid */
+                                        file_version_id: string;
+                                        name: string;
+                                    } | null;
                                     /** @enum {string} */
                                     state: "in_production" | "ready" | "cancelled";
                                     /** Format: uuid */
@@ -21986,6 +22313,10 @@ export interface operations {
                                         /** Format: uuid */
                                         id: string;
                                         name: string;
+                                        /** @enum {string} */
+                                        status: "offered" | "accepted";
+                                        /** Format: date-time */
+                                        expires_at: string | null;
                                     } | null;
                                 }[];
                             }[];
@@ -21999,6 +22330,16 @@ export interface operations {
                             note: string | null;
                             /** Format: date-time */
                             placed_at: string;
+                            placed_by: {
+                                /** Format: uuid */
+                                id: string;
+                                name: string;
+                            };
+                            cancelled: {
+                                /** Format: date-time */
+                                at: string;
+                                reason: string | null;
+                            } | null;
                             payment: {
                                 /** @enum {string} */
                                 terms: "pay_first" | "pay_later";
@@ -22067,7 +22408,9 @@ export interface operations {
     OrdersController_place: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -22165,6 +22508,28 @@ export interface operations {
                             quantity: number;
                             unit_price: string;
                             total: string;
+                            options: {
+                                group: {
+                                    key: string;
+                                    name: string;
+                                };
+                                value: {
+                                    key: string;
+                                    name: string;
+                                };
+                            }[];
+                            size: ({
+                                scale: string;
+                            } | {
+                                named: string;
+                            }) | null;
+                            design_file: {
+                                /** Format: uuid */
+                                file_id: string;
+                                /** Format: uuid */
+                                file_version_id: string;
+                                name: string;
+                            } | null;
                             /** @enum {string} */
                             state: "in_production" | "ready" | "cancelled";
                             /** Format: uuid */
@@ -22173,6 +22538,10 @@ export interface operations {
                                 /** Format: uuid */
                                 id: string;
                                 name: string;
+                                /** @enum {string} */
+                                status: "offered" | "accepted";
+                                /** Format: date-time */
+                                expires_at: string | null;
                             } | null;
                             parts: {
                                 /** Format: uuid */
@@ -22186,6 +22555,28 @@ export interface operations {
                                 quantity: number;
                                 unit_price: string;
                                 total: string;
+                                options: {
+                                    group: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                    value: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                }[];
+                                size: ({
+                                    scale: string;
+                                } | {
+                                    named: string;
+                                }) | null;
+                                design_file: {
+                                    /** Format: uuid */
+                                    file_id: string;
+                                    /** Format: uuid */
+                                    file_version_id: string;
+                                    name: string;
+                                } | null;
                                 /** @enum {string} */
                                 state: "in_production" | "ready" | "cancelled";
                                 /** Format: uuid */
@@ -22194,6 +22585,10 @@ export interface operations {
                                     /** Format: uuid */
                                     id: string;
                                     name: string;
+                                    /** @enum {string} */
+                                    status: "offered" | "accepted";
+                                    /** Format: date-time */
+                                    expires_at: string | null;
                                 } | null;
                             }[];
                         }[];
@@ -22207,6 +22602,16 @@ export interface operations {
                         note: string | null;
                         /** Format: date-time */
                         placed_at: string;
+                        placed_by: {
+                            /** Format: uuid */
+                            id: string;
+                            name: string;
+                        };
+                        cancelled: {
+                            /** Format: date-time */
+                            at: string;
+                            reason: string | null;
+                        } | null;
                         payment: {
                             /** @enum {string} */
                             terms: "pay_first" | "pay_later";
@@ -22297,6 +22702,300 @@ export interface operations {
             };
         };
     };
+    OrdersController_shipMany: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    orders: {
+                        courier?: string;
+                        tracking?: string;
+                        label?: {
+                            parcel?: {
+                                weight_g: number;
+                                length_cm: number;
+                                width_cm: number;
+                                height_cm: number;
+                            };
+                            carrier?: string;
+                            service?: string;
+                        };
+                        /** Format: uuid */
+                        order_id: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        results: ({
+                            /** Format: uuid */
+                            order_id: string;
+                            /** @enum {string} */
+                            result: "shipped";
+                            order: {
+                                /** Format: uuid */
+                                id: string;
+                                number: number;
+                                customer: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                };
+                                /** @enum {string} */
+                                channel: "staff" | "portal";
+                                /** @enum {string} */
+                                state: "awaiting_payment" | "in_production" | "ready" | "shipped" | "delivered" | "cancelled";
+                                /** Format: date */
+                                promised_on: string;
+                                needs: ("late" | "to_ship" | "to_collect" | "due_soon")[];
+                                delivery_speed: string | null;
+                                address: {
+                                    name: string;
+                                    line1: string;
+                                    line2?: string;
+                                    city: string;
+                                    postal_code: string;
+                                    region?: string;
+                                    country: string;
+                                    phone?: string;
+                                };
+                                shipping: {
+                                    method: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                    price: string;
+                                    courier: string | null;
+                                    tracking: string | null;
+                                    /** Format: date-time */
+                                    shipped_at: string | null;
+                                    /** Format: date-time */
+                                    delivered_at: string | null;
+                                    label: {
+                                        url: string;
+                                        carrier: string;
+                                        service: string;
+                                        tracking: string;
+                                        /** @enum {string|null} */
+                                        tracking_status: "pre_transit" | "in_transit" | "out_for_delivery" | "delivered" | "returned" | "failure" | "unknown" | null;
+                                        cost: string;
+                                        currency: string;
+                                    } | null;
+                                };
+                                lines: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    position: number;
+                                    product: {
+                                        /** Format: uuid */
+                                        id: string;
+                                        name: string;
+                                    };
+                                    quantity: number;
+                                    unit_price: string;
+                                    total: string;
+                                    options: {
+                                        group: {
+                                            key: string;
+                                            name: string;
+                                        };
+                                        value: {
+                                            key: string;
+                                            name: string;
+                                        };
+                                    }[];
+                                    size: ({
+                                        scale: string;
+                                    } | {
+                                        named: string;
+                                    }) | null;
+                                    design_file: {
+                                        /** Format: uuid */
+                                        file_id: string;
+                                        /** Format: uuid */
+                                        file_version_id: string;
+                                        name: string;
+                                    } | null;
+                                    /** @enum {string} */
+                                    state: "in_production" | "ready" | "cancelled";
+                                    /** Format: uuid */
+                                    group_id: string | null;
+                                    partner: {
+                                        /** Format: uuid */
+                                        id: string;
+                                        name: string;
+                                        /** @enum {string} */
+                                        status: "offered" | "accepted";
+                                        /** Format: date-time */
+                                        expires_at: string | null;
+                                    } | null;
+                                    parts: {
+                                        /** Format: uuid */
+                                        id: string;
+                                        position: number;
+                                        product: {
+                                            /** Format: uuid */
+                                            id: string;
+                                            name: string;
+                                        };
+                                        quantity: number;
+                                        unit_price: string;
+                                        total: string;
+                                        options: {
+                                            group: {
+                                                key: string;
+                                                name: string;
+                                            };
+                                            value: {
+                                                key: string;
+                                                name: string;
+                                            };
+                                        }[];
+                                        size: ({
+                                            scale: string;
+                                        } | {
+                                            named: string;
+                                        }) | null;
+                                        design_file: {
+                                            /** Format: uuid */
+                                            file_id: string;
+                                            /** Format: uuid */
+                                            file_version_id: string;
+                                            name: string;
+                                        } | null;
+                                        /** @enum {string} */
+                                        state: "in_production" | "ready" | "cancelled";
+                                        /** Format: uuid */
+                                        group_id: string | null;
+                                        partner: {
+                                            /** Format: uuid */
+                                            id: string;
+                                            name: string;
+                                            /** @enum {string} */
+                                            status: "offered" | "accepted";
+                                            /** Format: date-time */
+                                            expires_at: string | null;
+                                        } | null;
+                                    }[];
+                                }[];
+                                lines_total: string;
+                                tax: {
+                                    percent: string;
+                                    amount: string;
+                                };
+                                total: string;
+                                currency: string;
+                                note: string | null;
+                                /** Format: date-time */
+                                placed_at: string;
+                                placed_by: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                };
+                                cancelled: {
+                                    /** Format: date-time */
+                                    at: string;
+                                    reason: string | null;
+                                } | null;
+                                payment: {
+                                    /** @enum {string} */
+                                    terms: "pay_first" | "pay_later";
+                                    /** @enum {string} */
+                                    state: "awaiting_payment" | "paid" | "not_billed" | "invoiced" | "overdue" | "refunded" | "partly_refunded" | "none";
+                                    /** Format: date-time */
+                                    pay_by: string | null;
+                                    held_for_credit: boolean;
+                                    released: {
+                                        by: {
+                                            /** Format: uuid */
+                                            id: string;
+                                            name: string;
+                                        };
+                                        reason: string;
+                                    } | null;
+                                    /** @description In the order currency, with two decimals. */
+                                    paid: string;
+                                    /** @description In the order currency, with two decimals. */
+                                    refunded: string;
+                                    pay_url: string | null;
+                                    invoice: {
+                                        url: string;
+                                        /** Format: date */
+                                        due_on: string;
+                                        /** @enum {string} */
+                                        status: "open" | "paid" | "void";
+                                        /** @description In the order currency, with two decimals. */
+                                        credited: string;
+                                    } | null;
+                                };
+                            };
+                        } | {
+                            /** Format: uuid */
+                            order_id: string;
+                            /** @enum {string} */
+                            result: "failed";
+                            error: {
+                                status: number;
+                                code: string | null;
+                                detail: string;
+                            };
+                        })[];
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Conflict with the current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     OrdersController_counts: {
         parameters: {
             query?: {
@@ -22335,6 +23034,11 @@ export interface operations {
                             to_collect: number;
                             due_soon: number;
                         };
+                        to_collect_amounts: {
+                            currency: string;
+                            /** @description With two decimals. */
+                            amount: string;
+                        }[];
                     };
                 };
             };
@@ -22446,6 +23150,28 @@ export interface operations {
                             quantity: number;
                             unit_price: string;
                             total: string;
+                            options: {
+                                group: {
+                                    key: string;
+                                    name: string;
+                                };
+                                value: {
+                                    key: string;
+                                    name: string;
+                                };
+                            }[];
+                            size: ({
+                                scale: string;
+                            } | {
+                                named: string;
+                            }) | null;
+                            design_file: {
+                                /** Format: uuid */
+                                file_id: string;
+                                /** Format: uuid */
+                                file_version_id: string;
+                                name: string;
+                            } | null;
                             /** @enum {string} */
                             state: "in_production" | "ready" | "cancelled";
                             /** Format: uuid */
@@ -22454,6 +23180,10 @@ export interface operations {
                                 /** Format: uuid */
                                 id: string;
                                 name: string;
+                                /** @enum {string} */
+                                status: "offered" | "accepted";
+                                /** Format: date-time */
+                                expires_at: string | null;
                             } | null;
                             parts: {
                                 /** Format: uuid */
@@ -22467,6 +23197,28 @@ export interface operations {
                                 quantity: number;
                                 unit_price: string;
                                 total: string;
+                                options: {
+                                    group: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                    value: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                }[];
+                                size: ({
+                                    scale: string;
+                                } | {
+                                    named: string;
+                                }) | null;
+                                design_file: {
+                                    /** Format: uuid */
+                                    file_id: string;
+                                    /** Format: uuid */
+                                    file_version_id: string;
+                                    name: string;
+                                } | null;
                                 /** @enum {string} */
                                 state: "in_production" | "ready" | "cancelled";
                                 /** Format: uuid */
@@ -22475,6 +23227,10 @@ export interface operations {
                                     /** Format: uuid */
                                     id: string;
                                     name: string;
+                                    /** @enum {string} */
+                                    status: "offered" | "accepted";
+                                    /** Format: date-time */
+                                    expires_at: string | null;
                                 } | null;
                             }[];
                         }[];
@@ -22488,6 +23244,16 @@ export interface operations {
                         note: string | null;
                         /** Format: date-time */
                         placed_at: string;
+                        placed_by: {
+                            /** Format: uuid */
+                            id: string;
+                            name: string;
+                        };
+                        cancelled: {
+                            /** Format: date-time */
+                            at: string;
+                            reason: string | null;
+                        } | null;
                         payment: {
                             /** @enum {string} */
                             terms: "pay_first" | "pay_later";
@@ -22563,7 +23329,9 @@ export interface operations {
     OrdersController_cancel: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -22655,6 +23423,28 @@ export interface operations {
                             quantity: number;
                             unit_price: string;
                             total: string;
+                            options: {
+                                group: {
+                                    key: string;
+                                    name: string;
+                                };
+                                value: {
+                                    key: string;
+                                    name: string;
+                                };
+                            }[];
+                            size: ({
+                                scale: string;
+                            } | {
+                                named: string;
+                            }) | null;
+                            design_file: {
+                                /** Format: uuid */
+                                file_id: string;
+                                /** Format: uuid */
+                                file_version_id: string;
+                                name: string;
+                            } | null;
                             /** @enum {string} */
                             state: "in_production" | "ready" | "cancelled";
                             /** Format: uuid */
@@ -22663,6 +23453,10 @@ export interface operations {
                                 /** Format: uuid */
                                 id: string;
                                 name: string;
+                                /** @enum {string} */
+                                status: "offered" | "accepted";
+                                /** Format: date-time */
+                                expires_at: string | null;
                             } | null;
                             parts: {
                                 /** Format: uuid */
@@ -22676,6 +23470,28 @@ export interface operations {
                                 quantity: number;
                                 unit_price: string;
                                 total: string;
+                                options: {
+                                    group: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                    value: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                }[];
+                                size: ({
+                                    scale: string;
+                                } | {
+                                    named: string;
+                                }) | null;
+                                design_file: {
+                                    /** Format: uuid */
+                                    file_id: string;
+                                    /** Format: uuid */
+                                    file_version_id: string;
+                                    name: string;
+                                } | null;
                                 /** @enum {string} */
                                 state: "in_production" | "ready" | "cancelled";
                                 /** Format: uuid */
@@ -22684,6 +23500,10 @@ export interface operations {
                                     /** Format: uuid */
                                     id: string;
                                     name: string;
+                                    /** @enum {string} */
+                                    status: "offered" | "accepted";
+                                    /** Format: date-time */
+                                    expires_at: string | null;
                                 } | null;
                             }[];
                         }[];
@@ -22697,6 +23517,16 @@ export interface operations {
                         note: string | null;
                         /** Format: date-time */
                         placed_at: string;
+                        placed_by: {
+                            /** Format: uuid */
+                            id: string;
+                            name: string;
+                        };
+                        cancelled: {
+                            /** Format: date-time */
+                            at: string;
+                            reason: string | null;
+                        } | null;
                         payment: {
                             /** @enum {string} */
                             terms: "pay_first" | "pay_later";
@@ -22781,7 +23611,9 @@ export interface operations {
     OrdersController_ship: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -22874,6 +23706,28 @@ export interface operations {
                             quantity: number;
                             unit_price: string;
                             total: string;
+                            options: {
+                                group: {
+                                    key: string;
+                                    name: string;
+                                };
+                                value: {
+                                    key: string;
+                                    name: string;
+                                };
+                            }[];
+                            size: ({
+                                scale: string;
+                            } | {
+                                named: string;
+                            }) | null;
+                            design_file: {
+                                /** Format: uuid */
+                                file_id: string;
+                                /** Format: uuid */
+                                file_version_id: string;
+                                name: string;
+                            } | null;
                             /** @enum {string} */
                             state: "in_production" | "ready" | "cancelled";
                             /** Format: uuid */
@@ -22882,6 +23736,10 @@ export interface operations {
                                 /** Format: uuid */
                                 id: string;
                                 name: string;
+                                /** @enum {string} */
+                                status: "offered" | "accepted";
+                                /** Format: date-time */
+                                expires_at: string | null;
                             } | null;
                             parts: {
                                 /** Format: uuid */
@@ -22895,6 +23753,28 @@ export interface operations {
                                 quantity: number;
                                 unit_price: string;
                                 total: string;
+                                options: {
+                                    group: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                    value: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                }[];
+                                size: ({
+                                    scale: string;
+                                } | {
+                                    named: string;
+                                }) | null;
+                                design_file: {
+                                    /** Format: uuid */
+                                    file_id: string;
+                                    /** Format: uuid */
+                                    file_version_id: string;
+                                    name: string;
+                                } | null;
                                 /** @enum {string} */
                                 state: "in_production" | "ready" | "cancelled";
                                 /** Format: uuid */
@@ -22903,6 +23783,10 @@ export interface operations {
                                     /** Format: uuid */
                                     id: string;
                                     name: string;
+                                    /** @enum {string} */
+                                    status: "offered" | "accepted";
+                                    /** Format: date-time */
+                                    expires_at: string | null;
                                 } | null;
                             }[];
                         }[];
@@ -22916,6 +23800,16 @@ export interface operations {
                         note: string | null;
                         /** Format: date-time */
                         placed_at: string;
+                        placed_by: {
+                            /** Format: uuid */
+                            id: string;
+                            name: string;
+                        };
+                        cancelled: {
+                            /** Format: date-time */
+                            at: string;
+                            reason: string | null;
+                        } | null;
                         payment: {
                             /** @enum {string} */
                             terms: "pay_first" | "pay_later";
@@ -23009,7 +23903,9 @@ export interface operations {
     OrdersController_deliver: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -23085,6 +23981,28 @@ export interface operations {
                             quantity: number;
                             unit_price: string;
                             total: string;
+                            options: {
+                                group: {
+                                    key: string;
+                                    name: string;
+                                };
+                                value: {
+                                    key: string;
+                                    name: string;
+                                };
+                            }[];
+                            size: ({
+                                scale: string;
+                            } | {
+                                named: string;
+                            }) | null;
+                            design_file: {
+                                /** Format: uuid */
+                                file_id: string;
+                                /** Format: uuid */
+                                file_version_id: string;
+                                name: string;
+                            } | null;
                             /** @enum {string} */
                             state: "in_production" | "ready" | "cancelled";
                             /** Format: uuid */
@@ -23093,6 +24011,10 @@ export interface operations {
                                 /** Format: uuid */
                                 id: string;
                                 name: string;
+                                /** @enum {string} */
+                                status: "offered" | "accepted";
+                                /** Format: date-time */
+                                expires_at: string | null;
                             } | null;
                             parts: {
                                 /** Format: uuid */
@@ -23106,6 +24028,28 @@ export interface operations {
                                 quantity: number;
                                 unit_price: string;
                                 total: string;
+                                options: {
+                                    group: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                    value: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                }[];
+                                size: ({
+                                    scale: string;
+                                } | {
+                                    named: string;
+                                }) | null;
+                                design_file: {
+                                    /** Format: uuid */
+                                    file_id: string;
+                                    /** Format: uuid */
+                                    file_version_id: string;
+                                    name: string;
+                                } | null;
                                 /** @enum {string} */
                                 state: "in_production" | "ready" | "cancelled";
                                 /** Format: uuid */
@@ -23114,6 +24058,10 @@ export interface operations {
                                     /** Format: uuid */
                                     id: string;
                                     name: string;
+                                    /** @enum {string} */
+                                    status: "offered" | "accepted";
+                                    /** Format: date-time */
+                                    expires_at: string | null;
                                 } | null;
                             }[];
                         }[];
@@ -23127,6 +24075,16 @@ export interface operations {
                         note: string | null;
                         /** Format: date-time */
                         placed_at: string;
+                        placed_by: {
+                            /** Format: uuid */
+                            id: string;
+                            name: string;
+                        };
+                        cancelled: {
+                            /** Format: date-time */
+                            at: string;
+                            reason: string | null;
+                        } | null;
                         payment: {
                             /** @enum {string} */
                             terms: "pay_first" | "pay_later";
@@ -23295,7 +24253,9 @@ export interface operations {
     OrderCommentsController_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -23574,6 +24534,28 @@ export interface operations {
                                 quantity: number;
                                 unit_price: string;
                                 total: string;
+                                options: {
+                                    group: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                    value: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                }[];
+                                size: ({
+                                    scale: string;
+                                } | {
+                                    named: string;
+                                }) | null;
+                                design_file: {
+                                    /** Format: uuid */
+                                    file_id: string;
+                                    /** Format: uuid */
+                                    file_version_id: string;
+                                    name: string;
+                                } | null;
                                 /** @enum {string} */
                                 state: "in_production" | "ready" | "cancelled";
                                 parts: {
@@ -23584,6 +24566,21 @@ export interface operations {
                                         name: string;
                                     };
                                     quantity: number;
+                                    options: {
+                                        group: {
+                                            key: string;
+                                            name: string;
+                                        };
+                                        value: {
+                                            key: string;
+                                            name: string;
+                                        };
+                                    }[];
+                                    size: ({
+                                        scale: string;
+                                    } | {
+                                        named: string;
+                                    }) | null;
                                     /** @enum {string} */
                                     state: "in_production" | "ready" | "cancelled";
                                     progress: {
@@ -23682,7 +24679,9 @@ export interface operations {
     PortalOrdersController_place: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 customerId: string;
             };
@@ -23764,6 +24763,28 @@ export interface operations {
                             quantity: number;
                             unit_price: string;
                             total: string;
+                            options: {
+                                group: {
+                                    key: string;
+                                    name: string;
+                                };
+                                value: {
+                                    key: string;
+                                    name: string;
+                                };
+                            }[];
+                            size: ({
+                                scale: string;
+                            } | {
+                                named: string;
+                            }) | null;
+                            design_file: {
+                                /** Format: uuid */
+                                file_id: string;
+                                /** Format: uuid */
+                                file_version_id: string;
+                                name: string;
+                            } | null;
                             /** @enum {string} */
                             state: "in_production" | "ready" | "cancelled";
                             parts: {
@@ -23774,6 +24795,21 @@ export interface operations {
                                     name: string;
                                 };
                                 quantity: number;
+                                options: {
+                                    group: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                    value: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                }[];
+                                size: ({
+                                    scale: string;
+                                } | {
+                                    named: string;
+                                }) | null;
                                 /** @enum {string} */
                                 state: "in_production" | "ready" | "cancelled";
                                 progress: {
@@ -23949,6 +24985,28 @@ export interface operations {
                             quantity: number;
                             unit_price: string;
                             total: string;
+                            options: {
+                                group: {
+                                    key: string;
+                                    name: string;
+                                };
+                                value: {
+                                    key: string;
+                                    name: string;
+                                };
+                            }[];
+                            size: ({
+                                scale: string;
+                            } | {
+                                named: string;
+                            }) | null;
+                            design_file: {
+                                /** Format: uuid */
+                                file_id: string;
+                                /** Format: uuid */
+                                file_version_id: string;
+                                name: string;
+                            } | null;
                             /** @enum {string} */
                             state: "in_production" | "ready" | "cancelled";
                             parts: {
@@ -23959,6 +25017,21 @@ export interface operations {
                                     name: string;
                                 };
                                 quantity: number;
+                                options: {
+                                    group: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                    value: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                }[];
+                                size: ({
+                                    scale: string;
+                                } | {
+                                    named: string;
+                                }) | null;
                                 /** @enum {string} */
                                 state: "in_production" | "ready" | "cancelled";
                                 progress: {
@@ -24055,7 +25128,9 @@ export interface operations {
     PortalOrdersController_cancel: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
                 customerId: string;
@@ -24122,6 +25197,28 @@ export interface operations {
                             quantity: number;
                             unit_price: string;
                             total: string;
+                            options: {
+                                group: {
+                                    key: string;
+                                    name: string;
+                                };
+                                value: {
+                                    key: string;
+                                    name: string;
+                                };
+                            }[];
+                            size: ({
+                                scale: string;
+                            } | {
+                                named: string;
+                            }) | null;
+                            design_file: {
+                                /** Format: uuid */
+                                file_id: string;
+                                /** Format: uuid */
+                                file_version_id: string;
+                                name: string;
+                            } | null;
                             /** @enum {string} */
                             state: "in_production" | "ready" | "cancelled";
                             parts: {
@@ -24132,6 +25229,21 @@ export interface operations {
                                     name: string;
                                 };
                                 quantity: number;
+                                options: {
+                                    group: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                    value: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                }[];
+                                size: ({
+                                    scale: string;
+                                } | {
+                                    named: string;
+                                }) | null;
                                 /** @enum {string} */
                                 state: "in_production" | "ready" | "cancelled";
                                 progress: {
@@ -24319,7 +25431,9 @@ export interface operations {
     PortalOrderCommentsController_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
                 customerId: string;
@@ -24609,7 +25723,9 @@ export interface operations {
     ShippingRatesController_staff: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -24699,7 +25815,9 @@ export interface operations {
     ShippingRatesController_portal: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 customerId: string;
             };
@@ -24878,7 +25996,9 @@ export interface operations {
     DefectsController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -25064,7 +26184,9 @@ export interface operations {
     WorkflowsController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -25984,7 +27106,9 @@ export interface operations {
     WorkOrdersController_start: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -26320,7 +27444,9 @@ export interface operations {
     WorkOrdersController_move: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -26993,7 +28119,9 @@ export interface operations {
     InvitationsController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -27113,7 +28241,9 @@ export interface operations {
     UsersController_deactivate: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -27395,7 +28525,7 @@ export interface operations {
             };
         };
     };
-    MeController_me: {
+    MeController_view: {
         parameters: {
             query?: never;
             header?: never;
@@ -27429,6 +28559,7 @@ export interface operations {
                             name: string;
                             default_currency: string;
                             timezone: string;
+                            labels_available: boolean;
                         };
                         roles: {
                             /** Format: uuid */
@@ -27442,6 +28573,91 @@ export interface operations {
                             role: string;
                         }[];
                     };
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    MeController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    locale: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        kind: "staff" | "partner" | "customer";
+                        user: {
+                            /** Format: uuid */
+                            id: string;
+                            email: string;
+                            name: string;
+                            status: string;
+                            locale: string;
+                            created_at: string;
+                        };
+                        workspace: {
+                            /** Format: uuid */
+                            id: string;
+                            slug: string;
+                            name: string;
+                            default_currency: string;
+                            timezone: string;
+                            labels_available: boolean;
+                        };
+                        roles: {
+                            /** Format: uuid */
+                            id: string;
+                            name: string;
+                        }[];
+                        permissions: ("settings.read" | "settings.write" | "user.read" | "user.invite" | "user.deactivate" | "role.read" | "role.write" | "role.assign" | "template.read" | "template.write" | "file.read" | "file.write" | "catalog.read" | "catalog.write" | "material.price.override" | "pricing.read" | "pricing.write" | "quote.create" | "customer.read" | "customer.write" | "workflow.read" | "workflow.write" | "workflow.move" | "partner.read" | "partner.write" | "partner.assign" | "order.read" | "order.write" | "order.ship" | "payment.read" | "payment.setup" | "payment.write" | "payment.refund" | "payment.payout" | "plan.write" | "credit.grant" | "report.read" | "report.export" | "ai.use" | "knowledge.write")[];
+                        memberships: {
+                            organisation_type: string;
+                            organisation_id: string;
+                            role: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
             /** @description Missing or invalid token */
@@ -27524,7 +28740,9 @@ export interface operations {
     SkillsController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -27708,7 +28926,9 @@ export interface operations {
     RolesController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -28002,7 +29222,9 @@ export interface operations {
     PlatformAuthController_logout: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -29072,7 +30294,9 @@ export interface operations {
     CheckoutController_pay: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
                 customerId: string;
@@ -29151,7 +30375,9 @@ export interface operations {
     CheckoutController_payLink: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -29229,7 +30455,9 @@ export interface operations {
     CheckoutController_paidByHand: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -29317,6 +30545,28 @@ export interface operations {
                             quantity: number;
                             unit_price: string;
                             total: string;
+                            options: {
+                                group: {
+                                    key: string;
+                                    name: string;
+                                };
+                                value: {
+                                    key: string;
+                                    name: string;
+                                };
+                            }[];
+                            size: ({
+                                scale: string;
+                            } | {
+                                named: string;
+                            }) | null;
+                            design_file: {
+                                /** Format: uuid */
+                                file_id: string;
+                                /** Format: uuid */
+                                file_version_id: string;
+                                name: string;
+                            } | null;
                             /** @enum {string} */
                             state: "in_production" | "ready" | "cancelled";
                             /** Format: uuid */
@@ -29325,6 +30575,10 @@ export interface operations {
                                 /** Format: uuid */
                                 id: string;
                                 name: string;
+                                /** @enum {string} */
+                                status: "offered" | "accepted";
+                                /** Format: date-time */
+                                expires_at: string | null;
                             } | null;
                             parts: {
                                 /** Format: uuid */
@@ -29338,6 +30592,28 @@ export interface operations {
                                 quantity: number;
                                 unit_price: string;
                                 total: string;
+                                options: {
+                                    group: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                    value: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                }[];
+                                size: ({
+                                    scale: string;
+                                } | {
+                                    named: string;
+                                }) | null;
+                                design_file: {
+                                    /** Format: uuid */
+                                    file_id: string;
+                                    /** Format: uuid */
+                                    file_version_id: string;
+                                    name: string;
+                                } | null;
                                 /** @enum {string} */
                                 state: "in_production" | "ready" | "cancelled";
                                 /** Format: uuid */
@@ -29346,6 +30622,10 @@ export interface operations {
                                     /** Format: uuid */
                                     id: string;
                                     name: string;
+                                    /** @enum {string} */
+                                    status: "offered" | "accepted";
+                                    /** Format: date-time */
+                                    expires_at: string | null;
                                 } | null;
                             }[];
                         }[];
@@ -29359,6 +30639,16 @@ export interface operations {
                         note: string | null;
                         /** Format: date-time */
                         placed_at: string;
+                        placed_by: {
+                            /** Format: uuid */
+                            id: string;
+                            name: string;
+                        };
+                        cancelled: {
+                            /** Format: date-time */
+                            at: string;
+                            reason: string | null;
+                        } | null;
                         payment: {
                             /** @enum {string} */
                             terms: "pay_first" | "pay_later";
@@ -29608,7 +30898,9 @@ export interface operations {
     CreditController_release: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -29690,6 +30982,28 @@ export interface operations {
                             quantity: number;
                             unit_price: string;
                             total: string;
+                            options: {
+                                group: {
+                                    key: string;
+                                    name: string;
+                                };
+                                value: {
+                                    key: string;
+                                    name: string;
+                                };
+                            }[];
+                            size: ({
+                                scale: string;
+                            } | {
+                                named: string;
+                            }) | null;
+                            design_file: {
+                                /** Format: uuid */
+                                file_id: string;
+                                /** Format: uuid */
+                                file_version_id: string;
+                                name: string;
+                            } | null;
                             /** @enum {string} */
                             state: "in_production" | "ready" | "cancelled";
                             /** Format: uuid */
@@ -29698,6 +31012,10 @@ export interface operations {
                                 /** Format: uuid */
                                 id: string;
                                 name: string;
+                                /** @enum {string} */
+                                status: "offered" | "accepted";
+                                /** Format: date-time */
+                                expires_at: string | null;
                             } | null;
                             parts: {
                                 /** Format: uuid */
@@ -29711,6 +31029,28 @@ export interface operations {
                                 quantity: number;
                                 unit_price: string;
                                 total: string;
+                                options: {
+                                    group: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                    value: {
+                                        key: string;
+                                        name: string;
+                                    };
+                                }[];
+                                size: ({
+                                    scale: string;
+                                } | {
+                                    named: string;
+                                }) | null;
+                                design_file: {
+                                    /** Format: uuid */
+                                    file_id: string;
+                                    /** Format: uuid */
+                                    file_version_id: string;
+                                    name: string;
+                                } | null;
                                 /** @enum {string} */
                                 state: "in_production" | "ready" | "cancelled";
                                 /** Format: uuid */
@@ -29719,6 +31059,10 @@ export interface operations {
                                     /** Format: uuid */
                                     id: string;
                                     name: string;
+                                    /** @enum {string} */
+                                    status: "offered" | "accepted";
+                                    /** Format: date-time */
+                                    expires_at: string | null;
                                 } | null;
                             }[];
                         }[];
@@ -29732,6 +31076,16 @@ export interface operations {
                         note: string | null;
                         /** Format: date-time */
                         placed_at: string;
+                        placed_by: {
+                            /** Format: uuid */
+                            id: string;
+                            name: string;
+                        };
+                        cancelled: {
+                            /** Format: date-time */
+                            at: string;
+                            reason: string | null;
+                        } | null;
                         payment: {
                             /** @enum {string} */
                             terms: "pay_first" | "pay_later";
@@ -30040,7 +31394,9 @@ export interface operations {
     PayoutAccountsController_portalLink: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 partnerId: string;
             };
@@ -30172,7 +31528,9 @@ export interface operations {
     PayoutAccountsController_link: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -30332,7 +31690,9 @@ export interface operations {
     PayoutsController_pay: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -30577,7 +31937,9 @@ export interface operations {
     PlansController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -30783,7 +32145,9 @@ export interface operations {
     PlansController_archive: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -30865,7 +32229,9 @@ export interface operations {
     PlansController_sync: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -30976,7 +32342,9 @@ export interface operations {
     CreditsController_grant: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -31527,7 +32895,9 @@ export interface operations {
     SubscriptionsController_checkout: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 customerId: string;
             };
@@ -31614,7 +32984,9 @@ export interface operations {
     SubscriptionsController_change: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 customerId: string;
             };
@@ -31722,7 +33094,9 @@ export interface operations {
     SubscriptionsController_billingPortal: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 customerId: string;
             };
@@ -31851,7 +33225,9 @@ export interface operations {
     CreditPacksController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -32081,7 +33457,9 @@ export interface operations {
     CreditPacksController_buy: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 packId: string;
                 customerId: string;
@@ -32224,7 +33602,9 @@ export interface operations {
     CampaignsController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -32519,7 +33899,9 @@ export interface operations {
     CampaignsController_activate: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -32610,7 +33992,9 @@ export interface operations {
     CampaignsController_pause: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -32701,7 +34085,9 @@ export interface operations {
     CampaignsController_end: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -32792,7 +34178,9 @@ export interface operations {
     ClaimsController_open: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -32947,6 +34335,7 @@ export interface operations {
             query?: {
                 limit?: number;
                 cursor?: string;
+                order_id?: string;
                 state?: "open" | "awaiting_return" | "decided" | "closed";
                 fault?: "workshop" | "workspace" | "courier" | "customer";
                 partner_id?: string;
@@ -33208,7 +34597,9 @@ export interface operations {
     ClaimsController_requestReturn: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -33373,7 +34764,9 @@ export interface operations {
     ClaimsController_markReturned: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -33514,7 +34907,9 @@ export interface operations {
     ClaimsController_decide: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
                 lineId: string;
@@ -33673,7 +35068,9 @@ export interface operations {
     ClaimsController_ship: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -33840,7 +35237,9 @@ export interface operations {
     ClaimsController_delivered: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -33981,7 +35380,9 @@ export interface operations {
     PortalClaimsController_open: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 orderId: string;
                 customerId: string;
@@ -34373,7 +35774,9 @@ export interface operations {
     RunsController_askQuestion: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -34897,7 +36300,9 @@ export interface operations {
     DashboardController_refreshBriefing: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -34947,7 +36352,9 @@ export interface operations {
     DashboardController_dismissSuggestion: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -35068,7 +36475,9 @@ export interface operations {
     CustomerToolsController_startImage: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 customerId: string;
             };
@@ -35146,7 +36555,9 @@ export interface operations {
     CustomerToolsController_startRecommendations: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 customerId: string;
             };
@@ -35213,7 +36624,9 @@ export interface operations {
     CustomerToolsController_startMarketing: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 customerId: string;
             };
@@ -35274,7 +36687,9 @@ export interface operations {
     CustomerToolsController_startBrandContent: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 customerId: string;
             };
@@ -35999,7 +37414,9 @@ export interface operations {
     JobSummaryController_rewrite: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 groupId: string;
             };
@@ -36148,7 +37565,9 @@ export interface operations {
     ExportsController_start: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -36361,7 +37780,9 @@ export interface operations {
     ExportsController_download: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -36496,7 +37917,9 @@ export interface operations {
     ArticlesController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -36751,7 +38174,9 @@ export interface operations {
     ArticlesController_publish: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -36839,7 +38264,9 @@ export interface operations {
     ArticlesController_archive: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };

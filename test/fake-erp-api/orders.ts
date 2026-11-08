@@ -159,6 +159,20 @@ function decodeCursor(cursor: string): { sort: string; offset: number } | null {
   return null;
 }
 
+/** Whole cents, so the fake's sums never go through a fractional number. */
+const cents = (amount: string) => Number(amount.replace(".", ""));
+
+/** What is still owed on the to-collect orders, per currency, leaving out any currency owing nothing. */
+function toCollectAmounts(orders: Order[]): OrderCounts["to_collect_amounts"] {
+  const owed = new Map<string, number>();
+  for (const order of orders.filter((o) => o.needs.includes("to_collect")))
+    owed.set(order.currency, (owed.get(order.currency) ?? 0) + cents(order.total) - cents(order.payment.paid));
+  return [...owed]
+    .filter(([, amount]) => amount > 0)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, amount]) => ({ currency, amount: `${Math.floor(amount / 100)}.${String(amount % 100).padStart(2, "0")}` }));
+}
+
 export function createOrdersStore(now: () => number) {
   const today = () => new Date(now()).toISOString().slice(0, 10);
   const orders = new Map(seedOrders(today(), now()).map((order) => [order.id, order]));
@@ -215,8 +229,29 @@ export function createOrdersStore(now: () => number) {
           all: picked.length,
           states: states as OrderCounts["states"],
           needs_you: { total: picked.filter((o) => o.needs.length > 0).length, ...reasons } as OrderCounts["needs_you"],
+          to_collect_amounts: toCollectAmounts(picked),
         },
       };
+    },
+
+    get(id: string): Answer<Order> {
+      const order = orders.get(id);
+      return order ? { ok: true, body: view(order) } : { ok: false, status: 404, detail: "Order not found" };
+    },
+
+    deliver(id: string, key: string | null): Answer<Order> {
+      return once(key, { id, deliver: true }, () => {
+        const order = orders.get(id);
+        if (!order) return { ok: false, status: 404, detail: "Order not found" };
+        if (order.state !== "shipped") return { ok: false, status: 409, detail: "Only a shipped order can be delivered" };
+        const delivered: StoredOrder = {
+          ...order,
+          state: "delivered",
+          shipping: { ...order.shipping, delivered_at: new Date(now()).toISOString() },
+        };
+        orders.set(id, delivered);
+        return { ok: true, body: view(delivered) };
+      });
     },
 
     ship(id: string, body: ShipBody, key: string | null): Answer<Order> {

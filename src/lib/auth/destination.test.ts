@@ -15,7 +15,7 @@ function me(
   return {
     kind,
     user: { id: "u", email: "e@x.test", name: "N", status: "active", locale: "en", created_at: "2026-01-01T00:00:00.000Z" },
-    workspace: { id: "8d3a6a1e-4f5b-4c2d-9a7e-1b2c3d4e5f60", slug: "demo", name: "Demo", default_currency: "EUR", timezone: "UTC" },
+    workspace: { id: "8d3a6a1e-4f5b-4c2d-9a7e-1b2c3d4e5f60", slug: "demo", name: "Demo", default_currency: "EUR", timezone: "UTC", labels_available: true },
     roles: [],
     permissions,
     memberships: memberships.map((m) => ({ ...m, role: "owner" })),

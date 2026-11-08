@@ -4,7 +4,9 @@
  * `needs` is never stored; the store works it out on each read.
  */
 
-import type { Order, OrderState, PaymentState } from "../../src/lib/api/schema-types";
+import type { LinePartner, Order, OrderLine, OrderState, PaymentState } from "../../src/lib/api/schema-types";
+
+import { LAYERLINE_ID, NORTHCAST_ID } from "./seed";
 
 export type StoredOrder = Omit<Order, "needs">;
 
@@ -23,12 +25,21 @@ export const CUSTOMERS = {
 
 type Customer = (typeof CUSTOMERS)[keyof typeof CUSTOMERS];
 
-interface Line {
+interface Part {
   product: string;
   quantity: number;
   unitPrice: string;
   total: string;
 }
+
+interface Line extends Part {
+  /** Hours from now until an offer lapses; none once accepted. */
+  partner?: { id: string; name: string; status: LinePartner["status"]; expiresIn?: number };
+  parts?: Part[];
+}
+
+const NORTHCAST = { id: NORTHCAST_ID, name: "Northcast Foundry" };
+const LAYERLINE = { id: LAYERLINE_ID, name: "Layerline Prints" };
 
 interface Row {
   number: number;
@@ -46,10 +57,10 @@ const ROWS: Row[] = [
   { number: 1042, customer: CUSTOMERS.luna, state: "ready", payment: "paid", promised: -1, lines: [{ product: "Earring", quantity: 24, unitPrice: "30.00", total: "720.00" }], total: "864.00" },
   { number: 1043, customer: CUSTOMERS.orbit, state: "ready", payment: "invoiced", promised: 1, lines: [{ product: "Crown model", quantity: 6, unitPrice: "58.08", total: "348.50" }], total: "418.20" },
   { number: 1044, customer: CUSTOMERS.mira, state: "ready", payment: "paid", promised: 2, lines: [{ product: "Pendant", quantity: 2, unitPrice: "1558.33", total: "3116.67" }], total: "3740.00" },
-  { number: 1045, customer: CUSTOMERS.kestrel, state: "awaiting_payment", payment: "awaiting_payment", promised: 6, lines: [{ product: "Housing assembly", quantity: 1, unitPrice: "912.92", total: "912.92" }], total: "1095.50" },
+  { number: 1045, customer: CUSTOMERS.kestrel, state: "awaiting_payment", payment: "awaiting_payment", promised: 6, lines: [{ product: "Housing assembly", quantity: 1, unitPrice: "912.92", total: "912.92", parts: [{ product: "Housing shell", quantity: 1, unitPrice: "500.00", total: "500.00" }, { product: "Housing lid", quantity: 1, unitPrice: "300.00", total: "300.00" }] }], total: "1095.50" },
   { number: 1046, customer: CUSTOMERS.halden, state: "awaiting_payment", payment: "awaiting_payment", promised: 8, lines: [{ product: "Knob", quantity: 200, unitPrice: "2.55", total: "510.00" }], total: "612.00" },
   { number: 1047, customer: CUSTOMERS.pinewood, state: "in_production", payment: "overdue", promised: 10, lines: [{ product: "Tuning peg", quantity: 60, unitPrice: "4.10", total: "246.00" }], total: "295.20" },
-  { number: 1048, customer: CUSTOMERS.luna, state: "in_production", payment: "paid", promised: 0, lines: [{ product: "Ring band", quantity: 12, unitPrice: "202.53", total: "2430.33" }], total: "2916.40" },
+  { number: 1048, customer: CUSTOMERS.luna, state: "in_production", payment: "paid", promised: 0, lines: [{ product: "Ring band", quantity: 12, unitPrice: "202.53", total: "2430.33", partner: { ...NORTHCAST, status: "accepted" } }], total: "2916.40" },
   {
     number: 1049,
     customer: CUSTOMERS.northside,
@@ -57,8 +68,8 @@ const ROWS: Row[] = [
     payment: "paid",
     promised: 1,
     lines: [
-      { product: "Facade panel", quantity: 4, unitPrice: "40.00", total: "160.00" },
-      { product: "Stair core", quantity: 1, unitPrice: "95.00", total: "95.00" },
+      { product: "Facade panel", quantity: 4, unitPrice: "40.00", total: "160.00", partner: { ...LAYERLINE, status: "offered", expiresIn: 24 } },
+      { product: "Stair core", quantity: 1, unitPrice: "95.00", total: "95.00", partner: { ...LAYERLINE, status: "offered", expiresIn: -24 } },
       { product: "Roof truss", quantity: 8, unitPrice: "12.50", total: "100.00" },
     ],
     total: "426.00",
@@ -87,6 +98,15 @@ const LINE_STATE: Record<OrderState, Order["lines"][number]["state"]> = {
   delivered: "ready",
   cancelled: "cancelled",
 };
+
+/** What a line or part was made with: the same for every order, named after its product. */
+function picks(product: string, n: number): Pick<OrderLine, "options" | "size" | "design_file"> {
+  return {
+    options: [{ group: { key: "material", name: "Material" }, value: { key: "brass", name: "Brass" } }],
+    size: { named: "52" },
+    design_file: { file_id: uuid("66666666", n), file_version_id: uuid("77777777", n), name: `${product}.stl` },
+  };
+}
 
 /** Every seeded order, promised relative to `today` and placed an hour apart before `now`, newest last. */
 export function seedOrders(today: string, now: number): StoredOrder[] {
@@ -120,8 +140,30 @@ export function seedOrders(today: string, now: number): StoredOrder[] {
         total: line.total,
         state: LINE_STATE[row.state],
         group_id: null,
-        partner: null,
-        parts: [],
+        partner: line.partner
+          ? {
+              id: line.partner.id,
+              name: line.partner.name,
+              status: line.partner.status,
+              expires_at: line.partner.expiresIn === undefined ? null : new Date(now + line.partner.expiresIn * 3_600_000).toISOString(),
+            }
+          : null,
+        parts: (line.parts ?? []).map((part, partPosition) => {
+          const n = row.number * 100 + position * 10 + partPosition;
+          return {
+            id: uuid("88888888", n),
+            position: partPosition,
+            product: { id: uuid("99999999", n), name: part.product },
+            quantity: part.quantity,
+            unit_price: part.unitPrice,
+            total: part.total,
+            state: LINE_STATE[row.state],
+            group_id: null,
+            partner: null,
+            ...picks(part.product, n),
+          };
+        }),
+        ...picks(line.product, row.number * 10 + position),
       })),
       lines_total: row.lines.length === 1 ? row.lines[0]!.total : "355.00",
       tax: { percent: "20.00", amount: "0.00" },
@@ -129,6 +171,8 @@ export function seedOrders(today: string, now: number): StoredOrder[] {
       currency: "EUR",
       note: null,
       placed_at: placedAt,
+      placed_by: { id: uuid("55555555", 1), name: "Ana Ruiz" },
+      cancelled: row.state === "cancelled" ? { at: placedAt, reason: "Customer changed their mind" } : null,
       payment: {
         terms: row.payment === "invoiced" || row.payment === "overdue" ? "pay_later" : "pay_first",
         state: row.payment,

@@ -1,5 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 
+import { isApiProblem } from "@/lib/api/problem";
 import { OfflineError, SessionEndedError } from "@/lib/session/client-session";
 
 /** Screens refetch their data this often while the tab is visible. */
@@ -19,8 +20,12 @@ export function createQueryClient(): QueryClient {
         refetchOnWindowFocus: true,
         refetchOnReconnect: true,
         staleTime: 30_000,
+        // A 404 won't change on a second ask.
         retry: (count, error) =>
-          !(error instanceof SessionEndedError) && !(error instanceof OfflineError) && count < 2,
+          !(error instanceof SessionEndedError) &&
+          !(error instanceof OfflineError) &&
+          !(isApiProblem(error) && error.status === 404) &&
+          count < 2,
       },
       // A submit is retried by the person, with the same Idempotency-Key.
       mutations: { retry: false },
