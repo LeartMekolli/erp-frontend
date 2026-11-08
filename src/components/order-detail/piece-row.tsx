@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { cn } from "cn";
 
 import { Checkbox } from "@/components/ui/checkbox";
@@ -37,7 +39,15 @@ export function PieceRow({
           className="after:-inset-3.5"
         />
       )}
-      <span className="font-medium tabular-nums">{piece.label}</span>
+      <Link
+        href={`?piece=${piece.id}`}
+        scroll={false}
+        prefetch={false}
+        aria-label={`History of ${piece.label}`}
+        className="inline-flex min-h-11 items-center font-medium tabular-nums underline-offset-2 hover:underline"
+      >
+        {piece.label}
+      </Link>
       <span className="inline-flex items-center gap-1.5 text-ink-2">
         <span aria-hidden className={cn("size-1.5 rounded-full", status.dot)} />
         {status.word}

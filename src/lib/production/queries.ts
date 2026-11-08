@@ -6,6 +6,7 @@ import { api } from "@/lib/api/client";
 import { idempotent } from "@/lib/api/idempotency";
 import { problemFrom } from "@/lib/api/problem";
 import type { Group, MoveBody, MoveResponse, WorkOrderDetail, WorkOrderListItem, WorkflowVersion } from "@/lib/api/schema-types";
+import { downloadUrl } from "@/lib/files/download";
 import { invalidateOrders } from "@/lib/orders/queries";
 import { useApiMutation } from "@/lib/query/use-api-mutation";
 import { useCursorList } from "@/lib/query/use-cursor-list";
@@ -14,6 +15,7 @@ import { useCursorList } from "@/lib/query/use-cursor-list";
 export type PieceListStatus = "active" | "finished" | "scrapped";
 
 const PIECES_PAGE = 200;
+const PHOTO_LINK_RENEW_MS = 4 * 60_000;
 
 export const productionKeys = {
   all: ["production"] as const,
@@ -21,6 +23,7 @@ export const productionKeys = {
   pieces: (groupId: string, stepKey: string | null, status: PieceListStatus) => ["production", "pieces", groupId, stepKey, status] as const,
   version: (workflowId: string, version: number) => ["production", "version", workflowId, version] as const,
   piece: (id: string) => ["production", "piece", id] as const,
+  photo: (versionId: string) => ["production", "photo", versionId] as const,
 };
 
 /** A line's path, with how many pieces are at each step. */
@@ -79,6 +82,16 @@ export function usePiece(id: string) {
       if (!data) throw problemFrom(error, response);
       return data;
     },
+  });
+}
+
+/** A link to a QC photo, renewed while it's on screen before erp-api's five minutes run out (`files.service.ts:29`). */
+export function usePhotoUrl(fileId: string, versionId: string) {
+  return useQuery({
+    queryKey: productionKeys.photo(versionId),
+    queryFn: () => downloadUrl(fileId, versionId),
+    staleTime: PHOTO_LINK_RENEW_MS,
+    refetchInterval: PHOTO_LINK_RENEW_MS,
   });
 }
 

@@ -159,6 +159,9 @@ function seedPieces(now: number): StoredPiece[] {
             to_step: ref(s.key),
             defect: { id: POROSITY.defect_id, key: POROSITY.key, name: POROSITY.name },
             comment: "Pitted along one edge",
+            answers: [{ item: "surface_smooth", value: "false", note: null, passing: false }],
+            photo_file_version_ids: [uuid("c1c1c1c1", 1)],
+            photos: [{ file_id: uuid("c2c2c2c2", 1), file_version_id: uuid("c1c1c1c1", 1) }],
             created_at: at(1),
           });
           add({ status: "active", stepKey: s.key, inRework: true, history: [...passesBefore(index + 1, at), failed] });

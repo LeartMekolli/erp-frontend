@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { notFound, useParams } from "next/navigation";
+import { notFound, useParams, useRouter, useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 import { noAnswer } from "@/components/auth/copy";
@@ -18,6 +18,7 @@ import { OfflineError } from "@/lib/session/client-session";
 import { LinePanel } from "./line-panel";
 import { CancelledBanner, OrderHeader } from "./order-header";
 import { PaymentPanel } from "./payment-panel";
+import { PiecePanel } from "./piece-panel";
 import { NotePanel, ShippingPanel } from "./shipping-panel";
 import { StepSelectionProvider } from "./use-step-selection";
 
@@ -56,6 +57,9 @@ function Loading() {
 
 function OrderDetail({ id }: { id: string }) {
   const query = useOrder(id);
+  const router = useRouter();
+  // The open piece lives in the address, so its panel can be sent to someone.
+  const pieceId = useSearchParams().get("piece");
   const [shipping, setShipping] = useState(false);
   const [paying, setPaying] = useState(false);
   // What the last action did, announced politely.
@@ -127,6 +131,7 @@ function OrderDetail({ id }: { id: string }) {
 
       <ShipDialog order={order} open={shipping} onOpenChange={setShipping} onShipped={setNotice} />
       <RecordPaymentDialog order={order} open={paying} onOpenChange={setPaying} onRecorded={setNotice} />
+      <PiecePanel id={pieceId} onClose={() => router.replace(`/orders/${id}`, { scroll: false })} />
     </StepSelectionProvider>
   );
 }
