@@ -60,7 +60,7 @@ describe("QualityTab", () => {
 
   it("says how many are waiting and being redone", async () => {
     renderTab();
-    expect(within(await card("Finish")).getByText("4 waiting, 1 being redone")).toBeInTheDocument();
+    expect(within(await card("Finish")).getByText("4 waiting, 1 of them being redone")).toBeInTheDocument();
     expect(within(await card("Final QC")).getByText("3 waiting")).toBeInTheDocument();
   });
 

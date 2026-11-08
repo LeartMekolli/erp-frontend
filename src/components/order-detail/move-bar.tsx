@@ -30,6 +30,7 @@ export function MoveBar({
     <div
       role="region"
       aria-label="Selected pieces"
+      data-move-bar
       className="fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center gap-2 border-t border-line bg-card px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:sticky md:bottom-4 md:mt-2 md:rounded-2xl md:border md:shadow-lg"
     >
       <div className="mr-auto min-w-0 max-md:basis-full">

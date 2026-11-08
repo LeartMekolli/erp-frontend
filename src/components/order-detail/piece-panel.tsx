@@ -25,14 +25,19 @@ function labelOf(key: string): string {
 
 const answerText = (value: string) => (value === "true" ? "Yes" : value === "false" ? "No" : value);
 
+/** erp-api records a cancelled piece as a correction to no step (`work-orders.service.ts:165`). */
+const isCancel = (move: Transition) => move.kind === "correction" && !move.to_step;
+
 function moveTitle(move: Transition): string {
   const at = move.from_step?.name ?? "Reopened";
-  if (move.kind === "correction") return `Corrected to ${move.to_step?.name ?? "the start"}`;
+  if (isCancel(move)) return "Cancelled";
+  if (move.kind === "correction") return `Corrected to ${move.to_step?.name}`;
   if (move.kind === "fail") return `${at} failed`;
   return move.inspected ? `${at} passed` : `${at} passed, not inspected`;
 }
 
 function nextText(move: Transition): string {
+  if (isCancel(move)) return "Cancelled";
   if (move.outcome === "scrap") return "Scrapped";
   if (move.outcome === "rework") return `Back to ${move.to_step?.name ?? "an earlier step"}`;
   return move.to_step ? `On to ${move.to_step.name}` : "Finished";

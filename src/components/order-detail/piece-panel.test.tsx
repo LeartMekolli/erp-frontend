@@ -96,6 +96,21 @@ describe("PiecePanel", () => {
     expect(titles[2]).toContain("Final QC failed");
   });
 
+  it("says when a move cancelled the piece", async () => {
+    const id = REWORK();
+    serve(id, (piece) => ({
+      ...piece,
+      status: "cancelled",
+      history: [...piece.history, { ...piece.history[0]!, id: "cancel", kind: "correction", to_step: null }],
+    }));
+    renderPanel(id);
+    const button = await screen.findByRole("button", { name: /^Cancelled/ });
+    await userEvent.click(button);
+    const move = within(button.closest("li")!);
+    expect(move.getAllByText("Cancelled")).toHaveLength(2);
+    expect(move.queryByText("Finished")).not.toBeInTheDocument();
+  });
+
   it("keeps a pass to one line that opens", async () => {
     renderPanel(REWORK());
     const button = await screen.findByRole("button", { name: /^Print passed/ });

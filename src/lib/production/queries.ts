@@ -95,7 +95,10 @@ export function usePhotoUrl(fileId: string, versionId: string) {
   });
 }
 
-/** Passes, fails or corrects pieces (`POST /workflow/moves`). Finished pieces can change the order's state, so both refresh. */
+/**
+ * Passes, fails or corrects pieces (`POST /workflow/moves`). Finished pieces can change the order's state, so both refresh.
+ * The refresh isn't awaited: the caller clears its selection first, or the moved pieces would read as taken by someone else.
+ */
 export function useMovePieces() {
   const client = useQueryClient();
   return useApiMutation<MoveBody, MoveResponse>(
@@ -104,7 +107,11 @@ export function useMovePieces() {
       if (!data) throw problemFrom(error, response);
       return data;
     },
-    { onSettled: () => Promise.all([invalidateProduction(client), invalidateOrders(client)]) },
+    {
+      onSettled: () => {
+        void Promise.all([invalidateProduction(client), invalidateOrders(client)]);
+      },
+    },
   );
 }
 

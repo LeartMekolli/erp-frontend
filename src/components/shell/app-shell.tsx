@@ -43,7 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar onOpenMenu={() => setDrawerOpen(true)} />
-        <main id="main" tabIndex={-1} className="flex flex-1 flex-col gap-4 px-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] outline-none sm:px-5">
+        <main id="main" tabIndex={-1} className="flex flex-1 flex-col gap-4 px-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] outline-none sm:px-5 max-md:has-[[data-move-bar]]:pb-40">
           {children}
         </main>
       </div>

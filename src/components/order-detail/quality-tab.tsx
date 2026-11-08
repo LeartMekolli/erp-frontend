@@ -16,7 +16,7 @@ function Card({ card }: { card: QualityCard }) {
       <h3 className="font-semibold break-words">{card.name}</h3>
       <p className="inline-flex items-center gap-1.5 text-sm text-ink-2 tabular-nums">
         <Clock aria-hidden className="size-3.5 shrink-0" />
-        <span>{card.inRework > 0 ? `${card.waiting} waiting, ${card.inRework} being redone` : `${card.waiting} waiting`}</span>
+        <span>{card.inRework > 0 ? `${card.waiting} waiting, ${card.inRework} of them being redone` : `${card.waiting} waiting`}</span>
       </p>
       {card.sampling && <p className="text-caption text-ink-2 tabular-nums">{`Sampled: ${card.sampling.inspect} of every ${card.sampling.of_every}`}</p>}
     </article>

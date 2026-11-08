@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http, HttpResponse } from "msw";
+import { delay, http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -316,6 +316,17 @@ describe("moving from the order page", () => {
     expect(screen.queryByRole("region", { name: "Selected pieces" })).not.toBeInTheDocument();
     const strip = await screen.findByRole("list", { name: "Progress through the steps" });
     await waitFor(() => expect(within(strip).getAllByRole("listitem")[0]).toHaveTextContent("0 Print"));
+  });
+
+  it("doesn't call a person's own move someone else's while the page refreshes", async () => {
+    renderPieces();
+    await tick("Select all at Print");
+    await openPass("Pass to Finish");
+    const open = await dialog("Pass 2 pieces at Print");
+    server.use(http.get(`${FAKE_API_URL}/workflow/groups/:id`, () => delay("infinite")));
+    await userEvent.click(within(open).getByRole("button", { name: "Pass to Finish" }));
+    expect(await screen.findByText("2 pieces passed to Finish.")).toBeInTheDocument();
+    expect(screen.queryByText(/left your selection/)).not.toBeInTheDocument();
   });
 
   it("shows a 409's detail, refreshes and drops the piece someone else moved", async () => {
