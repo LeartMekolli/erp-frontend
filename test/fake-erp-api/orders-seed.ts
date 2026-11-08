@@ -122,6 +122,13 @@ export function seedOrders(today: string, now: number): StoredOrder[] {
         group_id: null,
         partner: null,
         parts: [],
+        options: [{ group: { key: "material", name: "Material" }, value: { key: "brass", name: "Brass" } }],
+        size: { named: "52" },
+        design_file: {
+          file_id: uuid("66666666", row.number * 10 + position),
+          file_version_id: uuid("77777777", row.number * 10 + position),
+          name: `${line.product}.stl`,
+        },
       })),
       lines_total: row.lines.length === 1 ? row.lines[0]!.total : "355.00",
       tax: { percent: "20.00", amount: "0.00" },
@@ -129,6 +136,8 @@ export function seedOrders(today: string, now: number): StoredOrder[] {
       currency: "EUR",
       note: null,
       placed_at: placedAt,
+      placed_by: { id: uuid("55555555", 1), name: "Ana Ruiz" },
+      cancelled: row.state === "cancelled" ? { at: placedAt, reason: "Customer changed their mind" } : null,
       payment: {
         terms: row.payment === "invoiced" || row.payment === "overdue" ? "pay_later" : "pay_first",
         state: row.payment,

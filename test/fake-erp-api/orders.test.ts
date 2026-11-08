@@ -23,6 +23,22 @@ const counts = (s: ReturnType<typeof store>, params: Record<string, string> = {}
 const byNumber = (s: ReturnType<typeof store>, number: number) => list(s, { limit: "200" }).data.find((o) => o.number === number)!;
 
 describe("fake erp-api orders", () => {
+  it("answers one order, with why it was cancelled", () => {
+    const s = store();
+    expect(ok(s.get(byNumber(s, 1054).id)).cancelled?.reason).toBe("Customer changed their mind");
+    expect(s.get("00000000-0000-4000-8000-000000000000")).toMatchObject({ ok: false, status: 404 });
+  });
+
+  it("says what each line was made with", () => {
+    const every = list(store(), { limit: "200" }).data.flatMap((o) => o.lines);
+    expect(every.every((line) => line.options.length === 1)).toBe(true);
+  });
+
+  it("adds up what is still to collect, per currency", () => {
+    const amounts = counts(store()).to_collect_amounts;
+    expect(amounts).toEqual([{ currency: "EUR", amount: "2002.70" }]);
+  });
+
   it("lists the needs-you orders, soonest promised first", () => {
     const page = list(store(), { needs: "late,to_ship,to_collect,due_soon", sort: "promised_on" });
     const days = page.data.map((o) => o.promised_on);

@@ -56,7 +56,7 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 /** How long a signed upload link lasts (erp-api `files.service.ts:28`). */
 const UPLOAD_LINK_MS = 15 * 60 * 1000;
 /** A version's next status on each read once its bytes are in: erp-api's measuring job, one step per poll. */
-const MEASURING: Record<string, string> = { uploaded: "measuring", measuring: "measured" };
+const MEASURING: Partial<Record<VersionResponse["status"], VersionResponse["status"]>> = { uploaded: "measuring", measuring: "measured" };
 
 /**
  * An in-memory erp-api that keeps the rules AMI's session depends on:

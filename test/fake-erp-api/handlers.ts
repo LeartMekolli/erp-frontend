@@ -257,10 +257,24 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
+    http.get("/orders/{id}", ({ request, params, response }) => {
+      const caller = staffWith(request, "order.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().orders.get(params.id);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
     http.post("/orders/{id}/ship", async ({ request, params, response }) => {
       const caller = staffWith(request, "order.ship");
       if (caller instanceof Response) return response.untyped(caller);
       const answer = fakeState().orders.ship(params.id, await request.json(), request.headers.get("idempotency-key"));
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/orders/{id}/deliver", ({ request, params, response }) => {
+      const caller = staffWith(request, "order.ship");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().orders.deliver(params.id, request.headers.get("idempotency-key"));
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 

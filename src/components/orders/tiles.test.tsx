@@ -51,6 +51,7 @@ describe("Tiles", () => {
       all: 5,
       states: { awaiting_payment: 1, in_production: 2, ready: 2, shipped: 0, delivered: 0, cancelled: 0 },
       needs_you: { total: 3, late: 0, to_ship: 2, to_collect: 1, due_soon: 0 },
+      to_collect_amounts: [],
     };
     server.use(http.get(`${FAKE_API_URL}/orders/counts`, () => HttpResponse.json(counts)));
     renderTiles();

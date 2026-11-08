@@ -54,6 +54,45 @@ export type ShipBody = JsonBody<"/orders/{id}/ship", "post">;
 /** `POST /orders/{id}/paid-by-hand`: a payment made outside the payment provider. */
 export type PaidByHandBody = JsonBody<"/orders/{id}/paid-by-hand", "post">;
 
+export type OrderLine = Order["lines"][number];
+export type OrderPart = OrderLine["parts"][number];
+export type LinePartner = NonNullable<OrderLine["partner"]>;
+
+/** `POST /orders/{id}/cancel`: the reason, and the lines when not all of them. */
+export type CancelOrderBody = JsonBody<"/orders/{id}/cancel", "post">;
+
+/** `GET /workflow/groups/{id}`: a line's path, with how many pieces are at each step. */
+export type Group = JsonOk<"/workflow/groups/{id}", "get">;
+
+/** One piece in a work list, from `GET /workflow/work-orders`. */
+export type WorkOrderListItem = JsonOk<"/workflow/work-orders", "get">["data"][number];
+
+/** `GET /workflow/work-orders/{id}`: one piece, its path and every move it has made. */
+export type WorkOrderDetail = JsonOk<"/workflow/work-orders/{id}", "get">;
+export type Transition = WorkOrderDetail["history"][number];
+
+/** `GET /workflow/workflows/{id}/versions/{number}`: each step's checklist, defects and evidence. */
+export type WorkflowVersion = JsonOk<"/workflow/workflows/{id}/versions/{number}", "get">;
+export type WorkflowStep = WorkflowVersion["steps"][number];
+
+/** `POST /workflow/moves`: pass, fail or correct pieces at once. */
+export type MoveBody = JsonBody<"/workflow/moves", "post">;
+
+/** `GET /partners/eligible`: who can take a job, and who can't with why. */
+export type EligiblePartners = JsonOk<"/partners/eligible", "get">;
+
+/** A job handed to a partner, as `POST /partners/jobs/{groupId}/withdraw` answers it. */
+export type JobAssignment = JsonOk<"/partners/jobs/{groupId}/withdraw", "post">;
+
+/** One comment as staff read it, from `GET /orders/{id}/comments`. */
+export type OrderComment = JsonOk<"/orders/{id}/comments", "get">["data"][number];
+
+/** `POST /orders/{id}/comments`: the body, its line, and whether it goes to the partner. */
+export type StaffCommentBody = JsonBody<"/orders/{id}/comments", "post">;
+
+/** One claim, from `GET /claims`. */
+export type Claim = JsonOk<"/claims", "get">["data"][number];
+
 /** `GET /search`: ⌘K's orders, customers, partners and help articles, at most 5 of each. */
 export type SearchResponse = JsonOk<"/search", "get">;
 

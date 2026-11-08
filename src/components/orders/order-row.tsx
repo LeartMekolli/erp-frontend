@@ -11,7 +11,7 @@ import { NEEDS_LABEL, PAYMENT_LABEL, STATE_LABEL, linesSummary, promisedText } f
 
 import { CustomerInitials } from "./customer-initials";
 
-const STATE_DOT: Record<OrderState, string> = {
+export const STATE_DOT: Record<OrderState, string> = {
   awaiting_payment: "bg-collect",
   in_production: "bg-violet",
   ready: "bg-ship",
