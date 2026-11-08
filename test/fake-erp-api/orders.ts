@@ -7,6 +7,7 @@
  */
 
 import type {
+  CancelOrderBody,
   NeedsReason,
   Order,
   OrderCounts,
@@ -251,6 +252,40 @@ export function createOrdersStore(now: () => number) {
         };
         orders.set(id, delivered);
         return { ok: true, body: view(delivered) };
+      });
+    },
+
+    /** `POST /orders/{id}/cancel` (erp-api `orders.service.ts:783`): a paid order needs a refund amount and `payment.refund`. */
+    cancel(id: string, body: CancelOrderBody, key: string | null, mayRefund: boolean): Answer<Order> {
+      return once(key, { id, body }, () => {
+        const order = orders.get(id);
+        if (!order) return { ok: false, status: 404, detail: "Order not found" };
+        if (order.state === "shipped" || order.state === "delivered") return { ok: false, status: 409, detail: "A shipped order can't be cancelled" };
+        const paidLeft = cents(order.payment.paid) - cents(order.payment.refunded);
+        if ((paidLeft > 0 || body.refund) && !mayRefund) return { ok: false, status: 403, detail: "Cancelling a paid order refunds it, which needs the payment.refund permission" };
+        if (paidLeft > 0 && !body.refund) return invalid("refund.amount", "required: up to the amount paid, or 0.00 to refund nothing");
+        const open = order.lines.filter((line) => line.state !== "cancelled").map((line) => line.position);
+        const targets = body.lines ?? open;
+        if (targets.length === 0) return { ok: false, status: 409, detail: "Nothing left to cancel" };
+        if (targets.some((position) => !order.lines.some((line) => line.position === position))) return invalid("lines", "not a line of this order");
+        if (targets.some((position) => !open.includes(position))) return { ok: false, status: 409, detail: "That line is already cancelled" };
+        if (body.partner_owed?.some((entry) => !targets.includes(entry.position))) return invalid("partner_owed", "a line not being cancelled");
+
+        const lines = order.lines.map((line) =>
+          targets.includes(line.position)
+            ? { ...line, state: "cancelled" as const, partner: null, parts: line.parts.map((part) => ({ ...part, state: "cancelled" as const, partner: null })) }
+            : line,
+        );
+        const whole = lines.every((line) => line.state === "cancelled");
+        const cancelled: StoredOrder = {
+          ...order,
+          lines,
+          state: whole ? "cancelled" : order.state,
+          cancelled: whole ? { at: new Date(now()).toISOString(), reason: body.reason } : order.cancelled,
+          payment: body.refund ? { ...order.payment, refunded: body.refund.amount } : order.payment,
+        };
+        orders.set(id, cancelled);
+        return { ok: true, body: view(cancelled) };
       });
     },
 

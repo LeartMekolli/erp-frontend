@@ -15,6 +15,7 @@ import { can } from "@/lib/auth/permissions";
 import { useOrder } from "@/lib/orders/queries";
 import { OfflineError } from "@/lib/session/client-session";
 
+import { CancelDialog } from "./cancel-dialog";
 import { ClaimsNote } from "./claims-note";
 import { CommentsPanel } from "./comments-panel";
 import { LinePanel } from "./line-panel";
@@ -64,6 +65,7 @@ function OrderDetail({ id }: { id: string }) {
   const pieceId = useSearchParams().get("piece");
   const [shipping, setShipping] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   // What the last action did, announced politely.
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -106,6 +108,10 @@ function OrderDetail({ id }: { id: string }) {
           setNotice(null);
           setPaying(true);
         }}
+        onCancel={() => {
+          setNotice(null);
+          setCancelling(true);
+        }}
       />
       {order.cancelled && <CancelledBanner cancelled={order.cancelled} />}
 
@@ -135,6 +141,7 @@ function OrderDetail({ id }: { id: string }) {
 
       <ShipDialog order={order} open={shipping} onOpenChange={setShipping} onShipped={setNotice} />
       <RecordPaymentDialog order={order} open={paying} onOpenChange={setPaying} onRecorded={setNotice} />
+      {cancelling && <CancelDialog order={order} open onOpenChange={setCancelling} onCancelled={setNotice} />}
       <PiecePanel id={pieceId} onClose={() => router.replace(`/orders/${id}`, { scroll: false })} />
     </StepSelectionProvider>
   );

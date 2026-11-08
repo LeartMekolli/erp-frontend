@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { workspaceToday } from "@/lib/orders/labels";
 import { useEligiblePartners, useOfferJob } from "@/lib/partners/queries";
 
+import { DIALOG_SHEET } from "./dialog-classes";
 import { LoadFailure } from "./load-failure";
 import { PartnerChoices } from "./partner-choices";
 import { submitErrorText } from "./submit-error";
@@ -37,7 +38,7 @@ interface SendProps {
 export function SendToPartnerDialog({ open, onOpenChange, ...form }: SendProps & { open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] max-w-[calc(100%-2rem)] gap-5 overflow-y-auto p-5 sm:max-w-md max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none">
+      <DialogContent className={DIALOG_SHEET}>
         <SendForm
           {...form}
           onSent={(message) => {

@@ -1,15 +1,16 @@
 "use client";
 
 import { cn } from "cn";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Ellipsis } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { CustomerInitials } from "@/components/orders/customer-initials";
 import { canRecordPayment, canShip } from "@/components/orders/order-row-menu";
 import { STATE_DOT } from "@/components/orders/order-row";
 import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { Order } from "@/lib/api/schema-types";
 import { can } from "@/lib/auth/permissions";
 import { useFormat } from "@/lib/format/use-format";
@@ -23,12 +24,16 @@ export function OrderHeader({
   order,
   onShip,
   onRecordPayment,
+  onCancel,
 }: {
   order: Order;
   onShip: () => void;
   onRecordPayment: () => void;
+  onCancel: () => void;
 }) {
   const { data: me } = useMe();
+  // Chosen from the menu: focus goes to the dialog, not back to the menu's button.
+  const chosen = useRef(false);
   const { date, money, timeZone } = useFormat();
   const [today] = useState(() => workspaceToday(timeZone));
   const late = order.needs.includes("late");
@@ -85,6 +90,34 @@ export function OrderHeader({
             >
               Ship
             </Button>
+          )}
+          {can(me, "order.write") && SHIP_SHOWN.includes(order.state) && (
+            <DropdownMenu
+              onOpenChange={(open) => {
+                if (open) chosen.current = false;
+              }}
+            >
+              <DropdownMenuTrigger aria-label="More actions" className="grid size-11 place-items-center rounded-full text-ink-2 hover:bg-card hover:text-ink focus-visible:outline-2 focus-visible:outline-violet">
+                <Ellipsis aria-hidden className="size-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="w-48 rounded-xl p-1.5"
+                onCloseAutoFocus={(event) => {
+                  if (chosen.current) event.preventDefault();
+                }}
+              >
+                <DropdownMenuItem
+                  onSelect={() => {
+                    chosen.current = true;
+                    onCancel();
+                  }}
+                  className="min-h-9 px-2 py-1.5 font-medium"
+                >
+                  Cancel order
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>

@@ -18,6 +18,7 @@ import { useMovePieces } from "@/lib/production/queries";
 import { nextStepName } from "@/lib/production/selection";
 
 import { ChecklistFields } from "./checklist-fields";
+import { DIALOG_SHEET } from "./dialog-classes";
 import { PhotoField, usePhotos } from "./evidence-fields";
 import { submitErrorText } from "./submit-error";
 
@@ -39,7 +40,7 @@ const nounFor = (count: number) => `${count} ${count === 1 ? "piece" : "pieces"}
 export function MoveDialog({ open, onOpenChange, ...form }: MoveDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] max-w-[calc(100%-2rem)] gap-5 overflow-y-auto p-5 sm:max-w-md max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none">
+      <DialogContent className={DIALOG_SHEET}>
         <MoveForm
           {...form}
           onDone={(message) => {
