@@ -15,6 +15,7 @@ import { renderAs } from "../../../test/render";
 
 import { LinePanel } from "./line-panel";
 import { LineTabs } from "./line-tabs";
+import { StepSelectionProvider } from "./use-step-selection";
 
 const GROUP = groupIdOf(1048, 0);
 
@@ -27,7 +28,7 @@ function groupBody(id = GROUP) {
 }
 
 function WithMe({ children }: { children: ReactNode }) {
-  return useMe().data ? children : null;
+  return useMe().data ? <StepSelectionProvider>{children}</StepSelectionProvider> : null;
 }
 
 function renderTabs(user = STAFF) {
@@ -35,7 +36,7 @@ function renderTabs(user = STAFF) {
     user,
     <WithMe>
       <p>Signed in</p>
-      <LineTabs groupId={GROUP} index={0} />
+      <LineTabs groupId={GROUP} index={0} orderState="in_production" />
     </WithMe>,
   );
 }

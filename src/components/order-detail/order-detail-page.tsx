@@ -19,6 +19,7 @@ import { LinePanel } from "./line-panel";
 import { CancelledBanner, OrderHeader } from "./order-header";
 import { PaymentPanel } from "./payment-panel";
 import { NotePanel, ShippingPanel } from "./shipping-panel";
+import { StepSelectionProvider } from "./use-step-selection";
 
 /** `/orders/:id`: one order, and everything staff can do with it. */
 export function OrderDetailPage() {
@@ -88,7 +89,7 @@ function OrderDetail({ id }: { id: string }) {
 
   const order = query.data;
   return (
-    <>
+    <StepSelectionProvider>
       <OrderHeader
         order={order}
         onShip={() => {
@@ -126,6 +127,6 @@ function OrderDetail({ id }: { id: string }) {
 
       <ShipDialog order={order} open={shipping} onOpenChange={setShipping} onShipped={setNotice} />
       <RecordPaymentDialog order={order} open={paying} onOpenChange={setPaying} onRecorded={setNotice} />
-    </>
+    </StepSelectionProvider>
   );
 }

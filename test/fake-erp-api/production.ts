@@ -84,6 +84,7 @@ interface SeedGroup {
 const GROUPS: SeedGroup[] = [
   { number: 1048, position: 0, at: { print: 2, finish: 4, final_qc: 3, packing: 1 }, rework: "finish", finished: 1, scrapped: 1 },
   { number: 1041, position: 0, at: { print: 10, finish: 20, final_qc: 10 } },
+  { number: 1045, position: 0, at: { print: 1 } },
 ];
 
 interface StoredPiece {
@@ -190,6 +191,7 @@ const LIST_KEYS = ["limit", "cursor", "group_id", "step_key", "status", "workabl
 export function createProductionStore(now: () => number) {
   const pieces = new Map(seedPieces(now()).map((piece) => [piece.id, piece]));
   const keys = new Map<string, { input: string; body: MoveResponse }>();
+  const skilled = new Set<string>();
   const createdAt = () => new Date(now()).toISOString();
 
   const base = (piece: StoredPiece) => ({
@@ -203,7 +205,11 @@ export function createProductionStore(now: () => number) {
     created_at: piece.createdAt,
   });
 
-  const listItem = (piece: StoredPiece): WorkOrderListItem => ({ ...base(piece), to_inspect: null, may_work: piece.status === "active" });
+  const listItem = (piece: StoredPiece): WorkOrderListItem => ({
+    ...base(piece),
+    to_inspect: null,
+    may_work: piece.status === "active" && !skilled.has(piece.stepKey ?? ""),
+  });
 
   function advance(piece: StoredPiece, from: string) {
     const next = nextKey(from);
@@ -372,6 +378,11 @@ export function createProductionStore(now: () => number) {
           history: structuredClone(piece.history),
         },
       };
+    },
+
+    /** This step now needs a skill the caller doesn't hold, so its pieces can't be worked. */
+    requireSkill(stepKey: string): void {
+      skilled.add(stepKey);
     },
 
     /** `POST /workflow/moves`, with erp-api's one-time `Idempotency-Key`. */

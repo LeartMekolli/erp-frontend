@@ -58,7 +58,7 @@ export function LinePanel({
           <LinePartnerTag partner={line.partner} now={now} />
         </div>
       )}
-      {!cancelled && line.group_id && <LineTabs groupId={line.group_id} index={index} />}
+      {!cancelled && line.group_id && <LineTabs groupId={line.group_id} index={index} orderState={order.state} />}
       {parts.length > 0 && (
         <div className="mt-2 flex flex-col gap-3">
           {[...parts]

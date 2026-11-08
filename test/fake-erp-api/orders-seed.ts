@@ -94,7 +94,7 @@ export const uuid = (prefix: string, n: number) => `${prefix}-0000-4000-8000-${S
 export const groupIdOf = (number: number, position: number) => uuid("a0a0a0a0", number * 10 + position);
 
 /** The lines with pieces in the fake production store: `<order number>:<position>`. */
-const GROUPED_LINES = new Set(["1048:0", "1041:0"]);
+const GROUPED_LINES = new Set(["1048:0", "1041:0", "1045:0"]);
 
 const LINE_STATE: Record<OrderState, Order["lines"][number]["state"]> = {
   awaiting_payment: "in_production",

@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { OrderState } from "@/lib/api/schema-types";
 import { useCan } from "@/lib/auth/permissions";
 import { useGroup } from "@/lib/production/queries";
 
@@ -14,7 +15,13 @@ import { StepStrip } from "./step-strip";
 /** How many of an order's lines load their progress without being asked. */
 const LOADED_UP_FRONT = 5;
 
-function Progress({ groupId, index }: { groupId: string; index: number }) {
+interface LineTabsProps {
+  groupId: string;
+  index: number;
+  orderState: OrderState;
+}
+
+function Progress({ groupId, index, orderState }: LineTabsProps) {
   const [asked, setAsked] = useState(false);
   const enabled = index < LOADED_UP_FRONT || asked;
   const group = useGroup(groupId, enabled);
@@ -42,7 +49,7 @@ function Progress({ groupId, index }: { groupId: string; index: number }) {
           <TabsTrigger value="quality">Quality</TabsTrigger>
         </TabsList>
         <TabsContent value="pieces">
-          <PiecesTab group={group.data} />
+          <PiecesTab group={group.data} orderState={orderState} />
         </TabsContent>
         <TabsContent value="quality" />
       </Tabs>
@@ -51,8 +58,8 @@ function Progress({ groupId, index }: { groupId: string; index: number }) {
 }
 
 /** A line's step strip and its Pieces and Quality tabs, for those who may read work lists. */
-export function LineTabs({ groupId, index }: { groupId: string; index: number }) {
+export function LineTabs(props: LineTabsProps) {
   const mayRead = useCan("workflow.read");
   if (!mayRead) return null;
-  return <Progress groupId={groupId} index={index} />;
+  return <Progress {...props} />;
 }
