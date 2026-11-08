@@ -113,8 +113,8 @@ function OrderDetail({ id }: { id: string }) {
         <section aria-label="Lines" className="flex min-w-0 flex-col gap-3.5">
           {[...order.lines]
             .sort((a, b) => a.position - b.position)
-            .map((line) => (
-              <LinePanel key={line.id} line={line} order={order} now={query.dataUpdatedAt} />
+            .map((line, index) => (
+              <LinePanel key={line.id} line={line} order={order} now={query.dataUpdatedAt} index={index} />
             ))}
         </section>
         <div className="flex min-w-0 flex-col gap-3.5">

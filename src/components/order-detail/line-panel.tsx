@@ -7,6 +7,7 @@ import { useFormat } from "@/lib/format/use-format";
 
 import { LinePartnerTag } from "./line-partner-tag";
 import { LinePicks } from "./line-picks";
+import { LineTabs } from "./line-tabs";
 
 const LINE_STATE: Record<OrderPart["state"], string> = {
   in_production: "In production",
@@ -22,12 +23,15 @@ export function LinePanel({
   line,
   order,
   now,
+  index,
   nested = false,
 }: {
   line: OrderLine | OrderPart;
   order: Order;
   /** When the order was loaded: what an offer's deadline is compared with. */
   now: number;
+  /** The panel's place on the page: only the first few load their progress up front. */
+  index: number;
   nested?: boolean;
 }) {
   const { money } = useFormat();
@@ -54,12 +58,13 @@ export function LinePanel({
           <LinePartnerTag partner={line.partner} now={now} />
         </div>
       )}
+      {!cancelled && line.group_id && <LineTabs groupId={line.group_id} index={index} />}
       {parts.length > 0 && (
         <div className="mt-2 flex flex-col gap-3">
           {[...parts]
             .sort((a, b) => a.position - b.position)
             .map((part) => (
-              <LinePanel key={part.id} line={part} order={order} now={now} nested />
+              <LinePanel key={part.id} line={part} order={order} now={now} index={index + part.position + 1} nested />
             ))}
         </div>
       )}

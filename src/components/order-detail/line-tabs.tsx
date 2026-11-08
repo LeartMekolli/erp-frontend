@@ -1,0 +1,58 @@
+"use client";
+
+import { useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useCan } from "@/lib/auth/permissions";
+import { useGroup } from "@/lib/production/queries";
+
+import { LoadFailure } from "./load-failure";
+import { PiecesTab } from "./pieces-tab";
+import { StepStrip } from "./step-strip";
+
+/** How many of an order's lines load their progress without being asked. */
+const LOADED_UP_FRONT = 5;
+
+function Progress({ groupId, index }: { groupId: string; index: number }) {
+  const [asked, setAsked] = useState(false);
+  const enabled = index < LOADED_UP_FRONT || asked;
+  const group = useGroup(groupId, enabled);
+
+  if (!enabled) {
+    return (
+      <Button variant="link" className="self-start" onClick={() => setAsked(true)}>
+        Show progress
+      </Button>
+    );
+  }
+  if (group.isPending) {
+    return <div role="status" aria-label="Loading this line's progress" className="mt-2 h-16 animate-pulse rounded-lg bg-panel-soft motion-reduce:animate-none" />;
+  }
+  if (!group.data) {
+    return <LoadFailure error={group.error} fallback="This line's progress couldn't be loaded." onRetry={() => void group.refetch()} />;
+  }
+
+  return (
+    <>
+      <StepStrip group={group.data} />
+      <Tabs defaultValue="pieces" className="min-w-0 pt-2">
+        <TabsList variant="line" aria-label="Pieces and quality">
+          <TabsTrigger value="pieces">Pieces</TabsTrigger>
+          <TabsTrigger value="quality">Quality</TabsTrigger>
+        </TabsList>
+        <TabsContent value="pieces">
+          <PiecesTab group={group.data} />
+        </TabsContent>
+        <TabsContent value="quality" />
+      </Tabs>
+    </>
+  );
+}
+
+/** A line's step strip and its Pieces and Quality tabs, for those who may read work lists. */
+export function LineTabs({ groupId, index }: { groupId: string; index: number }) {
+  const mayRead = useCan("workflow.read");
+  if (!mayRead) return null;
+  return <Progress groupId={groupId} index={index} />;
+}

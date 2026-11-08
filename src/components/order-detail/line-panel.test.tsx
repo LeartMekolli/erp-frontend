@@ -24,7 +24,7 @@ function renderLine(number: number, position = 0, user = STAFF) {
   return renderAs(
     user,
     <WithMe>
-      <LinePanel line={parent.lines[position]!} order={parent} now={Date.now()} />
+      <LinePanel line={parent.lines[position]!} order={parent} now={Date.now()} index={position} />
     </WithMe>,
   );
 }

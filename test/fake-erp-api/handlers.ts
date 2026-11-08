@@ -294,6 +294,41 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
+    http.get("/workflow/groups/{id}", ({ request, params, response }) => {
+      const caller = staffWith(request, "workflow.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().production.group(params.id);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/workflow/work-orders", ({ request, response }) => {
+      const caller = staffWith(request, "workflow.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().production.pieces(new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/workflow/work-orders/{id}", ({ request, params, response }) => {
+      const caller = staffWith(request, "workflow.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().production.piece(params.id);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/workflow/workflows/{id}/versions/{number}", ({ request, params, response }) => {
+      const caller = staffWith(request, "workflow.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().production.version(params.id, Number(params.number));
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/workflow/moves", async ({ request, response }) => {
+      const caller = staffWith(request, "workflow.move");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().production.move(await request.json(), request.headers.get("idempotency-key"));
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
     http.get("/search", ({ request, response }) => {
       const user = fakeState().authenticate(bearer(request));
       if (!user) return response.untyped(problem(401, "Unauthorized"));

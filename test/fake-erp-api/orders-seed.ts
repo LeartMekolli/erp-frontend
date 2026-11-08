@@ -88,7 +88,13 @@ export function addDays(day: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-const uuid = (prefix: string, n: number) => `${prefix}-0000-4000-8000-${String(n).padStart(12, "0")}`;
+export const uuid = (prefix: string, n: number) => `${prefix}-0000-4000-8000-${String(n).padStart(12, "0")}`;
+
+/** The work order group a seeded line is made as. */
+export const groupIdOf = (number: number, position: number) => uuid("a0a0a0a0", number * 10 + position);
+
+/** The lines with pieces in the fake production store: `<order number>:<position>`. */
+const GROUPED_LINES = new Set(["1048:0", "1041:0"]);
 
 const LINE_STATE: Record<OrderState, Order["lines"][number]["state"]> = {
   awaiting_payment: "in_production",
@@ -139,7 +145,7 @@ export function seedOrders(today: string, now: number): StoredOrder[] {
         unit_price: line.unitPrice,
         total: line.total,
         state: LINE_STATE[row.state],
-        group_id: null,
+        group_id: GROUPED_LINES.has(`${row.number}:${position}`) ? groupIdOf(row.number, position) : null,
         partner: line.partner
           ? {
               id: line.partner.id,
