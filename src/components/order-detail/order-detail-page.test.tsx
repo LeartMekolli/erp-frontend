@@ -32,7 +32,7 @@ describe("OrderDetailPage", () => {
   it("shows the order's number, state, customer and who placed it", async () => {
     open(1048);
     expect(await screen.findByRole("heading", { level: 1, name: "#1048" })).toBeInTheDocument();
-    expect(screen.getByText(/^In production/)).toBeInTheDocument();
+    expect(screen.getByText(/^In production · /)).toBeInTheDocument();
     expect(screen.getByText("Luna Jewels")).toBeInTheDocument();
     expect(screen.getByText(/^Placed .* by Ana Ruiz$/)).toBeInTheDocument();
   });

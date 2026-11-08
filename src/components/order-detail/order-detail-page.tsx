@@ -15,6 +15,7 @@ import { can } from "@/lib/auth/permissions";
 import { useOrder } from "@/lib/orders/queries";
 import { OfflineError } from "@/lib/session/client-session";
 
+import { LinePanel } from "./line-panel";
 import { CancelledBanner, OrderHeader } from "./order-header";
 import { PaymentPanel } from "./payment-panel";
 import { NotePanel, ShippingPanel } from "./shipping-panel";
@@ -109,7 +110,13 @@ function OrderDetail({ id }: { id: string }) {
       </div>
 
       <div className="grid items-start gap-3.5 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <section aria-label="Lines" className="flex min-w-0 flex-col gap-3.5" />
+        <section aria-label="Lines" className="flex min-w-0 flex-col gap-3.5">
+          {[...order.lines]
+            .sort((a, b) => a.position - b.position)
+            .map((line) => (
+              <LinePanel key={line.id} line={line} order={order} now={query.dataUpdatedAt} />
+            ))}
+        </section>
         <div className="flex min-w-0 flex-col gap-3.5">
           <PaymentPanel order={order} />
           <ShippingPanel order={order} onNotice={setNotice} />
