@@ -101,7 +101,7 @@ test("command-k finds an order and opens it", async ({ page }) => {
   await page.keyboard.press("Enter");
 
   await expect(page).toHaveURL(new RegExp(`/orders/${orderId(1041)}$`));
-  await expect(page.getByRole("heading", { level: 1, name: "Order" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "#1041" })).toBeVisible();
 });
 
 test("command-k asks the AI and links what it mentions", async ({ page }) => {
