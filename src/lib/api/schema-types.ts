@@ -77,12 +77,19 @@ export type WorkflowStep = WorkflowVersion["steps"][number];
 
 /** `POST /workflow/moves`: pass, fail or correct pieces at once. */
 export type MoveBody = JsonBody<"/workflow/moves", "post">;
+export type MoveResponse = JsonOk<"/workflow/moves", "post">;
 
 /** `GET /partners/eligible`: who can take a job, and who can't with why. */
 export type EligiblePartners = JsonOk<"/partners/eligible", "get">;
 
 /** A job handed to a partner, as `POST /partners/jobs/{groupId}/withdraw` answers it. */
 export type JobAssignment = JsonOk<"/partners/jobs/{groupId}/withdraw", "post">;
+
+/** `POST /partners/jobs/{groupId}/offer`: who to offer a job to, and by when. */
+export type OfferBody = JsonBody<"/partners/jobs/{groupId}/offer", "post">;
+
+/** `POST /partners/jobs/{groupId}/reassign`: who takes the job, and what the last partner is owed. */
+export type ReassignBody = JsonBody<"/partners/jobs/{groupId}/reassign", "post">;
 
 /** One comment as staff read it, from `GET /orders/{id}/comments`. */
 export type OrderComment = JsonOk<"/orders/{id}/comments", "get">["data"][number];

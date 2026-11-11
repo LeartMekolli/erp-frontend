@@ -1,0 +1,128 @@
+import { describe, expect, it } from "vitest";
+
+import type { WorkflowStep } from "@/lib/api/schema-types";
+
+import { createProductionStore } from "../../../test/fake-erp-api/production";
+import { groupIdOf } from "../../../test/fake-erp-api/orders-seed";
+
+import { emptyMoveValues, fieldPath, moveBody, moveSchema, type MoveValues } from "./move-body";
+
+function steps(): WorkflowStep[] {
+  const store = createProductionStore(() => 0);
+  const group = store.group(groupIdOf(1048, 0));
+  if (!group.ok) throw new Error("expected a group");
+  const version = store.version(group.body.workflow.id, group.body.workflow.version);
+  if (!version.ok) throw new Error("expected a version");
+  return version.body.steps;
+}
+
+const stepAt = (key: string) => steps().find((step) => step.key === key)!;
+const finish = () => stepAt("finish");
+const finalQc = () => stepAt("final_qc");
+
+const values = (step: WorkflowStep, changes: Partial<MoveValues> = {}): MoveValues => ({ ...emptyMoveValues(step), ...changes });
+
+function problems(schema: ReturnType<typeof moveSchema>, input: MoveValues) {
+  const result = schema.safeParse(input);
+  return result.success ? [] : result.error.issues.map((issue) => issue.path.join("."));
+}
+
+describe("moveBody", () => {
+  it("sends a pass's yes/no answers as booleans, with its photos", () => {
+    const step = finish();
+    expect(moveBody("pass", step, ["a"], values(step, { answers: { surface_smooth: "true" }, photoVersionIds: ["p"] }))).toEqual({
+      kind: "pass",
+      work_order_ids: ["a"],
+      at_step: "finish",
+      answers: [{ item: "surface_smooth", value: true }],
+      photo_file_version_ids: ["p"],
+    });
+  });
+
+  it("leaves out what wasn't filled in", () => {
+    const step = stepAt("print");
+    expect(moveBody("pass", step, ["a"], values(step))).toEqual({ kind: "pass", work_order_ids: ["a"], at_step: "print" });
+  });
+
+  it("sends a pass without inspecting with no answers or photos", () => {
+    const step = finish();
+    expect(moveBody("pass", step, ["a"], values(step, { inspected: false, answers: { surface_smooth: "true" }, photoVersionIds: ["p"] }))).toEqual({
+      kind: "pass",
+      work_order_ids: ["a"],
+      at_step: "finish",
+      inspected: false,
+    });
+  });
+
+  it("follows a defect's default with nothing extra", () => {
+    const step = finalQc();
+    const defectId = step.defects[0]!.defect_id;
+    expect(moveBody("fail", step, ["a"], values(step, { defectId, comment: " Pitted " }))).toEqual({
+      kind: "fail",
+      work_order_ids: ["a"],
+      at_step: "final_qc",
+      defect_id: defectId,
+      comment: "Pitted",
+    });
+  });
+
+  it("sends a changed outcome with its reason, and no rework target", () => {
+    const step = finalQc();
+    const defectId = step.defects[0]!.defect_id;
+    const body = moveBody("fail", step, ["a"], values(step, { defectId, changing: true, outcome: "scrap", overrideReason: "Too deep" }));
+    expect(body).toMatchObject({ outcome: "scrap", override_reason: "Too deep" });
+    expect(body).not.toHaveProperty("rework_to");
+  });
+
+  it("sends no reason when the change ends up the same as the default", () => {
+    const step = finalQc();
+    const defect = step.defects[0]!;
+    const body = moveBody("fail", step, ["a"], values(step, { defectId: defect.defect_id, changing: true, outcome: "rework", reworkTo: defect.rework_to!, overrideReason: "Same" }));
+    expect(body).not.toHaveProperty("override_reason");
+    expect(body).not.toHaveProperty("outcome");
+  });
+
+  it("sends a correction with its step and comment only", () => {
+    const step = finish();
+    expect(moveBody("correction", step, ["a"], values(step, { toStep: "print", comment: "Moved by mistake" }))).toEqual({
+      kind: "correction",
+      work_order_ids: ["a"],
+      to_step: "print",
+      comment: "Moved by mistake",
+    });
+  });
+});
+
+describe("moveSchema", () => {
+  it("wants required answers, photos and a comment where the step asks", () => {
+    const step = finish();
+    expect(problems(moveSchema("pass", step, 0), values(step))).toEqual(["answers.surface_smooth", "photoVersionIds"]);
+    expect(problems(moveSchema("pass", step, 1), values(step, { answers: { surface_smooth: "true" } }))).toEqual([]);
+    const qc = finalQc();
+    expect(problems(moveSchema("fail", qc, 0), values(qc))).toEqual(["defectId", "comment"]);
+  });
+
+  it("wants a reason only when the outcome really changes", () => {
+    const step = finalQc();
+    const defect = step.defects[0]!;
+    const base = { defectId: defect.defect_id, comment: "Pitted", changing: true };
+    expect(problems(moveSchema("fail", step, 0), values(step, { ...base, outcome: "scrap" }))).toEqual(["overrideReason"]);
+    expect(problems(moveSchema("fail", step, 0), values(step, { ...base, outcome: "rework", reworkTo: defect.rework_to! }))).toEqual([]);
+    expect(problems(moveSchema("fail", step, 0), values(step, { ...base, outcome: "rework", reworkTo: "", overrideReason: "x" }))).toEqual(["reworkTo"]);
+  });
+
+  it("wants a step and comment for a correction", () => {
+    const step = finish();
+    expect(problems(moveSchema("correction", step, 0), values(step))).toEqual(["toStep", "comment"]);
+  });
+});
+
+describe("fieldPath", () => {
+  it("maps what erp-api names onto the form's fields", () => {
+    const step = finish();
+    expect(fieldPath("surface_smooth", step)).toBe("answers.surface_smooth");
+    expect(fieldPath("photos", step)).toBe("photoVersionIds");
+    expect(fieldPath("defect_id", step)).toBe("defectId");
+    expect(fieldPath("work_order_ids.0", step)).toBe("work_order_ids.0");
+  });
+});

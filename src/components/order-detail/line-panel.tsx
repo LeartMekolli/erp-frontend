@@ -5,8 +5,10 @@ import { cn } from "cn";
 import type { Order, OrderLine, OrderPart } from "@/lib/api/schema-types";
 import { useFormat } from "@/lib/format/use-format";
 
+import { LinePartnerActions } from "./line-partner-actions";
 import { LinePartnerTag } from "./line-partner-tag";
 import { LinePicks } from "./line-picks";
+import { LineTabs } from "./line-tabs";
 
 const LINE_STATE: Record<OrderPart["state"], string> = {
   in_production: "In production",
@@ -22,12 +24,15 @@ export function LinePanel({
   line,
   order,
   now,
+  index,
   nested = false,
 }: {
   line: OrderLine | OrderPart;
   order: Order;
   /** When the order was loaded: what an offer's deadline is compared with. */
   now: number;
+  /** The panel's place on the page: only the first few load their progress up front. */
+  index: number;
   nested?: boolean;
 }) {
   const { money } = useFormat();
@@ -50,16 +55,25 @@ export function LinePanel({
       </div>
       <LinePicks line={line} />
       {!cancelled && (
-        <div className="pt-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-1">
           <LinePartnerTag partner={line.partner} now={now} />
+          <LinePartnerActions line={line} order={order} now={now} title={title} />
         </div>
+      )}
+      {!cancelled && line.group_id && (
+        <LineTabs
+          groupId={line.group_id}
+          index={index}
+          orderState={order.state}
+          partnerName={line.partner?.status === "accepted" ? line.partner.name : null}
+        />
       )}
       {parts.length > 0 && (
         <div className="mt-2 flex flex-col gap-3">
           {[...parts]
             .sort((a, b) => a.position - b.position)
             .map((part) => (
-              <LinePanel key={part.id} line={part} order={order} now={now} nested />
+              <LinePanel key={part.id} line={part} order={order} now={now} index={index + part.position + 1} nested />
             ))}
         </div>
       )}

@@ -11,12 +11,13 @@ import { fakeState } from "../../../test/fake-erp-api/state";
 import { renderAs } from "../../../test/render";
 
 import { LinePanel } from "./line-panel";
+import { StepSelectionProvider } from "./use-step-selection";
 
 const order = (number: number): Order => fakeState().orders.all().find((o) => o.number === number)!;
 
 /** As under SessionGate: nothing renders until `/me` has loaded. */
 function WithMe({ children }: { children: ReactNode }) {
-  return useMe().data ? children : null;
+  return useMe().data ? <StepSelectionProvider>{children}</StepSelectionProvider> : null;
 }
 
 function renderLine(number: number, position = 0, user = STAFF) {
@@ -24,7 +25,7 @@ function renderLine(number: number, position = 0, user = STAFF) {
   return renderAs(
     user,
     <WithMe>
-      <LinePanel line={parent.lines[position]!} order={parent} now={Date.now()} />
+      <LinePanel line={parent.lines[position]!} order={parent} now={Date.now()} index={position} />
     </WithMe>,
   );
 }

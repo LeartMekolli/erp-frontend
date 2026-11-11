@@ -40,6 +40,7 @@ export const STAFF: FakeUser = {
     "partner.read",
     "payment.read",
     "payment.write",
+    "payment.refund",
     "ai.use",
     "report.read",
     "workflow.read",
@@ -59,6 +60,26 @@ export const CLERK: FakeUser = {
   name: "Kai",
   kind: "staff",
   permissions: ["order.read"],
+  organisations: [],
+};
+
+/** Reads work lists but can't move pieces. */
+export const WORKFLOW_READER: FakeUser = {
+  id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c20",
+  email: "viewer@demo.example.test",
+  name: "Sam",
+  kind: "staff",
+  permissions: ["order.read", "workflow.read"],
+  organisations: [],
+};
+
+/** Can change orders but can't refund them. */
+export const ORDER_WRITER: FakeUser = {
+  id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c21",
+  email: "writer@demo.example.test",
+  name: "Noor",
+  kind: "staff",
+  permissions: ["order.read", "order.write"],
   organisations: [],
 };
 
@@ -109,7 +130,7 @@ export const NO_ACCESS: FakeUser = {
   organisations: [],
 };
 
-export const USERS: readonly FakeUser[] = [STAFF, CLERK, PARTNER, LAYERLINE_OWNER, PARTNER_TWO_SHOPS, CUSTOMER, NO_ACCESS];
+export const USERS: readonly FakeUser[] = [STAFF, CLERK, WORKFLOW_READER, ORDER_WRITER, PARTNER, LAYERLINE_OWNER, PARTNER_TWO_SHOPS, CUSTOMER, NO_ACCESS];
 
 export const PARTNER_NAMES: Record<string, string> = {
   [NORTHCAST_ID]: "Northcast Foundry",

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { notFound, useParams } from "next/navigation";
+import { notFound, useParams, useRouter, useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 import { noAnswer } from "@/components/auth/copy";
@@ -15,10 +15,15 @@ import { can } from "@/lib/auth/permissions";
 import { useOrder } from "@/lib/orders/queries";
 import { OfflineError } from "@/lib/session/client-session";
 
+import { CancelDialog } from "./cancel-dialog";
+import { ClaimsNote } from "./claims-note";
+import { CommentsPanel } from "./comments-panel";
 import { LinePanel } from "./line-panel";
 import { CancelledBanner, OrderHeader } from "./order-header";
 import { PaymentPanel } from "./payment-panel";
+import { PiecePanel } from "./piece-panel";
 import { NotePanel, ShippingPanel } from "./shipping-panel";
+import { StepSelectionProvider } from "./use-step-selection";
 
 /** `/orders/:id`: one order, and everything staff can do with it. */
 export function OrderDetailPage() {
@@ -55,8 +60,12 @@ function Loading() {
 
 function OrderDetail({ id }: { id: string }) {
   const query = useOrder(id);
+  const router = useRouter();
+  // The open piece lives in the address, so its panel can be sent to someone.
+  const pieceId = useSearchParams().get("piece");
   const [shipping, setShipping] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   // What the last action did, announced politely.
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -88,7 +97,7 @@ function OrderDetail({ id }: { id: string }) {
 
   const order = query.data;
   return (
-    <>
+    <StepSelectionProvider>
       <OrderHeader
         order={order}
         onShip={() => {
@@ -98,6 +107,10 @@ function OrderDetail({ id }: { id: string }) {
         onRecordPayment={() => {
           setNotice(null);
           setPaying(true);
+        }}
+        onCancel={() => {
+          setNotice(null);
+          setCancelling(true);
         }}
       />
       {order.cancelled && <CancelledBanner cancelled={order.cancelled} />}
@@ -113,19 +126,23 @@ function OrderDetail({ id }: { id: string }) {
         <section aria-label="Lines" className="flex min-w-0 flex-col gap-3.5">
           {[...order.lines]
             .sort((a, b) => a.position - b.position)
-            .map((line) => (
-              <LinePanel key={line.id} line={line} order={order} now={query.dataUpdatedAt} />
+            .map((line, index) => (
+              <LinePanel key={line.id} line={line} order={order} now={query.dataUpdatedAt} index={index} />
             ))}
         </section>
         <div className="flex min-w-0 flex-col gap-3.5">
           <PaymentPanel order={order} />
           <ShippingPanel order={order} onNotice={setNotice} />
           {order.note && <NotePanel note={order.note} />}
+          <ClaimsNote orderId={order.id} />
+          <CommentsPanel order={order} />
         </div>
       </div>
 
       <ShipDialog order={order} open={shipping} onOpenChange={setShipping} onShipped={setNotice} />
       <RecordPaymentDialog order={order} open={paying} onOpenChange={setPaying} onRecorded={setNotice} />
-    </>
+      {cancelling && <CancelDialog order={order} open onOpenChange={setCancelling} onCancelled={setNotice} />}
+      <PiecePanel id={pieceId} onClose={() => router.replace(`/orders/${id}`, { scroll: false })} />
+    </StepSelectionProvider>
   );
 }

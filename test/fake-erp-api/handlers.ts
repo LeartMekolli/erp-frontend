@@ -273,6 +273,13 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
+    http.post("/orders/{id}/cancel", async ({ request, params, response }) => {
+      const caller = staffWith(request, "order.write");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().orders.cancel(params.id, await request.json(), request.headers.get("idempotency-key"), caller.permissions.includes("payment.refund"));
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
     http.post("/orders/{id}/ship", async ({ request, params, response }) => {
       const caller = staffWith(request, "order.ship");
       if (caller instanceof Response) return response.untyped(caller);
@@ -291,6 +298,97 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       const caller = staffWith(request, "payment.write");
       if (caller instanceof Response) return response.untyped(caller);
       const answer = fakeState().orders.paidByHand(params.id, await request.json(), request.headers.get("idempotency-key"));
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/workflow/groups/{id}", ({ request, params, response }) => {
+      const caller = staffWith(request, "workflow.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().production.group(params.id);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/workflow/work-orders", ({ request, response }) => {
+      const caller = staffWith(request, "workflow.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().production.pieces(new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/workflow/work-orders/{id}", ({ request, params, response }) => {
+      const caller = staffWith(request, "workflow.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().production.piece(params.id);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/workflow/workflows/{id}/versions/{number}", ({ request, params, response }) => {
+      const caller = staffWith(request, "workflow.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().production.version(params.id, Number(params.number));
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/workflow/moves", async ({ request, response }) => {
+      const caller = staffWith(request, "workflow.move");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().production.move(await request.json(), request.headers.get("idempotency-key"));
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/partners/eligible", ({ request, response }) => {
+      const caller = staffWith(request, "partner.assign");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().jobs.eligible(new URL(request.url).searchParams.get("group_id") ?? "");
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/partners/jobs/{groupId}/offer", async ({ request, params, response }) => {
+      const caller = staffWith(request, "partner.assign");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().jobs.offer(params.groupId, await request.json(), request.headers.get("idempotency-key"));
+      return answer.ok ? response(201).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/partners/jobs/{groupId}/withdraw", ({ request, params, response }) => {
+      const caller = staffWith(request, "partner.assign");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().jobs.withdraw(params.groupId, request.headers.get("idempotency-key"));
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/partners/jobs/{groupId}/reassign", async ({ request, params, response }) => {
+      const caller = staffWith(request, "partner.assign");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().jobs.reassign(params.groupId, await request.json(), request.headers.get("idempotency-key"));
+      return answer.ok ? response(201).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/orders/{id}/comments", ({ request, params, response }) => {
+      const caller = staffWith(request, "order.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().comments.list(params.id, new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/orders/{id}/comments", async ({ request, params, response }) => {
+      const caller = staffWith(request, "order.write");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().comments.post(params.id, await request.json(), caller, request.headers.get("idempotency-key"));
+      return answer.ok ? response(201).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/orders/{id}/comments/{commentId}/attachments/{fileVersionId}/url", ({ request, params, response }) => {
+      const caller = staffWith(request, "order.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().comments.attachmentUrl(params.id, params.commentId, params.fileVersionId);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/claims", ({ request, response }) => {
+      const caller = staffWith(request, "order.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().comments.claims(new URL(request.url).searchParams);
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 

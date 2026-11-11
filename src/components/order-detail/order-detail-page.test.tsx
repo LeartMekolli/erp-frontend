@@ -18,6 +18,7 @@ const navigation = vi.hoisted(() => ({ id: "", notFound: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: navigation.id }),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
   notFound: navigation.notFound,
 }));
 
