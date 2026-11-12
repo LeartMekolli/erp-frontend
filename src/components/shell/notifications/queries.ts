@@ -15,23 +15,26 @@ const notificationsKeys = {
   feed: ["notifications", "feed"] as const,
 };
 
-async function fetchFeed(query: { limit: number; cursor?: string; unread?: "true" }) {
+async function fetchFeed(query: { limit: number; cursor?: string }) {
   const { data, error, response } = await api.GET("/notifications", { params: { query } });
   if (!data) throw problemFrom(error, response);
   return data;
 }
 
 /**
- * Whether anything is unread. erp-api has no unread count yet
- * (`backend-todos.md`), so one unread entry is enough to show the dot.
+ * How many notifications are unread; 0 while loading or on error.
  * Refreshes with the app's every-minute refetch.
  */
-export function useUnreadDot(): boolean {
+export function useUnreadCount(): number {
   const query = useQuery({
     queryKey: notificationsKeys.unread,
-    queryFn: async () => (await fetchFeed({ unread: "true", limit: 1 })).data.length > 0,
+    queryFn: async () => {
+      const { data, error, response } = await api.GET("/notifications/unread-count");
+      if (!data) throw problemFrom(error, response);
+      return data.count;
+    },
   });
-  return query.data ?? false;
+  return query.data ?? 0;
 }
 
 /** The signed-in person's notifications, newest first, 20 at a time. */
@@ -43,7 +46,7 @@ export function useFeed(enabled = true) {
   });
 }
 
-/** Marks one notification read; the dot and the list fetch again. */
+/** Marks one notification read; the count and the list fetch again. */
 export function useMarkRead() {
   const client = useQueryClient();
   return useApiMutation<string, void>(

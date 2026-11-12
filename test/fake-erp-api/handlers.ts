@@ -431,6 +431,12 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
+    http.get("/notifications/unread-count", ({ request, response }) => {
+      const user = fakeState().authenticate(bearer(request));
+      if (!user) return response.untyped(problem(401, "Unauthorized"));
+      return response(200).json({ count: fakeState().notifications.unread(user.id) });
+    }),
+
     http.post("/notifications/{id}/read", ({ request, params, response }) => {
       const user = fakeState().authenticate(bearer(request));
       if (!user) return response.untyped(problem(401, "Unauthorized"));

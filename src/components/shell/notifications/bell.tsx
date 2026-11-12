@@ -14,19 +14,19 @@ import type { FeedEntry } from "@/lib/api/schema-types";
 import { useFormat } from "@/lib/format/use-format";
 import { useMediaQuery } from "@/lib/use-media-query";
 
-import { useFeed, useMarkRead, useUnreadDot } from "./queries";
+import { useFeed, useMarkRead, useUnreadCount } from "./queries";
 import { subjectHref } from "./subject-href";
 
 const TITLE = "Notifications";
 
 /**
- * The bell in the top bar: a dot while anything is unread, and the panel of
+ * The bell in the top bar: how many are unread, and the panel of
  * notifications, a popover from 768 px and full screen below. Opening one
  * marks it read and goes to its record, when there is one to go to.
  */
 export function Bell() {
   const { data: me } = useMe();
-  const unread = useUnreadDot();
+  const unread = useUnreadCount();
   const wide = useMediaQuery("(min-width: 768px)");
   const [open, setOpen] = useState(false);
   const markRead = useMarkRead();
@@ -40,7 +40,7 @@ export function Bell() {
       try {
         await markRead.mutateAsync(entry.id);
       } catch {
-        // Still unread, so the dot stays; going to the record matters more.
+        // Still unread, so the count stays; going to the record matters more.
       }
     }
     const href = subjectHref(entry.subject, me);
@@ -55,8 +55,15 @@ export function Bell() {
       className="relative grid size-11 shrink-0 place-items-center rounded-xl text-ink-2 hover:bg-card hover:text-ink focus-visible:outline-2 focus-visible:outline-violet"
     >
       <BellIcon aria-hidden className="size-5" />
-      {unread && <span aria-hidden className="absolute top-2.5 right-2.5 size-2 rounded-full bg-violet ring-2 ring-ground" />}
-      <span className="sr-only">{unread ? `${TITLE}, unread` : TITLE}</span>
+      {unread > 0 && (
+        <span
+          aria-hidden
+          className="absolute top-1.5 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-violet px-1 text-[10px] font-semibold text-white tabular-nums ring-2 ring-ground"
+        >
+          {unread > 9 ? "9+" : unread}
+        </span>
+      )}
+      <span className="sr-only">{unread > 0 ? `${TITLE}, ${unread} unread` : TITLE}</span>
     </button>
   );
 
