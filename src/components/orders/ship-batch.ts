@@ -1,6 +1,6 @@
 import { UNKNOWN, noAnswer } from "@/components/auth/copy";
 import { api } from "@/lib/api/client";
-import { idempotent, newIdempotencyKey } from "@/lib/api/idempotency";
+import { idempotencyHeader, newIdempotencyKey } from "@/lib/api/idempotency";
 import { problemFrom } from "@/lib/api/problem";
 import type { ShipBody } from "@/lib/api/schema-types";
 import { OfflineError } from "@/lib/session/client-session";
@@ -52,9 +52,8 @@ export async function shipBatch(
 async function shipOne({ id, number }: BatchOrder, body: ShipBody, key: string): Promise<BatchResult> {
   try {
     const { data, error, response } = await api.POST("/orders/{id}/ship", {
-      params: { path: { id } },
+      params: { path: { id }, header: idempotencyHeader(key) },
       body,
-      ...idempotent(key),
     });
     if (data) return { id, number, ok: true, labelUrl: data.shipping.label?.url ?? null };
     const problem = problemFrom(error, response);

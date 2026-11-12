@@ -114,8 +114,11 @@ const ref = (key: string | null) => {
 const nextKey = (key: string) => STEPS[STEPS.findIndex((s) => s.key === key) + 1]?.key ?? null;
 
 function transition(fields: Pick<Transition, "kind" | "from_step" | "to_step" | "created_at"> & Partial<Transition>): Transition {
+  const id = crypto.randomUUID();
   return {
-    id: crypto.randomUUID(),
+    id,
+    // One piece per move here, so each row is its own action, as erp-api's older rows are.
+    move_id: id,
     outcome: null,
     defect: null,
     override_reason: null,
@@ -440,7 +443,7 @@ export function createProductionStore(now: () => number) {
       const input = JSON.stringify(body);
       const seen = key ? keys.get(key) : undefined;
       if (seen) {
-        return seen.input === input ? { ok: true, body: seen.body } : { ok: false, status: 409, detail: "Idempotency key reused with a different request" };
+        return seen.input === input ? { ok: true, body: seen.body } : { ok: false, status: 409, code: "idempotency_key_reused", detail: "Idempotency key reused with a different request" };
       }
       const answer = run(body);
       if (answer.ok && key) keys.set(key, { input, body: answer.body });

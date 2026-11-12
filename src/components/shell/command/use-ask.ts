@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { api } from "@/lib/api/client";
-import { idempotent } from "@/lib/api/idempotency";
+import { idempotencyHeader } from "@/lib/api/idempotency";
 import { problemFrom } from "@/lib/api/problem";
 import type { AiRun } from "@/lib/api/schema-types";
 import { useApiMutation } from "@/lib/query/use-api-mutation";
@@ -23,7 +23,7 @@ export function useAsk() {
   const [runId, setRunId] = useState<string | null>(null);
   const start = useApiMutation<string, { id: string }>(
     async (question, key) => {
-      const { data, error, response } = await api.POST("/ai/ask", { body: { question }, ...idempotent(key) });
+      const { data, error, response } = await api.POST("/ai/ask", { body: { question }, params: { header: idempotencyHeader(key) } });
       if (!data) throw problemFrom(error, response);
       return data;
     },

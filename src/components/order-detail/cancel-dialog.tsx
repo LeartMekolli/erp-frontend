@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api/client";
-import { idempotent } from "@/lib/api/idempotency";
+import { idempotencyHeader } from "@/lib/api/idempotency";
 import { applyFieldErrors, isApiProblem, problemFrom } from "@/lib/api/problem";
 import type { CancelOrderBody, Order, OrderLine } from "@/lib/api/schema-types";
 import { useCan } from "@/lib/auth/permissions";
@@ -149,7 +149,7 @@ function CancelForm({ order, onCancelled }: CancelProps) {
 
   const cancel = useApiMutation<CancelOrderBody, Order>(
     async (body, key) => {
-      const { data, error, response } = await api.POST("/orders/{id}/cancel", { params: { path: { id: order.id } }, body, ...idempotent(key) });
+      const { data, error, response } = await api.POST("/orders/{id}/cancel", { params: { path: { id: order.id }, header: idempotencyHeader(key) }, body });
       if (!data) throw problemFrom(error, response);
       return data;
     },

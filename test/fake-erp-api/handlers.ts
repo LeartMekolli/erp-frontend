@@ -18,9 +18,9 @@ const TITLES: Record<number, string> = {
 };
 
 /** erp-api's error body for a Nest exception (`api-error.ts:108-117`). */
-function problem(status: number, detail: string) {
+function problem(status: number, detail: string, code?: string) {
   return HttpResponse.json(
-    { type: "about:blank", title: TITLES[status] ?? "Error", status, detail },
+    { type: "about:blank", title: TITLES[status] ?? "Error", status, detail, ...(code ? { code } : {}) },
     { status, headers: { "content-type": "application/problem+json" } },
   );
 }
@@ -75,7 +75,7 @@ function staffWith(request: Request, permission: Permission): FakeUser | Respons
 
 /** A store's refusal as erp-api would send it. */
 function refusal(answer: Exclude<Answer<unknown>, { ok: true }>): Response {
-  return answer.status === 400 ? validation(answer.errors) : problem(answer.status, answer.detail);
+  return answer.status === 400 ? validation(answer.errors) : problem(answer.status, answer.detail, answer.code);
 }
 
 /** The bucket's CORS rules: browsers may PUT with `content-type` (erp-api `README.md`, "File storage"). */

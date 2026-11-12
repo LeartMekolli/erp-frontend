@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
-import { idempotent } from "@/lib/api/idempotency";
+import { idempotencyHeader } from "@/lib/api/idempotency";
 import { problemFrom } from "@/lib/api/problem";
 import type { FeedEntry } from "@/lib/api/schema-types";
 import { useApiMutation } from "@/lib/query/use-api-mutation";
@@ -49,8 +49,7 @@ export function useMarkRead() {
   return useApiMutation<string, void>(
     async (id, key) => {
       const { error, response } = await api.POST("/notifications/{id}/read", {
-        params: { path: { id } },
-        ...idempotent(key),
+        params: { path: { id }, header: idempotencyHeader(key) },
       });
       if (!response.ok) throw problemFrom(error, response);
     },

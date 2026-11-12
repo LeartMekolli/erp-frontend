@@ -3123,7 +3123,7 @@ export interface paths {
         };
         /**
          * The comments on one of the partner's jobs, oldest first, a page at a time.
-         * @description Only for a job the partner has accepted and still holds; else a 404.
+         * @description Only for a job the partner has accepted and still holds; else a 404. What staff wrote to a partner that held the job before is never shown.
          *
          *     Access: a person acting for the partner, at least `member`; a suspended partner only reads.
          */
@@ -3156,6 +3156,48 @@ export interface paths {
          * @description Access: a person acting for the partner, at least `member`; a suspended partner only reads.
          */
         get: operations["JobCommentsController_url"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/partner-portal/partners/{partnerId}/jobs/{groupId}/moves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The moves on one of the partner's jobs, one item per action, newest first, a page at a time.
+         * @description Only for a job the partner has accepted and still holds; else a 404. Names and what was written show only on moves the partner's own people made.
+         *
+         *     Access: a person acting for the partner, at least `member`; a suspended partner only reads.
+         */
+        get: operations["JobMovesController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/partner-portal/partners/{partnerId}/jobs/{groupId}/moves/{moveId}/photos/{fileVersionId}/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A short-lived download link for a photo of a move on the partner's job.
+         * @description Access: a person acting for the partner, at least `member`; a suspended partner only reads.
+         */
+        get: operations["JobMovesController_photoUrl"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3511,7 +3553,7 @@ export interface paths {
         put?: never;
         /**
          * Comment on an order or one of its lines, with files attached.
-         * @description `visibility` says who reads it besides staff: nobody by default, `customer`, or `partner`, the partner holding the line, which needs a `line_id`. A `line_id` of another order is a 400. Any uploaded file of the workspace can be attached, at most 10; one not found, or not uploaded yet, is a 404 naming it. Comments cannot be edited or deleted.
+         * @description `visibility` says who reads it besides staff: nobody by default, `customer`, or `partner`, the partner that has accepted the line, which needs a `line_id`. A `partner` comment stays that partner's when the line changes hands; on a line no partner has accepted yet it is a 409 with `code` `line_not_accepted`. A `line_id` of another order is a 400. Any uploaded file of the workspace can be attached, at most 10; one not found, or not uploaded yet, is a 404 naming it. Comments cannot be edited or deleted.
          *
          *     Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
          *
@@ -4004,6 +4046,28 @@ export interface paths {
          * @description Access: permission `workflow.read`.
          */
         get: operations["WorkOrdersController_group"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workflow/groups/{id}/moves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A line's moves, one item per action, newest first, a page at a time.
+         * @description `only=fails` keeps fails and corrections that put a piece at a step. `counts` covers every page, whatever the filter.
+         *
+         *     Access: permission `workflow.read`.
+         */
+        get: operations["WorkOrdersController_moveHistory"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21448,6 +21512,211 @@ export interface operations {
             };
         };
     };
+    JobMovesController_list: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+                only?: "fails";
+            };
+            header?: never;
+            path: {
+                groupId: string;
+                partnerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** Format: uuid */
+                            id: string;
+                            /** @enum {string} */
+                            kind: "pass" | "fail" | "correction";
+                            /** @enum {string|null} */
+                            outcome: "rework" | "scrap" | "continue" | null;
+                            from_step: {
+                                /** Format: uuid */
+                                id: string;
+                                key: string;
+                                name: string;
+                            } | null;
+                            to_step: {
+                                /** Format: uuid */
+                                id: string;
+                                key: string;
+                                name: string;
+                            } | null;
+                            defect: {
+                                /** Format: uuid */
+                                id: string;
+                                key: string;
+                                name: string;
+                            } | null;
+                            override_reason: string | null;
+                            comment: string | null;
+                            answers: {
+                                item: string;
+                                label: string;
+                                value: string;
+                                value_label: string | null;
+                                note: string | null;
+                                passing: boolean;
+                            }[];
+                            photos: {
+                                /** Format: uuid */
+                                file_id: string;
+                                /** Format: uuid */
+                                file_version_id: string;
+                            }[];
+                            inspected: boolean;
+                            /** Format: date-time */
+                            created_at: string;
+                            pieces: {
+                                /** Format: uuid */
+                                id: string;
+                                label: string;
+                                replacement: boolean;
+                                from_step: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    key: string;
+                                    name: string;
+                                } | null;
+                                to_step: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    key: string;
+                                    name: string;
+                                } | null;
+                                /** @enum {string} */
+                                status: "active" | "finished" | "scrapped" | "cancelled";
+                            }[];
+                            actor: {
+                                /** @enum {string} */
+                                kind: "own" | "workspace" | "other_partner";
+                                name: string | null;
+                            };
+                        }[];
+                        next_cursor: string | null;
+                        counts: {
+                            all: number;
+                            fails: number;
+                        };
+                        /** Format: date-time */
+                        handed_over_at: string;
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    JobMovesController_photoUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: string;
+                moveId: string;
+                fileVersionId: string;
+                partnerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        url: string;
+                        expires_at: string;
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     RatingsController_list: {
         parameters: {
             query?: {
@@ -24215,6 +24484,11 @@ export interface operations {
                             };
                             /** @enum {string} */
                             visibility: "customer" | "partner" | "staff";
+                            partner: {
+                                /** Format: uuid */
+                                id: string;
+                                name: string;
+                            } | null;
                             body: string;
                             attachments: {
                                 /** Format: uuid */
@@ -24312,6 +24586,11 @@ export interface operations {
                         };
                         /** @enum {string} */
                         visibility: "customer" | "partner" | "staff";
+                        partner: {
+                            /** Format: uuid */
+                            id: string;
+                            name: string;
+                        } | null;
                         body: string;
                         attachments: {
                             /** Format: uuid */
@@ -27373,6 +27652,149 @@ export interface operations {
             };
         };
     };
+    WorkOrdersController_moveHistory: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+                only?: "fails";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** Format: uuid */
+                            id: string;
+                            /** @enum {string} */
+                            kind: "pass" | "fail" | "correction";
+                            /** @enum {string|null} */
+                            outcome: "rework" | "scrap" | "continue" | null;
+                            from_step: {
+                                /** Format: uuid */
+                                id: string;
+                                key: string;
+                                name: string;
+                            } | null;
+                            to_step: {
+                                /** Format: uuid */
+                                id: string;
+                                key: string;
+                                name: string;
+                            } | null;
+                            defect: {
+                                /** Format: uuid */
+                                id: string;
+                                key: string;
+                                name: string;
+                            } | null;
+                            override_reason: string | null;
+                            comment: string | null;
+                            answers: {
+                                item: string;
+                                label: string;
+                                value: string;
+                                value_label: string | null;
+                                note: string | null;
+                                passing: boolean;
+                            }[];
+                            photos: {
+                                /** Format: uuid */
+                                file_id: string;
+                                /** Format: uuid */
+                                file_version_id: string;
+                            }[];
+                            actor: {
+                                /** Format: uuid */
+                                id: string;
+                                name: string;
+                            };
+                            partner: {
+                                /** Format: uuid */
+                                id: string;
+                                name: string;
+                            } | null;
+                            inspected: boolean;
+                            /** Format: date-time */
+                            created_at: string;
+                            pieces: {
+                                /** Format: uuid */
+                                id: string;
+                                label: string;
+                                replacement: boolean;
+                                from_step: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    key: string;
+                                    name: string;
+                                } | null;
+                                to_step: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    key: string;
+                                    name: string;
+                                } | null;
+                                /** @enum {string} */
+                                status: "active" | "finished" | "scrapped" | "cancelled";
+                            }[];
+                        }[];
+                        next_cursor: string | null;
+                        counts: {
+                            all: number;
+                            fails: number;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     WorkOrdersController_customerView: {
         parameters: {
             query?: never;
@@ -27692,6 +28114,8 @@ export interface operations {
                         data: {
                             /** Format: uuid */
                             id: string;
+                            /** Format: uuid */
+                            move_id: string;
                             /** @enum {string} */
                             kind: "pass" | "fail" | "correction";
                             /** @enum {string|null} */
@@ -27833,6 +28257,8 @@ export interface operations {
                         history: {
                             /** Format: uuid */
                             id: string;
+                            /** Format: uuid */
+                            move_id: string;
                             /** @enum {string} */
                             kind: "pass" | "fail" | "correction";
                             /** @enum {string|null} */

@@ -34,7 +34,7 @@ export interface FieldError {
 export type Answer<T> =
   | { ok: true; body: T }
   | { ok: false; status: 400; errors: FieldError[] }
-  | { ok: false; status: 403 | 404 | 409 | 503; detail: string };
+  | { ok: false; status: 403 | 404 | 409 | 503; detail: string; code?: string };
 
 const ORDER_STATES = ["awaiting_payment", "in_production", "ready", "shipped", "delivered", "cancelled"] as const satisfies readonly OrderState[];
 const PAYMENT_STATES = [
@@ -191,7 +191,7 @@ export function createOrdersStore(now: () => number) {
     if (seen) {
       return seen.input === serialised
         ? { ok: true, body: seen.body }
-        : { ok: false, status: 409, detail: "Idempotency key reused with a different request" };
+        : { ok: false, status: 409, code: "idempotency_key_reused", detail: "Idempotency key reused with a different request" };
     }
     const answer = run();
     if (answer.ok && key) keys.set(key, { input: serialised, body: answer.body });

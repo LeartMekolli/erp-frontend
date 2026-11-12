@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api/client";
-import { idempotent } from "@/lib/api/idempotency";
+import { idempotencyHeader } from "@/lib/api/idempotency";
 import { applyFieldErrors, isApiProblem, problemFrom } from "@/lib/api/problem";
 import type { Order, PaidByHandBody } from "@/lib/api/schema-types";
 import { workspaceToday } from "@/lib/orders/labels";
@@ -83,9 +83,8 @@ function PaymentForm({ order, onDone }: { order: Order; onDone: (message: string
 
   const record = useApiMutation<PaidByHandBody, Order>(async (body, key) => {
     const { data, error, response } = await api.POST("/orders/{id}/paid-by-hand", {
-      params: { path: { id: order.id } },
+      params: { path: { id: order.id }, header: idempotencyHeader(key) },
       body,
-      ...idempotent(key),
     });
     if (!data) throw problemFrom(error, response);
     return data;

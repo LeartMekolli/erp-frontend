@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
-import { idempotent } from "@/lib/api/idempotency";
+import { idempotencyHeader } from "@/lib/api/idempotency";
 import { problemFrom } from "@/lib/api/problem";
 import type { Claim, OrderComment, StaffCommentBody } from "@/lib/api/schema-types";
 import { useApiMutation } from "@/lib/query/use-api-mutation";
@@ -36,7 +36,7 @@ export function usePostComment(orderId: string) {
   const client = useQueryClient();
   return useApiMutation<StaffCommentBody, OrderComment>(
     async (body, key) => {
-      const { data, error, response } = await api.POST("/orders/{id}/comments", { params: { path: { id: orderId } }, body, ...idempotent(key) });
+      const { data, error, response } = await api.POST("/orders/{id}/comments", { params: { path: { id: orderId }, header: idempotencyHeader(key) }, body });
       if (!data) throw problemFrom(error, response);
       return data;
     },

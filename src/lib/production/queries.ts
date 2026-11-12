@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
-import { idempotent } from "@/lib/api/idempotency";
+import { idempotencyHeader } from "@/lib/api/idempotency";
 import { problemFrom } from "@/lib/api/problem";
 import type { Group, MoveBody, MoveResponse, WorkOrderDetail, WorkOrderListItem, WorkflowVersion } from "@/lib/api/schema-types";
 import { downloadUrl } from "@/lib/files/download";
@@ -103,7 +103,7 @@ export function useMovePieces() {
   const client = useQueryClient();
   return useApiMutation<MoveBody, MoveResponse>(
     async (body, key) => {
-      const { data, error, response } = await api.POST("/workflow/moves", { body, ...idempotent(key) });
+      const { data, error, response } = await api.POST("/workflow/moves", { body, params: { header: idempotencyHeader(key) } });
       if (!data) throw problemFrom(error, response);
       return data;
     },
