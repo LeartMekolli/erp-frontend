@@ -43,6 +43,31 @@ describe("ListEnd", () => {
     expect(props.fetchNextPage).toHaveBeenCalledTimes(1);
   });
 
+  it("names the button when asked", () => {
+    render(<ListEnd list={list()} more="Show earlier moves" />);
+    expect(screen.getByRole("button", { name: "Show earlier moves" })).toBeInTheDocument();
+  });
+
+  it("waits for a click when auto is off", async () => {
+    let fire: ((entries: { isIntersecting: boolean }[]) => void) | null = null;
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(callback: (entries: { isIntersecting: boolean }[]) => void) {
+          fire = callback;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const props = list();
+    render(<ListEnd list={props} auto={false} />);
+    expect(fire).toBeNull();
+    expect(props.fetchNextPage).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Show more" }));
+    expect(props.fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
   it("shows a busy button while loading", () => {
     render(<ListEnd list={list({ isFetchingNextPage: true })} />);
     const button = screen.getByRole("button", { name: "Loading more…" });

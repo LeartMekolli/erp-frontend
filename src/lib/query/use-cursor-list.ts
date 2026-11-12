@@ -11,18 +11,19 @@ export interface Page<T> {
 /**
  * A cursor-paged erp-api list. `fetchPage` gets the cursor (undefined for the
  * first page) and throws on a failed response. `items` is every loaded page
- * in order.
+ * in order. `P` keeps what a page carries besides its items, such as counts.
+ * Name `T`: it can't be inferred once `P` is.
  */
-export function useCursorList<T>(options: {
+export function useCursorList<T, P extends Page<T> = Page<T>>(options: {
   queryKey: QueryKey;
-  fetchPage: (cursor: string | undefined) => Promise<Page<T>>;
+  fetchPage: (cursor: string | undefined) => Promise<P>;
   enabled?: boolean;
 }) {
   const query = useInfiniteQuery({
     queryKey: options.queryKey,
     queryFn: ({ pageParam }) => options.fetchPage(pageParam),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last: Page<T>) => last.next_cursor ?? undefined,
+    getNextPageParam: (last: P) => last.next_cursor ?? undefined,
     enabled: options.enabled,
   });
   return {

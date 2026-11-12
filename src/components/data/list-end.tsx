@@ -17,12 +17,13 @@ interface ListState {
 
 /**
  * The end of a cursor list: loads the next page as it scrolls into view, with a
- * button that does the same for keyboard and screen-reader users.
+ * button that does the same for keyboard and screen-reader users. With `auto`
+ * off, only the button loads more: for a list inside a page that goes on below it.
  */
-export function ListEnd({ list }: { list: ListState }) {
+export function ListEnd({ list, more = "Show more", auto = true }: { list: ListState; more?: string; auto?: boolean }) {
   const sentinel = useRef<HTMLDivElement>(null);
   const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = list;
-  const canLoad = hasNextPage && !isFetchingNextPage && !isFetchNextPageError;
+  const canLoad = auto && hasNextPage && !isFetchingNextPage && !isFetchNextPageError;
 
   useEffect(() => {
     const element = sentinel.current;
@@ -57,7 +58,7 @@ export function ListEnd({ list }: { list: ListState }) {
           aria-busy={isFetchingNextPage}
           onClick={() => fetchNextPage()}
         >
-          {isFetchingNextPage ? "Loading more…" : "Show more"}
+          {isFetchingNextPage ? "Loading more…" : more}
         </Button>
       </div>
     );
