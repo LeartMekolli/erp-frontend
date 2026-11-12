@@ -315,6 +315,13 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
+    http.get("/workflow/groups/{id}/moves", ({ request, params, response }) => {
+      const caller = staffWith(request, "workflow.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().production.moves(params.id, new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
     http.get("/workflow/work-orders", ({ request, response }) => {
       const caller = staffWith(request, "workflow.read");
       if (caller instanceof Response) return response.untyped(caller);
