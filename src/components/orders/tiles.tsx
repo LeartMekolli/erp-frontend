@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
 import type { NeedsReason, OrderCounts } from "@/lib/api/schema-types";
+import { formatMoney } from "@/lib/format/money";
 import { daysBetween, workspaceToday } from "@/lib/orders/labels";
 import { useOrderCounts, useTileOrders } from "@/lib/orders/queries";
 import { NEEDS_REASONS } from "@/lib/orders/view";
@@ -35,6 +36,7 @@ const tileFoot = "mt-auto hidden text-caption text-ink-2 md:block";
 export function Tiles({ onPickReason }: { onPickReason: (reason: NeedsReason | null) => void }) {
   const counts = useOrderCounts({});
   const overdue = useOrderCounts({ payment_state: "overdue" });
+  const { data: me } = useMe();
 
   if (counts.isPending) return <Placeholder />;
   if (!counts.data) {
@@ -55,9 +57,12 @@ export function Tiles({ onPickReason }: { onPickReason: (reason: NeedsReason | n
       <Tile title="Ready to ship" count={needs.to_ship} onPick={() => onPickReason("to_ship")}>
         <ReadyFoot />
       </Tile>
-      <Tile title="Awaiting payment" count={needs.to_collect} unit="orders" onPick={() => onPickReason("to_collect")}>
-        {overdue.data && <span>{`${overdue.data.needs_you.to_collect} overdue`}</span>}
-      </Tile>
+      <AwaitingPayment
+        counts={counts.data}
+        overdue={overdue.data?.needs_you.to_collect}
+        currency={me?.workspace.default_currency}
+        onPick={() => onPickReason("to_collect")}
+      />
       <Tile title="Late" count={needs.late} accent onPick={() => onPickReason("late")}>
         <LateFoot />
       </Tile>
@@ -122,11 +127,50 @@ function Hero({
   );
 }
 
+/**
+ * What's still to collect: the amount in the workspace's currency (or the
+ * first one owed), other currencies and the orders in the foot. With no
+ * amounts, the number of orders.
+ */
+function AwaitingPayment({
+  counts,
+  overdue,
+  currency,
+  onPick,
+}: {
+  counts: OrderCounts;
+  overdue: number | undefined;
+  currency: string | undefined;
+  onPick: () => void;
+}) {
+  const orders = counts.needs_you.to_collect;
+  const amounts = counts.to_collect_amounts;
+  const lead = amounts.find((owed) => owed.currency === currency) ?? amounts[0];
+  const overdueText = overdue === undefined ? null : `${overdue} overdue`;
+  if (!lead) {
+    return (
+      <Tile title="Awaiting payment" count={orders} unit="orders" onPick={onPick}>
+        {overdueText && <span>{overdueText}</span>}
+      </Tile>
+    );
+  }
+  const others = amounts.filter((owed) => owed !== lead).map((owed) => formatMoney(owed.amount, owed.currency));
+  const foot = [others.length ? `+ ${others.join(", ")}` : null, [plural(orders, "order"), overdueText].filter(Boolean).join(", ")]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <Tile title="Awaiting payment" count={orders} figure={formatMoney(lead.amount, lead.currency)} onPick={onPick}>
+      <span>{foot}</span>
+    </Tile>
+  );
+}
+
 /** A smaller tile: a button to its orders, or quietly "None" when there are none. */
 function Tile({
   title,
   count,
   unit,
+  figure,
   accent = false,
   onPick,
   children,
@@ -134,6 +178,8 @@ function Tile({
   title: string;
   count: number;
   unit?: string;
+  /** Shown in place of `count` and `unit`; `count` still decides "None". */
+  figure?: string;
   accent?: boolean;
   onPick: () => void;
   children: ReactNode;
@@ -160,9 +206,10 @@ function Tile({
           <ArrowUpRight className="size-3.5" />
         </span>
       </span>
-      <span className={`${tileNumber} ${accent ? "text-late" : "text-ink"}`}>
-        {count}
-        {unit && <span className="ml-1.5 text-sm font-medium tracking-normal text-ink-2">{unit}</span>}
+      {/* An amount is wider than a count: smaller on a phone's three narrow tiles. */}
+      <span className={`${tileNumber} ${accent ? "text-late" : "text-ink"} ${figure ? "max-md:text-base" : ""}`}>
+        {figure ?? count}
+        {!figure && unit && <span className="ml-1.5 text-sm font-medium tracking-normal text-ink-2">{unit}</span>}
       </span>
       <span className={tileFoot}>{children}</span>
     </button>
