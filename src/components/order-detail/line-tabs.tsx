@@ -9,6 +9,7 @@ import { useCan } from "@/lib/auth/permissions";
 import { useGroup } from "@/lib/production/queries";
 import { failedOnLine } from "@/lib/production/quality";
 
+import { HistoryTab } from "./history-tab";
 import { LoadFailure } from "./load-failure";
 import { PiecesTab } from "./pieces-tab";
 import { QualityTab } from "./quality-tab";
@@ -49,7 +50,7 @@ function Progress({ groupId, index, orderState, partnerName = null }: LineTabsPr
     <>
       <StepStrip group={group.data} />
       <Tabs defaultValue="pieces" className="min-w-0 pt-2">
-        <TabsList variant="line" aria-label="Pieces and quality">
+        <TabsList variant="line" aria-label="Pieces, quality and history">
           <TabsTrigger value="pieces">Pieces</TabsTrigger>
           <TabsTrigger value="quality">
             Quality
@@ -60,6 +61,7 @@ function Progress({ groupId, index, orderState, partnerName = null }: LineTabsPr
               </>
             )}
           </TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
         <TabsContent value="pieces">
           <PiecesTab group={group.data} orderState={orderState} partnerName={partnerName} />
@@ -67,12 +69,15 @@ function Progress({ groupId, index, orderState, partnerName = null }: LineTabsPr
         <TabsContent value="quality">
           <QualityTab group={group.data} />
         </TabsContent>
+        <TabsContent value="history">
+          <HistoryTab group={group.data} />
+        </TabsContent>
       </Tabs>
     </>
   );
 }
 
-/** A line's step strip and its Pieces and Quality tabs, for those who may read work lists. */
+/** A line's step strip and its Pieces, Quality and History tabs, for those who may read work lists. */
 export function LineTabs(props: LineTabsProps) {
   const mayRead = useCan("workflow.read");
   if (!mayRead) return null;
