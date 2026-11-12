@@ -91,6 +91,33 @@ describe("fake erp-api orders", () => {
     expect(s.ship(order.id, { courier: "UPS" }, "k1")).toMatchObject({ ok: false, status: 409 });
   });
 
+  it("ships several orders, each with its own result, and replays by key", () => {
+    const s = store();
+    const [ready, shipped] = [byNumber(s, 1042), byNumber(s, 1051)];
+    const body = { orders: [{ order_id: ready.id, courier: "DHL" }, { order_id: shipped.id }] };
+    const answer = ok(s.shipMany(body, "k1"));
+    expect(answer.results).toMatchObject([
+      { order_id: ready.id, result: "shipped", order: { state: "shipped", shipping: { courier: "DHL" } } },
+      { order_id: shipped.id, result: "failed", error: { status: 409, code: "order_already_shipped" } },
+    ]);
+    expect(ok(s.shipMany(body, "k1"))).toEqual(answer);
+    expect(s.shipMany({ orders: [{ order_id: ready.id }] }, "k1")).toMatchObject({ ok: false, status: 409, code: "idempotency_key_reused" });
+  });
+
+  it("refuses no orders, more than 25, or an order listed twice", () => {
+    const s = store();
+    const id = byNumber(s, 1042).id;
+    expect(s.shipMany({ orders: [] }, null)).toMatchObject({ ok: false, status: 400, errors: [{ path: "orders" }] });
+    const many = Array.from({ length: 26 }, (_, i) => ({ order_id: `${id.slice(0, -2)}${String(i).padStart(2, "0")}` }));
+    expect(s.shipMany({ orders: many }, null)).toMatchObject({ ok: false, status: 400, errors: [{ path: "orders" }] });
+    expect(s.shipMany({ orders: [{ order_id: id }, { order_id: id }] }, null)).toMatchObject({
+      ok: false,
+      status: 400,
+      errors: [{ path: "orders", message: "an order is listed twice" }],
+    });
+    expect(byNumber(s, 1042).state).toBe("ready");
+  });
+
   it("refuses to ship an order that is not ready, or already shipped", () => {
     const s = store();
     expect(s.ship(byNumber(s, 1041).id, {}, "a")).toMatchObject({ ok: false, status: 409, code: "order_not_ready" });

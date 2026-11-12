@@ -7,6 +7,7 @@
  */
 
 import type {
+  BulkShipResult,
   CancelOrderBody,
   NeedsReason,
   Order,
@@ -16,6 +17,7 @@ import type {
   PaidByHandBody,
   PaymentState,
   ShipBody,
+  ShipManyBody,
 } from "../../src/lib/api/schema-types";
 
 import { addDays, seedOrders, type StoredOrder } from "./orders-seed";
@@ -179,6 +181,8 @@ export function createOrdersStore(now: () => number) {
   const today = () => new Date(now()).toISOString().slice(0, 10);
   const orders = new Map(seedOrders(today(), now()).map((order) => [order.id, order]));
   const keys = new Map<string, { input: string; body: Order }>();
+  // `POST /orders/ship` replays its whole answer by key, failed entries included.
+  const bulkKeys = new Map<string, { input: string; body: { results: BulkShipResult[] } }>();
   const failingLabels = new Set<string>();
   let courierAccount = true;
 
@@ -335,6 +339,28 @@ export function createOrdersStore(now: () => number) {
         orders.set(id, shipped);
         return { ok: true, body: view(shipped) };
       });
+    },
+
+    /** `POST /orders/ship` (erp-api `orders.controller.ts:63`): each entry as shipping it alone, one result each. */
+    shipMany(body: ShipManyBody, key: string | null): Answer<{ results: BulkShipResult[] }> {
+      if (body.orders.length < 1 || body.orders.length > 25) return invalid("orders", "must hold 1 to 25 orders");
+      if (new Set(body.orders.map((entry) => entry.order_id)).size !== body.orders.length) return invalid("orders", "an order is listed twice");
+      const input = JSON.stringify(body);
+      const seen = key ? bulkKeys.get(key) : undefined;
+      if (seen) {
+        return seen.input === input
+          ? { ok: true, body: seen.body }
+          : { ok: false, status: 409, code: "idempotency_key_reused", detail: "Idempotency key reused with a different request" };
+      }
+      const results = body.orders.map(({ order_id, ...options }): BulkShipResult => {
+        const answer = this.ship(order_id, options, null);
+        if (answer.ok) return { order_id, result: "shipped", order: answer.body };
+        const detail = answer.status === 400 ? answer.errors.map((e) => e.message).join("; ") : answer.detail;
+        return { order_id, result: "failed", error: { status: answer.status, code: answer.status === 400 ? null : (answer.code ?? null), detail } };
+      });
+      const answer = { results };
+      if (key) bulkKeys.set(key, { input, body: answer });
+      return { ok: true, body: answer };
     },
 
     paidByHand(id: string, body: PaidByHandBody, key: string | null): Answer<Order> {

@@ -280,6 +280,13 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
+    http.post("/orders/ship", async ({ request, response }) => {
+      const caller = staffWith(request, "order.ship");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().orders.shipMany(await request.json(), request.headers.get("idempotency-key"));
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
     http.post("/orders/{id}/ship", async ({ request, params, response }) => {
       const caller = staffWith(request, "order.ship");
       if (caller instanceof Response) return response.untyped(caller);
