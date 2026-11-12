@@ -111,6 +111,17 @@ test("order page, quality tab: accessible and fits the screen", async ({ page })
   await expectAccessibleAndFits(page);
 });
 
+test("order page, history tab: accessible and fits the screen", async ({ page }) => {
+  await openOrder(page);
+  await page.getByRole("tab", { name: "History" }).click();
+  await expect(page.getByText("Failed at Final QC: Porosity")).toBeVisible();
+  await page.getByRole("button", { name: /^\d+ pieces$/ }).first().click();
+  await expect(page.getByRole("list", { name: "Pieces in this move" })).toBeVisible();
+  // The click scrolled the tabs under the sticky top bar, which axe counts as targets too close together.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expectAccessibleAndFits(page);
+});
+
 test("move bar and dialog: accessible and fit the screen", async ({ page }) => {
   await openOrder(page);
   await page.getByRole("checkbox", { name: "Select 1/12" }).click();
