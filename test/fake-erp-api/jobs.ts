@@ -42,7 +42,7 @@ const WAITING_FOR_PAYMENT = "The order is waiting for payment";
 export function createJobsStore(now: () => number, orders: OrdersStore) {
   const keys = new Map<string, { input: string; body: JobAssignment }>();
   const stamp = (ms = now()) => new Date(ms).toISOString();
-  const refuse = (detail: string): Answer<never> => ({ ok: false, status: 409, detail });
+  const refuse = (detail: string, code?: string): Answer<never> => ({ ok: false, status: 409, detail, ...(code ? { code } : {}) });
   const notFound: Answer<never> = { ok: false, status: 404, detail: "Group not found" };
   const live = (partner: LinePartner) => partner.status === "accepted" || !partner.expires_at || Date.parse(partner.expires_at) > now();
   const eligibleOne = (id: string) => ELIGIBLE.find((row) => row.partner.id === id);
@@ -50,7 +50,7 @@ export function createJobsStore(now: () => number, orders: OrdersStore) {
   function once(key: string | null, input: unknown, run: () => Answer<JobAssignment>): Answer<JobAssignment> {
     const serialised = JSON.stringify(input);
     const seen = key ? keys.get(key) : undefined;
-    if (seen) return seen.input === serialised ? { ok: true, body: seen.body } : refuse("Idempotency key reused with a different request");
+    if (seen) return seen.input === serialised ? { ok: true, body: seen.body } : refuse("Idempotency key reused with a different request", "idempotency_key_reused");
     const answer = run();
     if (answer.ok && key) keys.set(key, { input: serialised, body: answer.body });
     return answer;
