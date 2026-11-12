@@ -14,6 +14,9 @@ export type MeResponse = JsonOk<"/me", "get">;
 /** `GET /partner-portal/me`: a partner person and the partners they act for. */
 export type PartnerMeResponse = JsonOk<"/partner-portal/me", "get">;
 
+/** A partner's standing: setting up, approved or suspended. */
+export type PartnerStatus = PartnerMeResponse["partners"][number]["status"];
+
 /** A staff permission, as `/me` lists them. */
 export type Permission = MeResponse["permissions"][number];
 
@@ -101,6 +104,15 @@ export type OfferBody = JsonBody<"/partners/jobs/{groupId}/offer", "post">;
 
 /** `POST /partners/jobs/{groupId}/reassign`: who takes the job, and what the last partner is owed. */
 export type ReassignBody = JsonBody<"/partners/jobs/{groupId}/reassign", "post">;
+
+/** One job as the partner sees it, from `GET /partner-portal/partners/{partnerId}/jobs`. */
+export type PartnerJob = JsonOk<"/partner-portal/partners/{partnerId}/jobs", "get">["data"][number];
+
+/** Whether a job is offered, accepted or finished. */
+export type PartnerJobStatus = PartnerJob["status"];
+
+/** One job with its pieces, from `GET /partner-portal/partners/{partnerId}/jobs/{groupId}`. */
+export type PartnerJobDetail = JsonOk<"/partner-portal/partners/{partnerId}/jobs/{groupId}", "get">;
 
 /** One comment as staff read it, from `GET /orders/{id}/comments`. */
 export type OrderComment = JsonOk<"/orders/{id}/comments", "get">["data"][number];
