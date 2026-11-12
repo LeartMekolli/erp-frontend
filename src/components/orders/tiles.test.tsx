@@ -71,10 +71,59 @@ describe("Tiles", () => {
     expect(await screen.findByText("First was due 1 day ago")).toBeInTheDocument();
   });
 
-  it("Awaiting payment counts orders and those overdue", async () => {
+  it("Awaiting payment counts orders and those overdue in its foot", async () => {
     renderTiles();
     const tile = await screen.findByRole("button", { name: /^Awaiting payment/ });
-    expect(await within(tile).findByText("1 overdue")).toBeInTheDocument();
+    expect(await within(tile).findByText("3 orders, 1 overdue")).toBeInTheDocument();
+  });
+
+  /** The counts answer, with `amounts` still to collect on 3 orders. */
+  function collecting(amounts: OrderCounts["to_collect_amounts"]) {
+    const counts: OrderCounts = {
+      all: 5,
+      states: { awaiting_payment: 3, in_production: 1, ready: 1, shipped: 0, delivered: 0, cancelled: 0 },
+      needs_you: { total: 4, late: 0, to_ship: 1, to_collect: 3, due_soon: 0 },
+      to_collect_amounts: amounts,
+    };
+    server.use(http.get(`${FAKE_API_URL}/orders/counts`, () => HttpResponse.json(counts)));
+  }
+
+  it("shows the amount to collect", async () => {
+    collecting([{ currency: "EUR", amount: "2916.40" }]);
+    renderTiles();
+    const tile = await screen.findByRole("button", { name: /^Awaiting payment/ });
+    expect(await within(tile).findByText("€2,916.40")).toBeInTheDocument();
+    expect(within(tile).queryByText("orders", { exact: true })).not.toBeInTheDocument();
+    expect(await within(tile).findByText(/^3 orders/)).toBeInTheDocument();
+  });
+
+  it("puts other currencies in the foot", async () => {
+    collecting([
+      { currency: "EUR", amount: "2916.40" },
+      { currency: "USD", amount: "120.00" },
+    ]);
+    renderTiles();
+    const tile = await screen.findByRole("button", { name: /^Awaiting payment/ });
+    expect(await within(tile).findByText("€2,916.40")).toBeInTheDocument();
+    // AMI's money formatter names the dollar "US$" (`src/lib/format/money.ts`).
+    expect(await within(tile).findByText(/^\+ US\$120\.00 · 3 orders/)).toBeInTheDocument();
+  });
+
+  it("leads with the workspace's currency", async () => {
+    collecting([
+      { currency: "CHF", amount: "50.00" },
+      { currency: "EUR", amount: "2916.40" },
+    ]);
+    renderTiles();
+    const tile = await screen.findByRole("button", { name: /^Awaiting payment/ });
+    expect(await within(tile).findByText("€2,916.40")).toBeInTheDocument();
+    expect(await within(tile).findByText(/^\+ CHF\s50\.00 · 3 orders/)).toBeInTheDocument();
+  });
+
+  it("falls back to the count with no amounts", async () => {
+    collecting([]);
+    renderTiles();
+    const tile = await screen.findByRole("button", { name: /^Awaiting payment/ });
     expect(tile).toHaveTextContent(/Awaiting payment\s*3\s*orders/);
   });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { IDEMPOTENCY_HEADER, idempotent, newIdempotencyKey } from "./idempotency";
+import { idempotencyHeader, newIdempotencyKey } from "./idempotency";
 
 describe("idempotency keys", () => {
   it("makes keys erp-api accepts, a new one each time", () => {
@@ -10,8 +10,7 @@ describe("idempotency keys", () => {
     expect(newIdempotencyKey()).not.toBe(key);
   });
 
-  it("puts the key in the header openapi-fetch sends", () => {
-    expect(IDEMPOTENCY_HEADER).toBe("Idempotency-Key");
-    expect(idempotent("k1")).toEqual({ headers: { "Idempotency-Key": "k1" } });
+  it("puts the key in the typed header parameter erp-api declares", () => {
+    expect(idempotencyHeader("k1")).toEqual({ "Idempotency-Key": "k1" });
   });
 });

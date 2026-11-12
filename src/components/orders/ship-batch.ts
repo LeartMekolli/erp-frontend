@@ -1,65 +1,87 @@
 import { UNKNOWN, noAnswer } from "@/components/auth/copy";
 import { api } from "@/lib/api/client";
-import { idempotent, newIdempotencyKey } from "@/lib/api/idempotency";
+import { idempotencyHeader, newIdempotencyKey } from "@/lib/api/idempotency";
 import { problemFrom } from "@/lib/api/problem";
 import type { ShipBody } from "@/lib/api/schema-types";
+import { STILL_WORKING } from "@/lib/query/use-api-mutation";
 import { OfflineError } from "@/lib/session/client-session";
 
-export type BatchResult =
-  | { id: string; number: number; ok: true; labelUrl: string | null }
-  | { id: string; number: number; ok: false; message: string };
+import { shipRefusal } from "./ship-refusal";
 
-interface BatchOrder {
+/** The most orders one `POST /orders/ship` takes (erp-api `orders.service.ts:227`). */
+export const SHIP_PER_REQUEST = 25;
+
+export interface BatchOrder {
   id: string;
   number: number;
 }
 
-/**
- * Ships several orders, one `POST /orders/{id}/ship` each since erp-api has
- * no bulk route (`backend-todos.md`), `concurrency` at a time. Each order's
- * `Idempotency-Key` is kept in `keys`, so a retry of a failed order replays
- * rather than ships twice. Once `signal` aborts no new request starts; those
- * in flight finish. Results come back in the orders' order.
- */
-export async function shipBatch(
-  orders: readonly BatchOrder[],
-  body: ShipBody,
-  options: { concurrency: number; keys: Map<string, string>; signal: AbortSignal; onResult: (result: BatchResult) => void },
-): Promise<BatchResult[]> {
-  const { concurrency, keys, signal, onResult } = options;
-  const results: (BatchResult | undefined)[] = [];
-  let next = 0;
-
-  async function worker() {
-    while (!signal.aborted && next < orders.length) {
-      const index = next++;
-      const order = orders[index]!;
-      let key = keys.get(order.id);
-      if (!key) {
-        key = newIdempotencyKey();
-        keys.set(order.id, key);
-      }
-      const result = await shipOne(order, body, key);
-      results[index] = result;
-      onResult(result);
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(concurrency, orders.length) }, worker));
-  return results.filter((result) => result !== undefined);
+/** One request's orders and its `Idempotency-Key`. */
+export interface Chunk {
+  orders: readonly BatchOrder[];
+  key: string;
 }
 
-async function shipOne({ id, number }: BatchOrder, body: ShipBody, key: string): Promise<BatchResult> {
+export type BatchResult =
+  | { id: string; number: number; ok: true; labelUrl: string | null }
+  | { id: string; number: number; ok: false; message: string; stale: boolean };
+
+/**
+ * What one request came to. Answered: a result for each of its orders.
+ * Unanswered: it may or may not have shipped them, so it goes again as the
+ * same request with the same key, and erp-api replays it if it did.
+ */
+export type ChunkOutcome =
+  | { chunk: Chunk; answered: true; results: BatchResult[] }
+  | { chunk: Chunk; answered: false; message: string };
+
+/** Splits orders into requests of at most 25, each with a new key. */
+export function chunksOf(orders: readonly BatchOrder[]): Chunk[] {
+  const chunks: Chunk[] = [];
+  for (let start = 0; start < orders.length; start += SHIP_PER_REQUEST) {
+    chunks.push({ orders: orders.slice(start, start + SHIP_PER_REQUEST), key: newIdempotencyKey() });
+  }
+  return chunks;
+}
+
+/**
+ * Ships the chunks one request at a time (erp-api ships 5 of each at once),
+ * with the same options for every order. Once `signal` aborts no new request
+ * starts; the one in flight finishes.
+ */
+export async function shipChunks(
+  chunks: readonly Chunk[],
+  body: ShipBody,
+  options: { signal: AbortSignal; onChunk: (outcome: ChunkOutcome) => void },
+): Promise<void> {
+  for (const chunk of chunks) {
+    if (options.signal.aborted) return;
+    options.onChunk(await shipChunk(chunk, body));
+  }
+}
+
+async function shipChunk(chunk: Chunk, body: ShipBody): Promise<ChunkOutcome> {
   try {
-    const { data, error, response } = await api.POST("/orders/{id}/ship", {
-      params: { path: { id } },
-      body,
-      ...idempotent(key),
+    const { data, error, response } = await api.POST("/orders/ship", {
+      params: { header: idempotencyHeader(chunk.key) },
+      body: { orders: chunk.orders.map(({ id }) => ({ order_id: id, ...body })) },
     });
-    if (data) return { id, number, ok: true, labelUrl: data.shipping.label?.url ?? null };
+    if (data) {
+      const numbers = new Map(chunk.orders.map((order) => [order.id, order.number]));
+      const results = data.results.map((result): BatchResult => {
+        const number = numbers.get(result.order_id) ?? 0;
+        if (result.result === "shipped") return { id: result.order_id, number, ok: true, labelUrl: result.order.shipping.label?.url ?? null };
+        return { id: result.order_id, number, ok: false, ...shipRefusal(result.error, number) };
+      });
+      return { chunk, answered: true, results };
+    }
     const problem = problemFrom(error, response);
-    return { id, number, ok: false, message: problem.detail || problem.title || UNKNOWN };
+    if (problem.code === "idempotency_in_progress") return { chunk, answered: false, message: STILL_WORKING };
+    if (problem.status >= 500) return { chunk, answered: false, message: problem.detail || UNKNOWN };
+    // Refused as a whole, so nothing shipped: each order can go again in a new request.
+    const message = problem.detail || problem.title || UNKNOWN;
+    return { chunk, answered: true, results: chunk.orders.map(({ id, number }) => ({ id, number, ok: false, message, stale: false })) };
   } catch (error) {
-    return { id, number, ok: false, message: error instanceof OfflineError ? noAnswer() : UNKNOWN };
+    return { chunk, answered: false, message: error instanceof OfflineError ? noAnswer() : UNKNOWN };
   }
 }

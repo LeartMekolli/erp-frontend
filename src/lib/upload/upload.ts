@@ -1,5 +1,5 @@
 import { api, createApiClient, partnerApi } from "@/lib/api/client";
-import { idempotent, newIdempotencyKey } from "@/lib/api/idempotency";
+import { idempotencyHeader, newIdempotencyKey } from "@/lib/api/idempotency";
 import { isApiProblem, type ApiProblem } from "@/lib/api/problem";
 import type { PartnerPaths, paths } from "@/lib/api/schema-types";
 import type { JobState } from "@/lib/query/use-polled-job";
@@ -31,11 +31,9 @@ export const PHOTO_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"] as 
 
 /**
  * A file version's statuses (erp-api `files.service.ts:301-386`,
- * `measure.handler.ts:66-122`). Kept by hand: the API types them as plain
- * strings (`backend-todos.md`, "File and version status are untyped strings").
+ * `measure.handler.ts:66-122`). A status erp-api adds fails the typecheck below.
  */
-export const VERSION_STATUSES = ["pending", "completing", "uploaded", "measuring", "measured", "failed"] as const;
-type VersionStatus = (typeof VERSION_STATUSES)[number];
+type VersionStatus = FileResponse["versions"][number]["status"];
 
 const VERSION_STATE: Record<VersionStatus, JobState> = {
   pending: "working",
@@ -135,9 +133,8 @@ export async function startUpload(clients: UploadClients, target: UploadTarget, 
     if (!(PHOTO_CONTENT_TYPES as readonly string[]).includes(file.type))
       throw new UploadRefusedError("Choose a JPEG, PNG or WebP photo.");
     const { data, error, response } = await clients.partnerApi.POST("/partner-portal/partners/{partnerId}/files", {
-      params: { path: { partnerId: target.partnerId } },
+      params: { path: { partnerId: target.partnerId }, header: idempotencyHeader(key) },
       body: declared,
-      ...idempotent(key),
     });
     if (!data) throw startFailure(error, response);
     return { fileId: data.file.id, versionId: data.version.id, upload: data.upload };
@@ -150,7 +147,7 @@ export async function startUpload(clients: UploadClients, target: UploadTarget, 
       ...(target.declaredUnit && { declared_unit: target.declaredUnit }),
       ...(target.customerId && { customer_id: target.customerId }),
     },
-    ...idempotent(key),
+    params: { header: idempotencyHeader(key) },
   });
   if (!data) throw startFailure(error, response);
   return { fileId: data.file.id, versionId: data.version.id, upload: data.upload };

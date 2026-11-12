@@ -8,93 +8,123 @@ import { fakeState } from "../../../test/fake-erp-api/state";
 import { server } from "../../../test/msw";
 import { signInAs } from "../../../test/render";
 
-import { shipBatch, type BatchResult } from "./ship-batch";
+import { chunksOf, SHIP_PER_REQUEST, shipChunks, type ChunkOutcome } from "./ship-batch";
 
 const order = (number: number): Order => fakeState().orders.all().find((o) => o.number === number)!;
 const pick = (...numbers: number[]) => numbers.map((number) => ({ id: order(number).id, number }));
 
-/** Each ship request as it starts: the order's id and its Idempotency-Key. */
-let requests: { id: string; key: string | null }[] = [];
+/** Each bulk ship request as it starts: its order ids and its Idempotency-Key. */
+let requests: { ids: string[]; key: string | null }[] = [];
 beforeEach(() => {
   signInAs(STAFF);
   requests = [];
   server.events.on("request:start", ({ request }) => {
-    const match = /\/orders\/([^/]+)\/ship$/.exec(new URL(request.url).pathname);
-    if (match) requests.push({ id: match[1]!, key: request.headers.get("idempotency-key") });
+    if (!new URL(request.url).pathname.endsWith("/orders/ship")) return;
+    const key = request.headers.get("idempotency-key");
+    void request
+      .clone()
+      .json()
+      .then((body: { orders: { order_id: string }[] }) => requests.push({ ids: body.orders.map((entry) => entry.order_id), key }));
   });
 });
 afterEach(() => server.events.removeAllListeners());
 
-/** Ships every order after a short wait, counting how many are in flight at once. */
-function serveSlowly() {
-  const seen = { inFlight: 0, most: 0 };
+/** Ships every order it's sent, with no label. */
+function serveAll() {
   server.use(
-    http.post(`${FAKE_API_URL}/orders/:id/ship`, async () => {
-      seen.inFlight += 1;
-      seen.most = Math.max(seen.most, seen.inFlight);
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      seen.inFlight -= 1;
-      return HttpResponse.json({ shipping: { label: null } });
+    http.post(`${FAKE_API_URL}/orders/ship`, async ({ request }) => {
+      const body = (await request.json()) as { orders: { order_id: string }[] };
+      return HttpResponse.json({
+        results: body.orders.map((entry) => ({ order_id: entry.order_id, result: "shipped", order: { shipping: { label: null } } })),
+      });
     }),
   );
-  return seen;
 }
 
 const fakeOrders = (count: number) => Array.from({ length: count }, (_, i) => ({ id: `order-${i}`, number: 2000 + i }));
 
-describe("shipBatch", () => {
-  it("runs at most 3 at once", async () => {
-    const seen = serveSlowly();
-    const reported: BatchResult[] = [];
-    const results = await shipBatch(fakeOrders(7), {}, {
-      concurrency: 3,
-      keys: new Map(),
-      signal: new AbortController().signal,
-      onResult: (result) => reported.push(result),
-    });
+async function ship(chunks: ReturnType<typeof chunksOf>, body = {}, signal = new AbortController().signal) {
+  const outcomes: ChunkOutcome[] = [];
+  await shipChunks(chunks, body, { signal, onChunk: (outcome) => outcomes.push(outcome) });
+  return outcomes;
+}
 
-    expect(seen.most).toBe(3);
-    expect(results).toHaveLength(7);
-    expect(results.every((r) => r.ok)).toBe(true);
-    expect(reported).toHaveLength(7);
-    // One key per order.
-    expect(new Set(requests.map((r) => r.key)).size).toBe(7);
+describe("chunksOf", () => {
+  it("splits orders into requests of at most 25, each with its own key", () => {
+    const chunks = chunksOf(fakeOrders(30));
+    expect(SHIP_PER_REQUEST).toBe(25);
+    expect(chunks.map((chunk) => chunk.orders.length)).toEqual([25, 5]);
+    expect(chunks[0]!.key).not.toBe(chunks[1]!.key);
+  });
+});
+
+describe("shipChunks", () => {
+  it("ships 30 orders in two requests", async () => {
+    serveAll();
+    const outcomes = await ship(chunksOf(fakeOrders(30)));
+
+    await expect.poll(() => requests.length).toBe(2);
+    expect(requests.map((r) => r.ids.length)).toEqual([25, 5]);
+    expect(outcomes.map((o) => o.answered && o.results.length)).toEqual([25, 5]);
+    expect(outcomes.every((o) => o.answered && o.results.every((r) => r.ok))).toBe(true);
   });
 
-  it("retries only failed orders with their first keys", async () => {
-    const failing = order(1043).id;
-    fakeState().orders.failNextLabel(failing);
-    const keys = new Map<string, string>();
-    const options = { concurrency: 3, keys, signal: new AbortController().signal, onResult: () => {} };
+  it("maps failed entries through shipRefusal", async () => {
+    const outcomes = await ship(chunksOf(pick(1042, 1051)));
 
-    const first = await shipBatch(pick(1042, 1043, 1044), { label: {} }, options);
-    const failed = first.filter((r) => !r.ok);
-    expect(failed).toEqual([
-      { id: failing, number: 1043, ok: false, message: "The courier service refused the label: address incomplete" },
+    expect(outcomes).toHaveLength(1);
+    const outcome = outcomes[0]!;
+    expect(outcome.answered).toBe(true);
+    if (!outcome.answered) return;
+    expect(outcome.results).toEqual([
+      { id: order(1042).id, number: 1042, ok: true, labelUrl: null },
+      { id: order(1051).id, number: 1051, ok: false, message: "#1051 is already shipped.", stale: true },
     ]);
-    expect(first.find((r) => r.number === 1042)).toMatchObject({ ok: true, labelUrl: "https://labels.example.test/1042.pdf" });
-    const firstKey = requests.find((r) => r.id === failing)!.key;
-
-    requests = [];
-    const second = await shipBatch(failed, { label: {} }, options);
-    expect(second).toEqual([{ id: failing, number: 1043, ok: true, labelUrl: "https://labels.example.test/1043.pdf" }]);
-    expect(requests).toEqual([{ id: failing, key: firstKey }]);
-    expect(order(1043).state).toBe("shipped");
   });
 
-  it("stops starting new requests when aborted", async () => {
-    serveSlowly();
+  it("gives each bought label's link", async () => {
+    const outcomes = await ship(chunksOf(pick(1042)), { label: {} });
+    expect(outcomes[0]).toMatchObject({ answered: true, results: [{ ok: true, labelUrl: "https://labels.example.test/1042.pdf" }] });
+  });
+
+  it("reports a request with no answer", async () => {
+    server.use(http.post(`${FAKE_API_URL}/orders/ship`, () => HttpResponse.error(), { once: true }));
+    const chunks = chunksOf(pick(1042, 1044));
+    const outcomes = await ship(chunks);
+
+    expect(outcomes).toEqual([{ chunk: chunks[0], answered: false, message: expect.any(String) as string }]);
+    expect(order(1042).state).toBe("ready");
+  });
+
+  it("treats a request still in progress as unanswered", async () => {
+    server.use(
+      http.post(
+        `${FAKE_API_URL}/orders/ship`,
+        () =>
+          HttpResponse.json(
+            { type: "about:blank", title: "Conflict", status: 409, code: "idempotency_in_progress", detail: "A request with this key is in progress" },
+            { status: 409, headers: { "content-type": "application/problem+json" } },
+          ),
+        { once: true },
+      ),
+    );
+    const outcomes = await ship(chunksOf(pick(1042)));
+    expect(outcomes).toEqual([expect.objectContaining({ answered: false, message: "Still working on it. Try again in a moment." })]);
+  });
+
+  it("stops after the request in flight when aborted", async () => {
+    serveAll();
     const controller = new AbortController();
-    const results = await shipBatch(fakeOrders(7), {}, {
-      concurrency: 3,
-      keys: new Map(),
+    const outcomes: ChunkOutcome[] = [];
+    await shipChunks(chunksOf(fakeOrders(60)), {}, {
       signal: controller.signal,
-      onResult: () => controller.abort(),
+      onChunk: (outcome) => {
+        outcomes.push(outcome);
+        controller.abort();
+      },
     });
 
-    // The three in flight finish; nothing new starts.
-    expect(requests).toHaveLength(3);
-    expect(results).toHaveLength(3);
-    expect(results.every((r) => r.ok)).toBe(true);
+    expect(outcomes).toHaveLength(1);
+    await expect.poll(() => requests.length).toBe(1);
   });
 });

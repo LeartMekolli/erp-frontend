@@ -1,19 +1,13 @@
 import type { FieldValues, Path, UseFormSetError } from "react-hook-form";
 
+import type { components } from "./schema";
+
 /**
- * erp-api's error body (`application/problem+json`, RFC 9457), matching
- * `ApiError` in erp-api `src/common/errors/api-error.ts`. Kept by hand because
- * the generated `Problem` schema lacks `code` (see `backend-todos.md`).
- * Branch on `type` and `code`, never on message text.
+ * erp-api's error body (`application/problem+json`, RFC 9457), `ApiError` in
+ * erp-api `src/common/errors/api-error.ts`. Branch on `type` and `code`,
+ * never on message text.
  */
-export interface ApiProblem {
-  type: string;
-  title: string;
-  status: number;
-  detail?: string;
-  errors?: { path: string; message: string }[];
-  code?: string;
-}
+export type ApiProblem = components["schemas"]["Problem"];
 
 export function isApiProblem(value: unknown): value is ApiProblem {
   if (typeof value !== "object" || value === null) return false;

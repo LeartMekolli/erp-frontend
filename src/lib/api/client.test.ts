@@ -6,7 +6,7 @@ import { fakeState } from "../../../test/fake-erp-api/state";
 import { server } from "../../../test/msw";
 
 import { createApiClient } from "./client";
-import { idempotent } from "./idempotency";
+import { idempotencyHeader } from "./idempotency";
 import type { PartnerPaths } from "./schema-types";
 
 let authHeaders: (string | null)[] = [];
@@ -74,7 +74,7 @@ describe("api client", () => {
       { getAccessToken: async (options) => (options?.force ? "fresh" : "stale") },
       FAKE_API_URL,
     );
-    const { response } = await api.POST("/roles", { body: { name: "Packers", permissions: [] }, ...idempotent("k1") });
+    const { response } = await api.POST("/roles", { body: { name: "Packers", permissions: [] }, params: { header: idempotencyHeader("k1") } });
     expect(response.status).toBe(201);
     expect(keys).toEqual(["k1", "k1"]);
   });

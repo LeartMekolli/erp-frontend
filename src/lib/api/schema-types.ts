@@ -51,6 +51,12 @@ export type OrderCountsQuery = NonNullable<paths["/orders/counts"]["get"]["param
 /** `POST /orders/{id}/ship`: courier and tracking, or a label to buy. */
 export type ShipBody = JsonBody<"/orders/{id}/ship", "post">;
 
+/** `POST /orders/ship`: up to 25 orders, each with what shipping it alone takes. */
+export type ShipManyBody = JsonBody<"/orders/ship", "post">;
+
+/** One order's result from `POST /orders/ship`: the order, or what shipping it alone would have refused. */
+export type BulkShipResult = JsonOk<"/orders/ship", "post">["results"][number];
+
 /** `POST /orders/{id}/paid-by-hand`: a payment made outside the payment provider. */
 export type PaidByHandBody = JsonBody<"/orders/{id}/paid-by-hand", "post">;
 

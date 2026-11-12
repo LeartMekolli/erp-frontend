@@ -224,7 +224,7 @@ export function createFakeState(now: () => number = Date.now) {
       return {
         kind: user.kind,
         user: { id: user.id, email: user.email, name: user.name, status: "active", locale: "en", created_at: "2026-01-05T09:00:00.000Z" },
-        workspace: WORKSPACE_INFO,
+        workspace: { ...WORKSPACE_INFO, labels_available: orders.labelsAvailable() },
         roles: user.permissions.length ? [{ id: "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a80", name: "Owner" }] : [],
         permissions: user.permissions,
         memberships:

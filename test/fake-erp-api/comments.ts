@@ -2,10 +2,11 @@
  * The fake erp-api's order comments and claims. It keeps the rules the order
  * page depends on (erp-api `src/modules/orders/comments.service.ts`): comments
  * oldest first, staff only unless `visibility` says otherwise, a comment for
- * the partner needs a line, and a line must be on the order.
+ * the partner needs a line a partner has accepted and names that partner, and
+ * a line must be on the order.
  */
 
-import type { Claim, OrderComment, StaffCommentBody } from "../../src/lib/api/schema-types";
+import type { Claim, OrderComment, OrderLine, OrderPart, StaffCommentBody } from "../../src/lib/api/schema-types";
 
 import type { Answer, OrdersStore, Page } from "./orders";
 import { uuid } from "./orders-seed";
@@ -15,6 +16,11 @@ const COMMENT_MAX_LENGTH = 5000;
 const FILE_VERSION = uuid("d0d0d0d0", 1);
 
 const invalid = (path: string, message: string): Answer<never> => ({ ok: false, status: 400, errors: [{ path, message }] });
+
+/** The partner that has accepted a line: the one a comment for the partner is to (erp-api `holder`). */
+function holder(line: OrderLine | OrderPart): OrderComment["partner"] {
+  return line.partner?.status === "accepted" ? { id: line.partner.id, name: line.partner.name } : null;
+}
 
 function paged<T>(all: T[], params: URLSearchParams): Answer<Page<T>> {
   const limit = Number(params.get("limit") ?? 50);
@@ -36,6 +42,7 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
           line_id: null,
           author: { kind: "customer", id: uuid("d2d2d2d2", 1), name: "Rina Holt" },
           visibility: "customer",
+          partner: null,
           body: "Could the polish stay matte?",
           attachments: [{ file_version_id: FILE_VERSION, name: "polish-sample.pdf" }],
           created_at: stamp(5),
@@ -45,6 +52,7 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
           line_id: order1048.lines[0]!.id,
           author: { kind: "staff", id: uuid("55555555", 1), name: "Ana Ruiz" },
           visibility: "partner",
+          partner: holder(order1048.lines[0]!),
           body: "Matte polish on these, please.",
           attachments: [],
           created_at: stamp(2),
@@ -84,18 +92,23 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
       if (text.length < 1 || text.length > COMMENT_MAX_LENGTH) return invalid("body", `must be 1 to ${COMMENT_MAX_LENGTH} characters`);
       const visibility = body.visibility ?? "staff";
       if (visibility === "partner" && !body.line_id) return invalid("visibility", "A comment for the partner needs a line");
-      const lineIds = found.body.lines.flatMap((line) => [line.id, ...line.parts.map((part) => part.id)]);
-      if (body.line_id && !lineIds.includes(body.line_id)) return invalid("line_id", "not a line of this order");
+      const line = found.body.lines.flatMap((orderLine) => [orderLine, ...orderLine.parts]).find((candidate) => candidate.id === body.line_id);
+      if (body.line_id && !line) return invalid("line_id", "not a line of this order");
+      const partner = visibility === "partner" && line ? holder(line) : null;
+      if (visibility === "partner" && !partner) {
+        return { ok: false, status: 409, code: "line_not_accepted", detail: "No partner has accepted this line yet" };
+      }
 
       const input = JSON.stringify({ orderId, body });
       const seen = key ? keys.get(key) : undefined;
-      if (seen) return seen.input === input ? { ok: true, body: seen.body } : { ok: false, status: 409, detail: "Idempotency key reused with a different request" };
+      if (seen) return seen.input === input ? { ok: true, body: seen.body } : { ok: false, status: 409, code: "idempotency_key_reused", detail: "Idempotency key reused with a different request" };
 
       const comment: OrderComment = {
         id: crypto.randomUUID(),
         line_id: body.line_id ?? null,
         author: { kind: "staff", id: author.id, name: author.name },
         visibility,
+        partner,
         body: text,
         attachments: [],
         created_at: stamp(),

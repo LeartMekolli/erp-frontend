@@ -10,11 +10,12 @@ import { z } from "zod";
 import { UNKNOWN, noAnswer } from "@/components/auth/copy";
 import { Field } from "@/components/auth/field";
 import { FormMessage } from "@/components/auth/form-message";
+import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api/client";
-import { idempotent } from "@/lib/api/idempotency";
+import { idempotencyHeader } from "@/lib/api/idempotency";
 import { applyFieldErrors, isApiProblem, problemFrom } from "@/lib/api/problem";
 import type { Order, ShipBody } from "@/lib/api/schema-types";
 import { invalidateOrders } from "@/lib/orders/queries";
@@ -22,6 +23,7 @@ import { useApiMutation } from "@/lib/query/use-api-mutation";
 import { OfflineError } from "@/lib/session/client-session";
 
 import { ShipChoice } from "./ship-choice";
+import { shipRefusal } from "./ship-refusal";
 
 // erp-api's rules (`orders.service.ts:199-203`); both optional.
 const schema = z.object({
@@ -78,7 +80,11 @@ export function ShipDialog({
 
 function ShipForm({ order, onClose, onShipped }: { order: Order; onClose: () => void; onShipped: (message: string) => void }) {
   const client = useQueryClient();
-  const [choice, setChoice] = useState<Choice>("tracking");
+  const { data: me } = useMe();
+  // A label needs the workspace's courier service (`/me`); until that's known, only tracking is offered.
+  const labels = me?.workspace.labels_available ?? false;
+  const [picked, setChoice] = useState<Choice>("tracking");
+  const choice: Choice = labels ? picked : "tracking";
   const [failure, setFailure] = useState<Failure | null>(null);
   const [labelUrl, setLabelUrl] = useState<string | null>(null);
   // The body last sent, so "Try again" sends the same input and so the same key.
@@ -92,9 +98,8 @@ function ShipForm({ order, onClose, onShipped }: { order: Order; onClose: () => 
 
   const ship = useApiMutation<ShipBody, Order>(async (body, key) => {
     const { data, error, response } = await api.POST("/orders/{id}/ship", {
-      params: { path: { id: order.id } },
+      params: { path: { id: order.id }, header: idempotencyHeader(key) },
       body,
-      ...idempotent(key),
     });
     if (!data) throw problemFrom(error, response);
     return data;
@@ -108,8 +113,8 @@ function ShipForm({ order, onClose, onShipped }: { order: Order; onClose: () => 
       shipped = await ship.mutateAsync(body);
     } catch (error) {
       setFailure(failureFrom(error, body));
-      // A 409 means the order moved on, or has no way to buy a label: show it as it is now.
-      if (isApiProblem(error) && error.status === 409) void invalidateOrders(client);
+      // The order moved on since it was shown: show it as it is now.
+      if (isApiProblem(error) && error.status === 409 && shipRefusal(error, order.number).stale) void invalidateOrders(client);
       return;
     }
     void invalidateOrders(client);
@@ -122,9 +127,12 @@ function ShipForm({ order, onClose, onShipped }: { order: Order; onClose: () => 
     if (error instanceof OfflineError) return { message: noAnswer(), offer: null };
     if (!isApiProblem(error)) return { message: UNKNOWN, offer: null };
     if (error.status === 503) return { message: error.detail || UNKNOWN, offer: "retry" };
-    if (body.label && (error.status === 409 || error.status === 400))
-      // The dialog has no fields for a label's parcel, carrier or service, so tracking is the way on.
-      return { message: error.detail || UNKNOWN, offer: "tracking" };
+    if (error.status === 409) {
+      const refusal = shipRefusal(error, order.number);
+      return { message: refusal.message, offer: error.code === "courier_account_missing" ? "tracking" : null };
+    }
+    // The dialog has no fields for a label's parcel, carrier or service, so tracking is the way on.
+    if (body.label && error.status === 400) return { message: error.detail || UNKNOWN, offer: "tracking" };
     if (error.status === 400) return { message: applyFieldErrors(error, setError, FIELDS) ?? "", offer: null };
     return { message: error.detail || UNKNOWN, offer: null };
   };
@@ -199,13 +207,15 @@ function ShipForm({ order, onClose, onShipped }: { order: Order; onClose: () => 
           </div>
         )}
         <fieldset disabled={busy} className="flex flex-col gap-4">
-          <fieldset className="flex flex-col gap-2">
-            <legend className="sr-only">How to ship</legend>
-            <div className="grid grid-cols-2 gap-2">
-              <ShipChoice name="ship-choice" value="tracking" label="Enter tracking" choice={choice} onChoose={setChoice} />
-              <ShipChoice name="ship-choice" value="label" label="Buy a label" choice={choice} onChoose={setChoice} />
-            </div>
-          </fieldset>
+          {labels && (
+            <fieldset className="flex flex-col gap-2">
+              <legend className="sr-only">How to ship</legend>
+              <div className="grid grid-cols-2 gap-2">
+                <ShipChoice name="ship-choice" value="tracking" label="Enter tracking" choice={choice} onChoose={setChoice} />
+                <ShipChoice name="ship-choice" value="label" label="Buy a label" choice={choice} onChoose={setChoice} />
+              </div>
+            </fieldset>
+          )}
           {choice === "tracking" ? (
             <>
               <Field id="ship-courier" label="Courier" error={errors.courier?.message}>

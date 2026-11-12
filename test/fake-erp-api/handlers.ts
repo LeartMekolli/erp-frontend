@@ -18,9 +18,9 @@ const TITLES: Record<number, string> = {
 };
 
 /** erp-api's error body for a Nest exception (`api-error.ts:108-117`). */
-function problem(status: number, detail: string) {
+function problem(status: number, detail: string, code?: string) {
   return HttpResponse.json(
-    { type: "about:blank", title: TITLES[status] ?? "Error", status, detail },
+    { type: "about:blank", title: TITLES[status] ?? "Error", status, detail, ...(code ? { code } : {}) },
     { status, headers: { "content-type": "application/problem+json" } },
   );
 }
@@ -75,7 +75,7 @@ function staffWith(request: Request, permission: Permission): FakeUser | Respons
 
 /** A store's refusal as erp-api would send it. */
 function refusal(answer: Exclude<Answer<unknown>, { ok: true }>): Response {
-  return answer.status === 400 ? validation(answer.errors) : problem(answer.status, answer.detail);
+  return answer.status === 400 ? validation(answer.errors) : problem(answer.status, answer.detail, answer.code);
 }
 
 /** The bucket's CORS rules: browsers may PUT with `content-type` (erp-api `README.md`, "File storage"). */
@@ -280,6 +280,13 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
+    http.post("/orders/ship", async ({ request, response }) => {
+      const caller = staffWith(request, "order.ship");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().orders.shipMany(await request.json(), request.headers.get("idempotency-key"));
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
     http.post("/orders/{id}/ship", async ({ request, params, response }) => {
       const caller = staffWith(request, "order.ship");
       if (caller instanceof Response) return response.untyped(caller);
@@ -422,6 +429,19 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       if (!user) return response.untyped(problem(401, "Unauthorized"));
       const answer = fakeState().notifications.list(user.id, new URL(request.url).searchParams);
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/notifications/unread-count", ({ request, response }) => {
+      const user = fakeState().authenticate(bearer(request));
+      if (!user) return response.untyped(problem(401, "Unauthorized"));
+      return response(200).json({ count: fakeState().notifications.unread(user.id) });
+    }),
+
+    http.post("/notifications/read-all", ({ request, response }) => {
+      const user = fakeState().authenticate(bearer(request));
+      if (!user) return response.untyped(problem(401, "Unauthorized"));
+      fakeState().notifications.readAll(user.id);
+      return response(204).empty();
     }),
 
     http.post("/notifications/{id}/read", ({ request, params, response }) => {

@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
-import { idempotent } from "@/lib/api/idempotency";
+import { idempotencyHeader } from "@/lib/api/idempotency";
 import { problemFrom } from "@/lib/api/problem";
 import type { Order, OrderCountsQuery, OrderListQuery } from "@/lib/api/schema-types";
 import { useApiMutation } from "@/lib/query/use-api-mutation";
@@ -72,7 +72,7 @@ export function useMarkDelivered(id: string) {
   const client = useQueryClient();
   return useApiMutation<void, Order>(
     async (_, key) => {
-      const { data, error, response } = await api.POST("/orders/{id}/deliver", { params: { path: { id } }, ...idempotent(key) });
+      const { data, error, response } = await api.POST("/orders/{id}/deliver", { params: { path: { id }, header: idempotencyHeader(key) } });
       if (!data) throw problemFrom(error, response);
       return data;
     },

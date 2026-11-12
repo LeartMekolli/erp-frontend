@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
-import { idempotent } from "@/lib/api/idempotency";
+import { idempotencyHeader } from "@/lib/api/idempotency";
 import { problemFrom } from "@/lib/api/problem";
 import type { EligiblePartners, JobAssignment, OfferBody, ReassignBody } from "@/lib/api/schema-types";
 import { invalidateOrders } from "@/lib/orders/queries";
@@ -37,7 +37,7 @@ export function useOfferJob() {
   const client = useQueryClient();
   return useApiMutation<{ groupId: string; body: OfferBody }, JobAssignment>(
     async ({ groupId, body }, key) => {
-      const { data, error, response } = await api.POST("/partners/jobs/{groupId}/offer", { params: { path: { groupId } }, body, ...idempotent(key) });
+      const { data, error, response } = await api.POST("/partners/jobs/{groupId}/offer", { params: { path: { groupId }, header: idempotencyHeader(key) }, body });
       if (!data) throw problemFrom(error, response);
       return data;
     },
@@ -50,7 +50,7 @@ export function useWithdrawOffer() {
   const client = useQueryClient();
   return useApiMutation<string, JobAssignment>(
     async (groupId, key) => {
-      const { data, error, response } = await api.POST("/partners/jobs/{groupId}/withdraw", { params: { path: { groupId } }, ...idempotent(key) });
+      const { data, error, response } = await api.POST("/partners/jobs/{groupId}/withdraw", { params: { path: { groupId }, header: idempotencyHeader(key) } });
       if (!data) throw problemFrom(error, response);
       return data;
     },
@@ -63,7 +63,7 @@ export function useReassignJob() {
   const client = useQueryClient();
   return useApiMutation<{ groupId: string; body: ReassignBody }, JobAssignment>(
     async ({ groupId, body }, key) => {
-      const { data, error, response } = await api.POST("/partners/jobs/{groupId}/reassign", { params: { path: { groupId } }, body, ...idempotent(key) });
+      const { data, error, response } = await api.POST("/partners/jobs/{groupId}/reassign", { params: { path: { groupId }, header: idempotencyHeader(key) }, body });
       if (!data) throw problemFrom(error, response);
       return data;
     },

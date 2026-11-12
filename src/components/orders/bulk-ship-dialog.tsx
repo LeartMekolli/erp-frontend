@@ -5,6 +5,7 @@ import { ExternalLink } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { Field } from "@/components/auth/field";
+import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,7 @@ import type { Order, ShipBody } from "@/lib/api/schema-types";
 import { invalidateOrders } from "@/lib/orders/queries";
 
 import { canShip } from "./order-row-menu";
-import { shipBatch, type BatchResult } from "./ship-batch";
+import { chunksOf, shipChunks, type BatchResult, type Chunk } from "./ship-batch";
 import { ShipChoice } from "./ship-choice";
 
 type Choice = "mark" | "label";
@@ -21,10 +22,11 @@ const ordersText = (n: number) => `${n} ${n === 1 ? "order" : "orders"}`;
 
 /**
  * Ships the selected orders that are ready (spec §6.3): marked as shipped
- * with one optional courier for all, or with a label bought for each. Three
- * requests at a time, with progress, then which shipped and which didn't;
- * "Try again" resends only the failed ones, with their first keys. Closing
- * stops new requests, refetches the list, and hands back what shipped.
+ * with one optional courier for all, or with a label bought for each. Any
+ * number, in requests of 25 one after another, with progress, then which
+ * shipped and which didn't. "Try again" resends a request that got no answer
+ * as it was, with its key, and orders refused on their own in a new request.
+ * Closing stops new requests, refetches the list, and hands back what shipped.
  */
 export function BulkShipDialog({
   orders,
@@ -38,7 +40,11 @@ export function BulkShipDialog({
   onShipped: (ids: string[]) => void;
 }) {
   const client = useQueryClient();
-  const [choice, setChoice] = useState<Choice>("mark");
+  const { data: me } = useMe();
+  // Labels need the workspace's courier service (`/me`); until that's known, only marking is offered.
+  const labelsOffered = me?.workspace.labels_available ?? false;
+  const [picked, setChoice] = useState<Choice>("mark");
+  const choice: Choice = labelsOffered ? picked : "mark";
   const [courier, setCourier] = useState("");
   const [phase, setPhase] = useState<"form" | "running" | "done">("form");
   // How many orders the dialog set out to ship: its title from then on.
@@ -46,7 +52,8 @@ export function BulkShipDialog({
   const [progress, setProgress] = useState({ done: 0, of: 0 });
   // The latest result for each order sent.
   const [results, setResults] = useState<ReadonlyMap<string, BatchResult>>(new Map());
-  const keys = useRef(new Map<string, string>());
+  // Requests that got no answer: they go again as they were, with their keys.
+  const unanswered = useRef<Chunk[]>([]);
   const body = useRef<ShipBody>({});
   const controller = useRef<AbortController | null>(null);
 
@@ -57,30 +64,46 @@ export function BulkShipDialog({
   const labels = shipped.flatMap((r) => (r.ok && r.labelUrl ? [{ id: r.id, number: r.number, url: r.labelUrl }] : []));
   const failed = outcomes.flatMap((r) => (r.ok ? [] : [r]));
 
-  async function run(list: readonly { id: string; number: number }[]) {
+  async function run(chunks: readonly Chunk[]) {
     const abort = new AbortController();
     controller.current = abort;
+    unanswered.current = [];
+    let stale = false;
     setPhase("running");
-    setProgress({ done: 0, of: list.length });
-    await shipBatch(list, body.current, {
-      concurrency: 3,
-      keys: keys.current,
+    setProgress({ done: 0, of: chunks.reduce((sum, chunk) => sum + chunk.orders.length, 0) });
+    await shipChunks(chunks, body.current, {
       signal: abort.signal,
-      onResult: (result) => {
-        setResults((current) => new Map(current).set(result.id, result));
-        setProgress((current) => ({ ...current, done: current.done + 1 }));
+      onChunk: (outcome) => {
+        const settled: BatchResult[] = outcome.answered
+          ? outcome.results
+          : outcome.chunk.orders.map(({ id, number }) => ({ id, number, ok: false, message: outcome.message, stale: false }));
+        if (!outcome.answered) unanswered.current.push(outcome.chunk);
+        if (settled.some((r) => !r.ok && r.stale)) stale = true;
+        setResults((current) => {
+          const next = new Map(current);
+          for (const result of settled) next.set(result.id, result);
+          return next;
+        });
+        setProgress((current) => ({ ...current, done: current.done + outcome.chunk.orders.length }));
       },
     });
-    // Closed mid-way: those in flight have now finished, so show the list as it is.
-    if (abort.signal.aborted) void invalidateOrders(client);
-    else setPhase("done");
+    // Closed mid-way, or an order had moved on: show the list as it is now.
+    if (abort.signal.aborted || stale) void invalidateOrders(client);
+    if (!abort.signal.aborted) setPhase("done");
   }
 
   function start() {
     const name = courier.trim();
     body.current = choice === "label" ? { label: {} } : name ? { courier: name } : {};
     setSent(ready.length);
-    void run(ready.map(({ id, number }) => ({ id, number })));
+    void run(chunksOf(ready.map(({ id, number }) => ({ id, number }))));
+  }
+
+  /** Unanswered requests again with their keys; orders refused on their own in new requests. */
+  function retry() {
+    const pending = new Set(unanswered.current.flatMap((chunk) => chunk.orders.map((order) => order.id)));
+    const refused = failed.filter((r) => !pending.has(r.id)).map(({ id, number }) => ({ id, number }));
+    void run([...unanswered.current, ...chunksOf(refused)]);
   }
 
   function close(next: boolean) {
@@ -92,7 +115,7 @@ export function BulkShipDialog({
     setResults(new Map());
     setCourier("");
     setChoice("mark");
-    keys.current = new Map();
+    unanswered.current = [];
     onOpenChange(false);
   }
 
@@ -120,13 +143,15 @@ export function BulkShipDialog({
               start();
             }}
           >
-            <fieldset className="flex flex-col gap-2">
-              <legend className="sr-only">How to ship</legend>
-              <div className="grid grid-cols-2 gap-2">
-                <ShipChoice name="bulk-ship-choice" value="mark" label="Mark as shipped" choice={choice} onChoose={setChoice} />
-                <ShipChoice name="bulk-ship-choice" value="label" label="Buy labels" choice={choice} onChoose={setChoice} />
-              </div>
-            </fieldset>
+            {labelsOffered && (
+              <fieldset className="flex flex-col gap-2">
+                <legend className="sr-only">How to ship</legend>
+                <div className="grid grid-cols-2 gap-2">
+                  <ShipChoice name="bulk-ship-choice" value="mark" label="Mark as shipped" choice={choice} onChoose={setChoice} />
+                  <ShipChoice name="bulk-ship-choice" value="label" label="Buy labels" choice={choice} onChoose={setChoice} />
+                </div>
+              </fieldset>
+            )}
             {choice === "mark" ? (
               <Field id="bulk-ship-courier" label="Courier" hint="Tracking numbers can be added one order at a time.">
                 {(props) => (
@@ -191,7 +216,7 @@ export function BulkShipDialog({
             )}
             <div className="flex flex-col gap-2 sm:flex-row-reverse">
               {failed.length > 0 && (
-                <Button type="button" onClick={() => void run(failed.map(({ id, number }) => ({ id, number })))}>
+                <Button type="button" onClick={retry}>
                   Try again
                 </Button>
               )}
