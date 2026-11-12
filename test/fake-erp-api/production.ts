@@ -50,6 +50,9 @@ function step(position: number, key: string, name: string, config: Partial<Workf
   };
 }
 
+/** Finish's instructions, the only step with any. */
+const SOP = { file_id: uuid("c3c3c3c3", 1), file_version_id: uuid("c4c4c4c4", 1) };
+
 const SCRATCH = { defect_id: uuid("b3b3b3b3", 1), key: "scratch", name: "Scratch", outcome: "rework" as const, rework_to: "finish" };
 const POROSITY = { defect_id: uuid("b3b3b3b3", 2), key: "porosity", name: "Porosity", outcome: "rework" as const, rework_to: "finish" };
 
@@ -61,6 +64,7 @@ const STEPS: WorkflowStep[] = [
     rework_targets: ["finish"],
     pass: { min_photos: 1, comment_required: false },
     done_by: "partner",
+    sop_file_version_id: SOP.file_version_id,
   }),
   step(2, "final_qc", "Final QC", {
     defects: [POROSITY],
@@ -162,7 +166,7 @@ function seedPieces(now: number): StoredPiece[] {
             to_step: ref(s.key),
             defect: { id: POROSITY.defect_id, key: POROSITY.key, name: POROSITY.name },
             comment: "Pitted along one edge",
-            answers: [{ item: "surface_smooth", value: "false", note: null, passing: false }],
+            answers: [{ item: "surface_smooth", label: "Surface smooth", value: "false", value_label: null, note: null, passing: false }],
             photo_file_version_ids: [uuid("c1c1c1c1", 1)],
             photos: [{ file_id: uuid("c2c2c2c2", 1), file_version_id: uuid("c1c1c1c1", 1) }],
             created_at: at(1),
@@ -190,6 +194,38 @@ function seedPieces(now: number): StoredPiece[] {
   });
 }
 
+/**
+ * A step's checks from its group's moves, as erp-api adds them up (`progress.ts` `stepTotals`): passes and
+ * fails made at the step, never corrections; defects most frequent first, then by name; the latest
+ * inspected pass or fail.
+ */
+function checksAt(stepKey: string, members: StoredPiece[]): Pick<Group["steps"][number], "passed" | "failed" | "not_inspected" | "defects" | "latest_check"> {
+  const moves = members.flatMap((piece) => piece.history).filter((move) => move.from_step?.key === stepKey && move.kind !== "correction");
+  const passes = moves.filter((move) => move.kind === "pass");
+  const counts = new Map<string, { key: string; name: string; count: number }>();
+  for (const move of moves) {
+    if (move.kind !== "fail" || !move.defect) continue;
+    const seen = counts.get(move.defect.key) ?? { key: move.defect.key, name: move.defect.name, count: 0 };
+    counts.set(move.defect.key, { ...seen, count: seen.count + 1 });
+  }
+  const latest = moves.filter((move) => move.inspected).reduce<Transition | null>((last, move) => (!last || move.created_at >= last.created_at ? move : last), null);
+  return {
+    passed: passes.length,
+    failed: moves.length - passes.length,
+    not_inspected: passes.filter((move) => !move.inspected).length,
+    defects: [...counts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+    latest_check: latest ? { actor: latest.actor, partner: latest.partner, created_at: latest.created_at, photos: latest.photos } : null,
+  };
+}
+
+/** An answer as erp-api records it, named from the step's checklist (its key once the item is gone). */
+function answerOf(step: WorkflowStep | undefined, answer: NonNullable<MoveBody["answers"]>[number]): Transition["answers"][number] {
+  const item = step?.checklist.find((candidate) => candidate.key === answer.item);
+  const value = String(answer.value);
+  const option = item?.kind === "choice" ? item.options.find((candidate) => candidate.key === value) : undefined;
+  return { item: answer.item, label: item?.label ?? answer.item, value, value_label: option?.label ?? null, note: answer.note ?? null, passing: true };
+}
+
 const invalid = (path: string, message: string): Answer<never> => ({ ok: false, status: 400, errors: [{ path, message }] });
 
 const LIST_KEYS = ["limit", "cursor", "group_id", "step_key", "status", "workable"];
@@ -211,11 +247,18 @@ export function createProductionStore(now: () => number) {
     created_at: piece.createdAt,
   });
 
-  const listItem = (piece: StoredPiece): WorkOrderListItem => ({
-    ...base(piece),
-    to_inspect: null,
-    may_work: piece.status === "active" && !skilled.has(piece.stepKey ?? ""),
-  });
+  const listItem = (piece: StoredPiece): WorkOrderListItem => {
+    const last = piece.history.at(-1);
+    return {
+      ...base(piece),
+      to_inspect: null,
+      may_work: piece.status === "active" && !skilled.has(piece.stepKey ?? ""),
+      in_rework: piece.status === "active" && piece.inRework,
+      last_move: last
+        ? { kind: last.kind, outcome: last.outcome, from_step: last.from_step, defect: last.defect, actor: last.actor, partner: last.partner, created_at: last.created_at }
+        : null,
+    };
+  };
 
   function advance(piece: StoredPiece, from: string) {
     const next = nextKey(from);
@@ -253,8 +296,9 @@ export function createProductionStore(now: () => number) {
       moved.push(piece);
     }
     const respond = (): Answer<MoveResponse> => ({ ok: true, body: { data: moved.map(base) } });
+    const atStep = STEPS.find((s) => s.key === body.at_step);
     const common = {
-      answers: (body.answers ?? []).map((a) => ({ item: a.item, value: String(a.value), note: a.note ?? null, passing: true })),
+      answers: (body.answers ?? []).map((a) => answerOf(atStep, a)),
       comment: body.comment ?? null,
       photo_file_version_ids: body.photo_file_version_ids ?? [],
       photos: (body.photo_file_version_ids ?? []).map((id) => ({ file_id: id, file_version_id: id })),
@@ -343,7 +387,7 @@ export function createProductionStore(now: () => number) {
           pieces: { active: count("active"), finished: count("finished"), scrapped: count("scrapped") },
           steps: STEPS.map((s) => {
             const here = members.filter((piece) => piece.status === "active" && piece.stepKey === s.key);
-            return { key: s.key, name: s.name, count: here.length, in_rework: here.filter((piece) => piece.inRework).length };
+            return { key: s.key, name: s.name, count: here.length, in_rework: here.filter((piece) => piece.inRework).length, ...checksAt(s.key, members) };
           }),
         },
       };
@@ -380,7 +424,7 @@ export function createProductionStore(now: () => number) {
           ...base(piece),
           to_inspect: null,
           path: STEPS.map(({ key, name }) => ({ key, name })),
-          sop_file_version_id: null,
+          sop: STEPS.find((s) => s.key === piece.stepKey)?.sop_file_version_id ? SOP : null,
           history: structuredClone(piece.history),
         },
       };

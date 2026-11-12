@@ -3504,14 +3504,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * An order's comments, oldest first, a page at a time, with who wrote each and whether the partner reads it.
+         * An order's comments, oldest first, a page at a time, with who wrote each and who else reads it.
          * @description Access: permission `order.read`.
          */
         get: operations["OrderCommentsController_list"];
         put?: never;
         /**
          * Comment on an order or one of its lines, with files attached.
-         * @description The customer reads it, unless `for_partner` sends it to the partner holding the line instead: that needs a `line_id`, and the customer never sees it. A `line_id` of another order is a 400. Any uploaded file of the workspace can be attached, at most 10; one not found, or not uploaded yet, is a 404 naming it. Comments cannot be edited or deleted.
+         * @description `visibility` says who reads it besides staff: nobody by default, `customer`, or `partner`, the partner holding the line, which needs a `line_id`. A `line_id` of another order is a 400. Any uploaded file of the workspace can be attached, at most 10; one not found, or not uploaded yet, is a 404 naming it. Comments cannot be edited or deleted.
          *
          *     Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
          *
@@ -4000,7 +4000,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * A group of pieces: its workflow version, and how many pieces are at each step of its path.
+         * A group of pieces: its workflow version, how many pieces are at each step of its path, and each step's checks.
          * @description Access: permission `workflow.read`.
          */
         get: operations["WorkOrdersController_group"];
@@ -4043,7 +4043,7 @@ export interface paths {
         };
         /**
          * Pieces in the order to work them, such as the work list of one step: first-in-line customers' first, then as they started.
-         * @description A customer whose priority band is first in line has its pieces listed first, higher bands before lower ones. Every step is listed to everyone who may read work lists; `may_work` says whether the caller may pass or fail the piece where it is, which at a step that requires a skill needs that skill (the owner always may). `workable=true` keeps only those pieces.
+         * @description A customer whose priority band is first in line has its pieces listed first, higher bands before lower ones. Every step is listed to everyone who may read work lists; `may_work` says whether the caller may pass or fail the piece where it is, which at a step that requires a skill needs that skill (the owner always may). `workable=true` keeps only those pieces. `in_rework` says whether an active piece is being redone after a failed check, and `last_move` is what last happened to it.
          *
          *     Access: permission `workflow.read`.
          */
@@ -22360,6 +22360,8 @@ export interface operations {
                                 paid: string;
                                 /** @description In the order currency, with two decimals. */
                                 refunded: string;
+                                /** @description In the order currency, with two decimals. */
+                                refundable: string;
                                 pay_url: string | null;
                                 invoice: {
                                     url: string;
@@ -22632,6 +22634,8 @@ export interface operations {
                             paid: string;
                             /** @description In the order currency, with two decimals. */
                             refunded: string;
+                            /** @description In the order currency, with two decimals. */
+                            refundable: string;
                             pay_url: string | null;
                             invoice: {
                                 url: string;
@@ -22932,6 +22936,8 @@ export interface operations {
                                     paid: string;
                                     /** @description In the order currency, with two decimals. */
                                     refunded: string;
+                                    /** @description In the order currency, with two decimals. */
+                                    refundable: string;
                                     pay_url: string | null;
                                     invoice: {
                                         url: string;
@@ -23274,6 +23280,8 @@ export interface operations {
                             paid: string;
                             /** @description In the order currency, with two decimals. */
                             refunded: string;
+                            /** @description In the order currency, with two decimals. */
+                            refundable: string;
                             pay_url: string | null;
                             invoice: {
                                 url: string;
@@ -23547,6 +23555,8 @@ export interface operations {
                             paid: string;
                             /** @description In the order currency, with two decimals. */
                             refunded: string;
+                            /** @description In the order currency, with two decimals. */
+                            refundable: string;
                             pay_url: string | null;
                             invoice: {
                                 url: string;
@@ -23830,6 +23840,8 @@ export interface operations {
                             paid: string;
                             /** @description In the order currency, with two decimals. */
                             refunded: string;
+                            /** @description In the order currency, with two decimals. */
+                            refundable: string;
                             pay_url: string | null;
                             invoice: {
                                 url: string;
@@ -24105,6 +24117,8 @@ export interface operations {
                             paid: string;
                             /** @description In the order currency, with two decimals. */
                             refunded: string;
+                            /** @description In the order currency, with two decimals. */
+                            refundable: string;
                             pay_url: string | null;
                             invoice: {
                                 url: string;
@@ -24199,7 +24213,8 @@ export interface operations {
                                 id: string;
                                 name: string;
                             };
-                            for_partner: boolean;
+                            /** @enum {string} */
+                            visibility: "customer" | "partner" | "staff";
                             body: string;
                             attachments: {
                                 /** Format: uuid */
@@ -24267,7 +24282,11 @@ export interface operations {
                     body: string;
                     /** Format: uuid */
                     line_id?: string;
-                    for_partner?: boolean;
+                    /**
+                     * @default staff
+                     * @enum {string}
+                     */
+                    visibility?: "customer" | "partner" | "staff";
                     attachments?: string[];
                 };
             };
@@ -24291,7 +24310,8 @@ export interface operations {
                             id: string;
                             name: string;
                         };
-                        for_partner: boolean;
+                        /** @enum {string} */
+                        visibility: "customer" | "partner" | "staff";
                         body: string;
                         attachments: {
                             /** Format: uuid */
@@ -27157,6 +27177,34 @@ export interface operations {
                             name: string;
                             count: number;
                             in_rework: number;
+                            passed: number;
+                            failed: number;
+                            not_inspected: number;
+                            defects: {
+                                key: string;
+                                name: string;
+                                count: number;
+                            }[];
+                            latest_check: {
+                                actor: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                };
+                                partner: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                } | null;
+                                /** Format: date-time */
+                                created_at: string;
+                                photos: {
+                                    /** Format: uuid */
+                                    file_id: string;
+                                    /** Format: uuid */
+                                    file_version_id: string;
+                                }[];
+                            } | null;
                         }[];
                     };
                 };
@@ -27255,6 +27303,34 @@ export interface operations {
                             name: string;
                             count: number;
                             in_rework: number;
+                            passed: number;
+                            failed: number;
+                            not_inspected: number;
+                            defects: {
+                                key: string;
+                                name: string;
+                                count: number;
+                            }[];
+                            latest_check: {
+                                actor: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                };
+                                partner: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                } | null;
+                                /** Format: date-time */
+                                created_at: string;
+                                photos: {
+                                    /** Format: uuid */
+                                    file_id: string;
+                                    /** Format: uuid */
+                                    file_version_id: string;
+                                }[];
+                            } | null;
                         }[];
                     };
                 };
@@ -27407,6 +27483,37 @@ export interface operations {
                             created_at: string;
                             to_inspect: boolean | null;
                             may_work: boolean;
+                            in_rework: boolean;
+                            last_move: {
+                                /** @enum {string} */
+                                kind: "pass" | "fail" | "correction";
+                                /** @enum {string|null} */
+                                outcome: "rework" | "scrap" | "continue" | null;
+                                from_step: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    key: string;
+                                    name: string;
+                                } | null;
+                                defect: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    key: string;
+                                    name: string;
+                                } | null;
+                                actor: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                };
+                                partner: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                } | null;
+                                /** Format: date-time */
+                                created_at: string;
+                            } | null;
                         }[];
                         next_cursor: string | null;
                     };
@@ -27611,7 +27718,9 @@ export interface operations {
                             comment: string | null;
                             answers: {
                                 item: string;
+                                label: string;
                                 value: string;
+                                value_label: string | null;
                                 note: string | null;
                                 passing: boolean;
                             }[];
@@ -27715,8 +27824,12 @@ export interface operations {
                             key: string;
                             name: string;
                         }[];
-                        /** Format: uuid */
-                        sop_file_version_id: string | null;
+                        sop: {
+                            /** Format: uuid */
+                            file_id: string;
+                            /** Format: uuid */
+                            file_version_id: string;
+                        } | null;
                         history: {
                             /** Format: uuid */
                             id: string;
@@ -27746,7 +27859,9 @@ export interface operations {
                             comment: string | null;
                             answers: {
                                 item: string;
+                                label: string;
                                 value: string;
+                                value_label: string | null;
                                 note: string | null;
                                 passing: boolean;
                             }[];
@@ -30669,6 +30784,8 @@ export interface operations {
                             paid: string;
                             /** @description In the order currency, with two decimals. */
                             refunded: string;
+                            /** @description In the order currency, with two decimals. */
+                            refundable: string;
                             pay_url: string | null;
                             invoice: {
                                 url: string;
@@ -30768,6 +30885,8 @@ export interface operations {
                             paid: string;
                             /** @description In the order currency, with two decimals. */
                             refunded: string;
+                            /** @description In the order currency, with two decimals. */
+                            refundable: string;
                             pay_url: string | null;
                             invoice: {
                                 url: string;
@@ -31106,6 +31225,8 @@ export interface operations {
                             paid: string;
                             /** @description In the order currency, with two decimals. */
                             refunded: string;
+                            /** @description In the order currency, with two decimals. */
+                            refundable: string;
                             pay_url: string | null;
                             invoice: {
                                 url: string;

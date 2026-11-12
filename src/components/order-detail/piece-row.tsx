@@ -1,5 +1,6 @@
 "use client";
 
+import { RotateCcw } from "lucide-react";
 import Link from "next/link";
 
 import { cn } from "cn";
@@ -14,7 +15,14 @@ const STATUS: Record<WorkOrderListItem["status"], { word: string; dot: string }>
   cancelled: { word: "Cancelled", dot: "bg-ink-2" },
 };
 
-/** One piece in a step's list: its number out of the line's quantity and its status. */
+function lastMoveText(move: NonNullable<WorkOrderListItem["last_move"]>): string {
+  const step = move.from_step?.name ?? "a step";
+  if (move.kind === "pass") return `Passed ${step}`;
+  if (move.kind === "correction") return `Corrected from ${step}`;
+  return move.defect ? `Failed at ${step}: ${move.defect.name}` : `Failed at ${step}`;
+}
+
+/** One piece in a step's list: its number out of the line's quantity, its status and what last happened to it. */
 export function PieceRow({
   piece,
   selectable,
@@ -52,6 +60,13 @@ export function PieceRow({
         <span aria-hidden className={cn("size-1.5 rounded-full", status.dot)} />
         {status.word}
       </span>
+      {piece.in_rework && (
+        <span className="inline-flex items-center gap-1.5 font-medium">
+          <RotateCcw aria-hidden className="size-3.5 shrink-0 text-collect" />
+          Being redone
+        </span>
+      )}
+      {piece.last_move && <span className="hidden min-w-0 truncate text-caption text-ink-2 sm:inline">{lastMoveText(piece.last_move)}</span>}
       {selectable && !piece.may_work && <span className="ml-auto text-caption text-ink-2">Needs a skill you don&apos;t have</span>}
     </li>
   );

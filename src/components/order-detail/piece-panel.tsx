@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Minus, RotateCcw, X, type LucideIcon } from "lucide-react";
+import { Check, ChevronDown, FileText, Minus, RotateCcw, X, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
@@ -10,20 +10,20 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { isApiProblem } from "@/lib/api/problem";
 import type { Transition, WorkOrderDetail } from "@/lib/api/schema-types";
 import { useCan } from "@/lib/auth/permissions";
+import { openFile } from "@/lib/files/download";
 import { useFormat } from "@/lib/format/use-format";
 import { usePhotoUrl, usePiece } from "@/lib/production/queries";
 
 import { LoadFailure } from "./load-failure";
+import { submitErrorText } from "./submit-error";
 
 const LABEL = "text-caption text-ink-2";
 
-/** erp-api gives a checklist answer by its key, not the label staff see (`backend-todos.md`). */
-function labelOf(key: string): string {
-  const words = key.replaceAll("_", " ");
-  return words.charAt(0).toUpperCase() + words.slice(1);
+/** A choice by its option's name; a yes/no, sent as "true" or "false", in words; anything else as given. */
+function answerText(answer: Transition["answers"][number]): string {
+  if (answer.value_label !== null) return answer.value_label;
+  return answer.value === "true" ? "Yes" : answer.value === "false" ? "No" : answer.value;
 }
-
-const answerText = (value: string) => (value === "true" ? "Yes" : value === "false" ? "No" : value);
 
 /** erp-api records a cancelled piece as a correction to no step (`work-orders.service.ts:165`). */
 const isCancel = (move: Transition) => move.kind === "correction" && !move.to_step;
@@ -106,8 +106,8 @@ function Move({ move, stepName }: { move: Transition; stepName: string }) {
           <div className="mb-2 flex flex-col gap-2 rounded-xl border border-line px-3 py-2.5">
             {move.defect && <Row label="Defect">{move.defect.name}</Row>}
             {move.answers.map((answer) => (
-              <Row key={answer.item} label={labelOf(answer.item)}>
-                {answerText(answer.value)}
+              <Row key={answer.item} label={answer.label}>
+                {answerText(answer)}
                 {answer.note && ` (${answer.note})`}
               </Row>
             ))}
@@ -129,6 +129,29 @@ function Move({ move, stepName }: { move: Transition; stepName: string }) {
         )}
       </div>
     </li>
+  );
+}
+
+/** The current step's instructions, opened in a new tab. */
+function Instructions({ sop, stepName }: { sop: NonNullable<WorkOrderDetail["sop"]>; stepName: string }) {
+  const mayRead = useCan("file.read");
+  const [failure, setFailure] = useState<string | null>(null);
+  if (!mayRead) return null;
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        className="inline-flex min-h-11 items-center gap-2 self-start text-sm font-medium underline underline-offset-2 hover:text-ink"
+        onClick={() => {
+          setFailure(null);
+          openFile(sop.file_id, sop.file_version_id).catch((error: unknown) => setFailure(submitErrorText(error)));
+        }}
+      >
+        <FileText aria-hidden className="size-4 shrink-0" />
+        {`Instructions for ${stepName}`}
+      </button>
+      {failure && <p className="text-caption text-late">{failure}</p>}
+    </div>
   );
 }
 
@@ -171,6 +194,7 @@ function PieceHistory({ id }: { id: string }) {
         <SheetTitle className="text-base font-semibold tabular-nums">{`Piece ${data.label}`}</SheetTitle>
         <SheetDescription className="text-sm font-medium text-ink">{nowText(data)}</SheetDescription>
       </div>
+      {data.sop && data.step && <Instructions sop={data.sop} stepName={data.step.name} />}
       {data.replaces_id && (
         <Link href={`?piece=${data.replaces_id}`} scroll={false} prefetch={false} className="text-sm underline underline-offset-2">
           See the piece this replaces

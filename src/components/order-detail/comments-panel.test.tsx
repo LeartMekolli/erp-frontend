@@ -67,6 +67,21 @@ describe("CommentsPanel", () => {
     expect(within(staff).getByText("To the partner")).toBeInTheDocument();
   });
 
+  it("says who reads each staff comment, and nothing extra on a customer's own", async () => {
+    const parent = order(1048);
+    const answer = fakeState().comments.list(parent.id, new URLSearchParams());
+    if (!answer.ok) throw new Error("expected comments");
+    const [customer, partner] = answer.body.data;
+    const staffOnly = { ...partner!, id: crypto.randomUUID(), line_id: null, visibility: "staff" as const, body: "Watch this one" };
+    const toCustomer = { ...partner!, id: crypto.randomUUID(), line_id: null, visibility: "customer" as const, body: "On its way" };
+    server.use(http.get(`${FAKE_API_URL}/orders/:id/comments`, () => HttpResponse.json({ data: [customer, staffOnly, toCustomer], next_cursor: null })));
+    renderPanel(1048);
+    const [first, second, third] = within(await list()).getAllByRole("listitem");
+    expect(first).not.toHaveTextContent(/Staff only|To the/);
+    expect(within(second!).getByText("Staff only")).toBeInTheDocument();
+    expect(within(third!).getByText("To the customer")).toBeInTheDocument();
+  });
+
   it("opens an attachment through a signed link", async () => {
     const tab = { opener: {}, location: { href: "" }, close: vi.fn() };
     vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
@@ -105,42 +120,103 @@ describe("CommentsPanel", () => {
 });
 
 describe("posting a comment", () => {
-  it("says the customer reads it by default, and posts to the order", async () => {
+  it("starts on staff only, and says so", async () => {
     renderPanel(1049);
-    expect(await screen.findByText("The customer will read this")).toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText("Add a comment"), "Ready on Friday");
+    expect(await screen.findByLabelText("Who reads it")).toHaveDisplayValue("Staff only");
+    expect(screen.getByText("Only staff will read this")).toBeInTheDocument();
+  });
+
+  it("posts a staff-only comment to the order, saying so to erp-api", async () => {
+    renderPanel(1049);
+    await userEvent.type(await screen.findByLabelText("Add a comment"), "Ready on Friday");
     await userEvent.click(postButton());
     expect(await screen.findByText("Ready on Friday")).toBeInTheDocument();
     await waitFor(() => expect(posted).toHaveLength(1));
-    expect(posted[0]).toEqual({ body: "Ready on Friday" });
+    expect(posted[0]).toEqual({ body: "Ready on Friday", visibility: "staff" });
     await waitFor(() => expect(screen.getByLabelText("Add a comment")).toHaveValue(""));
+    expect(screen.getByLabelText("Who reads it")).toHaveDisplayValue("Staff only");
+  });
+
+  it("sends a comment to the customer when picked", async () => {
+    renderPanel(1049);
+    await userEvent.selectOptions(await screen.findByLabelText("Who reads it"), "The customer");
+    expect(screen.getByText("The customer will read this")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("Add a comment"), "Ready on Friday");
+    await userEvent.click(postButton());
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]).toEqual({ body: "Ready on Friday", visibility: "customer" });
   });
 
   it("sends a line's comment to the partner holding it", async () => {
     const parent = renderPanel(1048);
     await userEvent.selectOptions(await screen.findByLabelText("About"), "12 × Ring band");
-    await userEvent.click(screen.getByRole("checkbox", { name: "Send to partner" }));
+    await userEvent.selectOptions(screen.getByLabelText("Who reads it"), "Northcast Foundry");
     expect(screen.getByText("Northcast Foundry will read this, not the customer")).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText("Add a comment"), "Keep the polish matte");
     await userEvent.click(postButton());
     await waitFor(() => expect(posted).toHaveLength(1));
-    expect(posted[0]).toEqual({ body: "Keep the polish matte", line_id: parent.lines[0]!.id, for_partner: true });
+    expect(posted[0]).toEqual({ body: "Keep the polish matte", line_id: parent.lines[0]!.id, visibility: "partner" });
   });
 
-  it("goes back to the customer when the line is changed away", async () => {
+  it("goes back to staff only when the line is changed away from the partner's", async () => {
     renderPanel(1048);
     const about = await screen.findByLabelText("About");
     await userEvent.selectOptions(about, "12 × Ring band");
-    await userEvent.click(screen.getByRole("checkbox", { name: "Send to partner" }));
+    await userEvent.selectOptions(screen.getByLabelText("Who reads it"), "Northcast Foundry");
     await userEvent.selectOptions(about, "The whole order");
-    expect(screen.getByText("The customer will read this")).toBeInTheDocument();
-    expect(screen.queryByRole("checkbox", { name: "Send to partner" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Who reads it")).toHaveDisplayValue("Staff only");
+    expect(screen.getByText("Only staff will read this")).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Northcast Foundry" })).not.toBeInTheDocument();
+  });
+
+  it("goes back to staff only when the line's partner lets go of it", async () => {
+    const parent = order(1048);
+    const panel = (o: Order) => (
+      <WithMe>
+        <CommentsPanel order={o} />
+      </WithMe>
+    );
+    const { rerender } = renderAs(STAFF, panel(parent));
+    await userEvent.selectOptions(await screen.findByLabelText("About"), "12 × Ring band");
+    await userEvent.selectOptions(screen.getByLabelText("Who reads it"), "Northcast Foundry");
+    const released: Order = {
+      ...parent,
+      lines: parent.lines.map((line, index) => (index === 0 ? { ...line, partner: { ...line.partner!, status: "offered" } } : line)),
+    };
+    rerender(panel(released));
+    expect(screen.getByText("Only staff will read this")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("Add a comment"), "Keep the polish matte");
+    await userEvent.click(postButton());
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]).toMatchObject({ visibility: "staff" });
+  });
+
+  it("keeps the customer picked when the line changes", async () => {
+    renderPanel(1048);
+    await userEvent.selectOptions(await screen.findByLabelText("Who reads it"), "The customer");
+    await userEvent.selectOptions(screen.getByLabelText("About"), "12 × Ring band");
+    expect(screen.getByLabelText("Who reads it")).toHaveDisplayValue("The customer");
   });
 
   it("doesn't offer the partner on a line that's only been offered", async () => {
     renderPanel(1049);
     await userEvent.selectOptions(await screen.findByLabelText("About"), "4 × Facade panel");
-    expect(screen.queryByRole("checkbox", { name: "Send to partner" })).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText("Who reads it")).getAllByRole("option").map((option) => option.textContent)).toEqual(["Staff only", "The customer"]);
+  });
+
+  it("shows erp-api's refusal of the reader above the form", async () => {
+    server.use(
+      http.post(`${FAKE_API_URL}/orders/:id/comments`, () =>
+        HttpResponse.json(
+          { type: "about:blank", title: "Bad Request", status: 400, errors: [{ path: "visibility", message: "A comment for the partner needs a line" }] },
+          { status: 400 },
+        ),
+      ),
+    );
+    renderPanel(1049);
+    await userEvent.type(await screen.findByLabelText("Add a comment"), "Hello");
+    await userEvent.click(postButton());
+    expect(await screen.findByText(/A comment for the partner needs a line/)).toBeInTheDocument();
   });
 
   it("wants something written", async () => {

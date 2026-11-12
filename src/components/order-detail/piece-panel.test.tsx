@@ -8,7 +8,7 @@ import { useMe } from "@/components/session/session-gate";
 import type { Transition, WorkOrderDetail } from "@/lib/api/schema-types";
 
 import { groupIdOf } from "../../../test/fake-erp-api/orders-seed";
-import { CLERK, FAKE_API_URL, STAFF } from "../../../test/fake-erp-api/seed";
+import { CLERK, FAKE_API_URL, STAFF, WORKFLOW_READER } from "../../../test/fake-erp-api/seed";
 import { fakeState } from "../../../test/fake-erp-api/state";
 import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
@@ -131,6 +131,70 @@ describe("PiecePanel", () => {
     expect(within(failure).getByText("Back to Finish")).toBeInTheDocument();
     expect(within(failure).getByText("Pitted along one edge")).toBeInTheDocument();
     expect(within(failure).getByText("Ana Ruiz")).toBeInTheDocument();
+  });
+
+  it("names an answer as the step does, not by its key", async () => {
+    const id = REWORK();
+    serve(id, (piece) => ({
+      ...piece,
+      history: piece.history.map((move) =>
+        move.kind === "fail" ? { ...move, answers: [{ item: "surface_smooth", label: "Smooth all over", value: "false", value_label: null, note: null, passing: false }] } : move,
+      ),
+    }));
+    renderPanel(id);
+    const failure = (await screen.findByRole("button", { name: /^Final QC failed/ })).closest("li")!;
+    expect(within(failure).getByText("Smooth all over")).toBeInTheDocument();
+    expect(within(failure).queryByText("Surface smooth")).not.toBeInTheDocument();
+    expect(within(failure).getByText("No")).toBeInTheDocument();
+  });
+
+  it("shows a choice by its option's name, and a free answer as given", async () => {
+    const id = REWORK();
+    const answers: Transition["answers"] = [
+      { item: "surface", label: "Surface", value: "pitted", value_label: "Pitted", note: null, passing: false },
+      { item: "depth", label: "Depth", value: "0.4 mm", value_label: null, note: null, passing: true },
+    ];
+    serve(id, (piece) => ({ ...piece, history: piece.history.map((move) => (move.kind === "fail" ? { ...move, answers } : move)) }));
+    renderPanel(id);
+    const failure = (await screen.findByRole("button", { name: /^Final QC failed/ })).closest("li")!;
+    expect(within(failure).getByText("Pitted")).toBeInTheDocument();
+    expect(within(failure).queryByText("pitted")).not.toBeInTheDocument();
+    expect(within(failure).getByText("0.4 mm")).toBeInTheDocument();
+  });
+
+  it("opens the current step's instructions", async () => {
+    const tab = { opener: {}, location: { href: "" }, close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
+    renderPanel(REWORK());
+    await userEvent.click(await screen.findByRole("button", { name: "Instructions for Finish" }));
+    await waitFor(() => expect(tab.location.href).toMatch(/^https:\/\/storage\.example\.test\//));
+    expect(tab.opener).toBeNull();
+  });
+
+  it("offers no instructions at a step without them", async () => {
+    renderPanel(pieceAt("final_qc"));
+    await screen.findByText("At Final QC");
+    expect(screen.queryByRole("button", { name: /^Instructions/ })).not.toBeInTheDocument();
+  });
+
+  it("offers no instructions without file.read", async () => {
+    renderPanel(REWORK(), WORKFLOW_READER);
+    await screen.findByText("Being redone at Finish");
+    expect(screen.queryByRole("button", { name: /^Instructions/ })).not.toBeInTheDocument();
+  });
+
+  it("says when the instructions can't be opened, and stays open", async () => {
+    const tab = { opener: {}, location: { href: "" }, close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
+    server.use(
+      http.get(`${FAKE_API_URL}/files/:id/versions/:versionId/url`, () =>
+        HttpResponse.json({ type: "about:blank", title: "Not Found", status: 404, detail: "File not found" }, { status: 404 }),
+      ),
+    );
+    renderPanel(REWORK());
+    await userEvent.click(await screen.findByRole("button", { name: "Instructions for Finish" }));
+    expect(await screen.findByText(/File not found/)).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Piece 3/12" })).toBeInTheDocument();
   });
 
   it("says why a defect's usual outcome wasn't followed", async () => {

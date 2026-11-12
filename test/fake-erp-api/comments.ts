@@ -1,8 +1,8 @@
 /**
  * The fake erp-api's order comments and claims. It keeps the rules the order
  * page depends on (erp-api `src/modules/orders/comments.service.ts`): comments
- * oldest first, a comment for the partner needs a line, and a line must be on
- * the order.
+ * oldest first, staff only unless `visibility` says otherwise, a comment for
+ * the partner needs a line, and a line must be on the order.
  */
 
 import type { Claim, OrderComment, StaffCommentBody } from "../../src/lib/api/schema-types";
@@ -35,7 +35,7 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
           id: uuid("d1d1d1d1", 1),
           line_id: null,
           author: { kind: "customer", id: uuid("d2d2d2d2", 1), name: "Rina Holt" },
-          for_partner: false,
+          visibility: "customer",
           body: "Could the polish stay matte?",
           attachments: [{ file_version_id: FILE_VERSION, name: "polish-sample.pdf" }],
           created_at: stamp(5),
@@ -44,7 +44,7 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
           id: uuid("d1d1d1d1", 2),
           line_id: order1048.lines[0]!.id,
           author: { kind: "staff", id: uuid("55555555", 1), name: "Ana Ruiz" },
-          for_partner: true,
+          visibility: "partner",
           body: "Matte polish on these, please.",
           attachments: [],
           created_at: stamp(2),
@@ -82,7 +82,8 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
       if (!found.ok) return found;
       const text = body.body.trim();
       if (text.length < 1 || text.length > COMMENT_MAX_LENGTH) return invalid("body", `must be 1 to ${COMMENT_MAX_LENGTH} characters`);
-      if (body.for_partner && !body.line_id) return invalid("for_partner", "A comment for the partner needs a line");
+      const visibility = body.visibility ?? "staff";
+      if (visibility === "partner" && !body.line_id) return invalid("visibility", "A comment for the partner needs a line");
       const lineIds = found.body.lines.flatMap((line) => [line.id, ...line.parts.map((part) => part.id)]);
       if (body.line_id && !lineIds.includes(body.line_id)) return invalid("line_id", "not a line of this order");
 
@@ -94,7 +95,7 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
         id: crypto.randomUUID(),
         line_id: body.line_id ?? null,
         author: { kind: "staff", id: author.id, name: author.name },
-        for_partner: body.for_partner ?? false,
+        visibility,
         body: text,
         attachments: [],
         created_at: stamp(),
