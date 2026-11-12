@@ -119,6 +119,28 @@ test("a failed check shows on the Quality tab", async ({ page }) => {
   await expect(card.getByText("Latest check by Ana Ruiz")).toBeVisible();
 });
 
+test("a fail shows on the History tab", async ({ page }) => {
+  await openOrder(page, 1048);
+  await page.getByRole("tab", { name: "History" }).click();
+  await expect(page.getByRole("button", { name: "Fails and moves back 2" })).toBeVisible();
+  await page.getByRole("tab", { name: "Pieces" }).click();
+  await section(page, /^Final QC\b/).click();
+  await tick(page, "7/12");
+  await page.getByRole("button", { name: "Fail…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Fail 1 piece at Final QC" });
+  await dialog.getByLabel("Defect").selectOption({ label: "Porosity" });
+  await dialog.getByLabel("Comment").fill("Pitted on the inside");
+  await dialog.getByRole("button", { name: "Fail", exact: true }).click();
+  await expect(page.getByText("1 piece failed at Final QC.")).toBeVisible();
+
+  // The move refreshes the timeline without a reload.
+  await page.getByRole("tab", { name: "History" }).click();
+  const today = page.getByRole("list", { name: "Moves on Today" });
+  await expect(today.getByRole("listitem").first()).toContainText("Failed at Final QC: Porosity");
+  await expect(today.getByRole("listitem").first()).toContainText("Pitted on the inside");
+  await expect(page.getByRole("button", { name: "Fails and moves back 3" })).toBeVisible();
+});
+
 test("a comment posts for staff only unless another reader is picked", async ({ page }) => {
   await openOrder(page, 1049);
   const comments = page.getByRole("region", { name: "Comments" });

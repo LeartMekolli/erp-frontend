@@ -186,3 +186,60 @@ describe("fake erp-api production", () => {
     expect(pieces(s, { step_key: "print", status: "active" }).data[0]!.last_move).toBeNull();
   });
 });
+
+describe("fake erp-api: a line's moves", () => {
+  const moves = (s: Store, params: Record<string, string> = {}) => ok(s.moves(GROUP, new URLSearchParams(params)));
+
+  it("one move is one action", () => {
+    const s = store();
+    const [one, two] = idsAt(s, "finish").slice(1);
+    ok(s.move(passFinish([two!, one!]), null));
+    const first = moves(s).data[0]!;
+    expect(first).toMatchObject({ kind: "pass", from_step: { key: "finish" }, to_step: { key: "final_qc" } });
+    const labels = [ok(s.piece(one!)).label, ok(s.piece(two!)).label];
+    expect(first.pieces.map((piece) => piece.label)).toEqual(labels);
+    expect(ok(s.piece(one!)).history.at(-1)!.move_id).toBe(first.id);
+    expect(ok(s.piece(two!)).history.at(-1)!.move_id).toBe(first.id);
+  });
+
+  it("seeds passes made together as one action", () => {
+    const fromFinish = moves(store(), { limit: "200" }).data.filter((action) => action.kind === "pass" && action.from_step?.key === "finish");
+    expect(Math.max(...fromFinish.map((action) => action.pieces.length))).toBeGreaterThanOrEqual(3);
+  });
+
+  it("keeps fails and corrections under only=fails", () => {
+    const s = store();
+    const all = moves(s, { limit: "200" });
+    const fails = moves(s, { limit: "200", only: "fails" });
+    expect(all.counts.fails).toBe(2);
+    expect(fails.counts).toEqual(all.counts);
+    expect(fails.data).toHaveLength(2);
+    for (const action of fails.data) expect(action.kind === "fail" || (action.kind === "correction" && action.to_step !== null)).toBe(true);
+    expect(all.data).toHaveLength(all.counts.all);
+  });
+
+  it("pages by action", () => {
+    const s = store();
+    const first = moves(s, { limit: "1" });
+    expect(first.data).toHaveLength(1);
+    expect(first.next_cursor).not.toBeNull();
+    const second = moves(s, { limit: "1", cursor: first.next_cursor! });
+    expect(second.data).toHaveLength(1);
+    expect(second.data[0]!.id).not.toBe(first.data[0]!.id);
+  });
+
+  it("says each piece's status after the move", () => {
+    const s = store();
+    const scrap = moves(s, { limit: "200" }).data.find((action) => action.outcome === "scrap")!;
+    expect(scrap.pieces.map((piece) => piece.status)).toEqual(["scrapped"]);
+    const [id] = idsAt(s, "final_qc");
+    ok(s.move({ kind: "correction", work_order_ids: [id!], to_step: "print", comment: "Not printed right" }, null));
+    expect(moves(s).data[0]!).toMatchObject({ kind: "correction", to_step: { key: "print" }, comment: "Not printed right", pieces: [{ id, status: "active", to_step: { key: "print" } }] });
+  });
+
+  it("refuses an unknown filter or group", () => {
+    const s = store();
+    expect(s.moves(GROUP, new URLSearchParams({ only: "all" }))).toMatchObject({ ok: false, status: 400, errors: [{ path: "only" }] });
+    expect(s.moves("99999999-0000-4000-8000-000000000001", new URLSearchParams())).toMatchObject({ ok: false, status: 404 });
+  });
+});

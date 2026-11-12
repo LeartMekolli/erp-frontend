@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, FileText, Minus, RotateCcw, X, type LucideIcon } from "lucide-react";
+import { ChevronDown, FileText } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
@@ -12,18 +12,13 @@ import type { Transition, WorkOrderDetail } from "@/lib/api/schema-types";
 import { useCan } from "@/lib/auth/permissions";
 import { openFile } from "@/lib/files/download";
 import { useFormat } from "@/lib/format/use-format";
-import { usePhotoUrl, usePiece } from "@/lib/production/queries";
+import { usePiece } from "@/lib/production/queries";
 
 import { LoadFailure } from "./load-failure";
+import { answerText, MovePhoto, moveIcon } from "./move-look";
 import { submitErrorText } from "./submit-error";
 
 const LABEL = "text-caption text-ink-2";
-
-/** A choice by its option's name; a yes/no, sent as "true" or "false", in words; anything else as given. */
-function answerText(answer: Transition["answers"][number]): string {
-  if (answer.value_label !== null) return answer.value_label;
-  return answer.value === "true" ? "Yes" : answer.value === "false" ? "No" : answer.value;
-}
 
 /** erp-api records a cancelled piece as a correction to no step (`work-orders.service.ts:165`). */
 const isCancel = (move: Transition) => move.kind === "correction" && !move.to_step;
@@ -43,12 +38,6 @@ function nextText(move: Transition): string {
   return move.to_step ? `On to ${move.to_step.name}` : "Finished";
 }
 
-function moveIcon(move: Transition): { Icon: LucideIcon; tone: string } {
-  if (move.kind === "fail") return { Icon: X, tone: "bg-collect text-ink" };
-  if (move.kind === "correction") return { Icon: RotateCcw, tone: "bg-lilac text-violet-ink" };
-  return move.inspected ? { Icon: Check, tone: "bg-lilac text-violet-ink" } : { Icon: Minus, tone: "bg-ground text-ink-2" };
-}
-
 /** Where the piece is now. A piece whose last move was a rework is being redone. */
 function nowText(piece: WorkOrderDetail): string {
   if (piece.status === "finished") return "Finished";
@@ -65,17 +54,6 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
       <span className={LABEL}>{label}</span>
       <span className="text-right font-medium break-words">{children}</span>
     </div>
-  );
-}
-
-function Photo({ photo, alt }: { photo: Transition["photos"][number]; alt: string }) {
-  const url = usePhotoUrl(photo.file_id, photo.file_version_id);
-  return (
-    <a href={url.data} target="_blank" rel="noreferrer" className="block size-16 overflow-hidden rounded-lg bg-ground">
-      {/* A signed link that runs out: next/image would keep a copy under a dead address. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={url.data} alt={alt} className="size-full object-cover" />
-    </a>
   );
 }
 
@@ -118,7 +96,7 @@ function Move({ move, stepName }: { move: Transition; stepName: string }) {
               (mayRead ? (
                 <div className="flex flex-wrap gap-2">
                   {move.photos.map((photo, index) => (
-                    <Photo key={photo.file_version_id} photo={photo} alt={`Photo ${index + 1} at ${stepName}`} />
+                    <MovePhoto key={photo.file_version_id} photo={photo} alt={`Photo ${index + 1} at ${stepName}`} />
                   ))}
                 </div>
               ) : (

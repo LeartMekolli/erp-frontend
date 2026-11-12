@@ -43,7 +43,7 @@ function renderList() {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  return renderHook(() => useCursorList({ queryKey: ["orders"], fetchPage }), { wrapper });
+  return renderHook(() => useCursorList<Row>({ queryKey: ["orders"], fetchPage }), { wrapper });
 }
 
 describe("useCursorList", () => {

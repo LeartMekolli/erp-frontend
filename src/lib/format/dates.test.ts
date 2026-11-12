@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatDate, formatDateTime, formatDay, formatTime } from "./dates";
+import { dayKey, formatDate, formatDateTime, formatDay, formatDayMonth, formatTime } from "./dates";
 
 describe("dates", () => {
   it("shows an instant in the workspace zone", () => {
@@ -14,6 +14,15 @@ describe("dates", () => {
 
   it("shows the time on a 24-hour clock", () => {
     expect(formatTime("2026-11-05T14:05:00Z", "UTC")).toBe("14:05");
+  });
+
+  it("keys an instant by its day in the zone", () => {
+    expect(dayKey("2026-11-12T10:30:00Z", "Pacific/Auckland")).toBe("2026-11-12");
+    expect(dayKey("2026-11-12T11:30:00Z", "Pacific/Auckland")).toBe("2026-11-13");
+  });
+
+  it("shows a day and month without the year", () => {
+    expect(formatDayMonth("2026-11-11T09:00:00Z", "UTC")).toBe("11 Nov");
   });
 
   it("never shifts a calendar day", () => {

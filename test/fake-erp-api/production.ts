@@ -7,8 +7,11 @@
  */
 
 import type {
+  ActionPiece,
   Group,
+  LineAction,
   MoveBody,
+  MoveHistory,
   paths,
   Transition,
   WorkflowStep,
@@ -117,7 +120,7 @@ function transition(fields: Pick<Transition, "kind" | "from_step" | "to_step" | 
   const id = crypto.randomUUID();
   return {
     id,
-    // One piece per move here, so each row is its own action, as erp-api's older rows are.
+    // The rows one request writes share it, as in erp-api; a row given none is an action of its own.
     move_id: id,
     outcome: null,
     defect: null,
@@ -146,6 +149,14 @@ function seedPieces(now: number): StoredPiece[] {
     const waiting = STEPS.map((s) => group.at[s.key] ?? 0);
     const quantity = waiting.reduce((sum, n) => sum + n, 0) + (group.finished ?? 0) + (group.scrapped ?? 0);
     const pieces: StoredPiece[] = [];
+    // Seeded passes at the same step and hour were made together: one action.
+    const together = new Map<string, string>();
+    const passesFor = (stepIndex: number) =>
+      passesBefore(stepIndex, at).map((move) => {
+        const key = `${move.from_step?.key}|${move.created_at}`;
+        if (!together.has(key)) together.set(key, move.move_id);
+        return { ...move, move_id: together.get(key)! };
+      });
     const add = (fields: Pick<StoredPiece, "status" | "stepKey" | "history"> & { inRework?: boolean }) => {
       const number = pieces.length + 1;
       pieces.push({
@@ -174,13 +185,13 @@ function seedPieces(now: number): StoredPiece[] {
             photos: [{ file_id: uuid("c2c2c2c2", 1), file_version_id: uuid("c1c1c1c1", 1) }],
             created_at: at(1),
           });
-          add({ status: "active", stepKey: s.key, inRework: true, history: [...passesBefore(index + 1, at), failed] });
+          add({ status: "active", stepKey: s.key, inRework: true, history: [...passesFor(index + 1), failed] });
         } else {
-          add({ status: "active", stepKey: s.key, history: passesBefore(index, at) });
+          add({ status: "active", stepKey: s.key, history: passesFor(index) });
         }
       }
     });
-    for (let n = 0; n < (group.finished ?? 0); n += 1) add({ status: "finished", stepKey: null, history: passesBefore(STEPS.length, at) });
+    for (let n = 0; n < (group.finished ?? 0); n += 1) add({ status: "finished", stepKey: null, history: passesFor(STEPS.length) });
     for (let n = 0; n < (group.scrapped ?? 0); n += 1) {
       const scrapped = transition({
         kind: "fail",
@@ -191,7 +202,7 @@ function seedPieces(now: number): StoredPiece[] {
         override_reason: "Too deep to save",
         created_at: at(2),
       });
-      add({ status: "scrapped", stepKey: null, history: [...passesBefore(1, at), scrapped] });
+      add({ status: "scrapped", stepKey: null, history: [...passesFor(1), scrapped] });
     }
     return pieces;
   });
@@ -232,6 +243,58 @@ function answerOf(step: WorkflowStep | undefined, answer: NonNullable<MoveBody["
 const invalid = (path: string, message: string): Answer<never> => ({ ok: false, status: 400, errors: [{ path, message }] });
 
 const LIST_KEYS = ["limit", "cursor", "group_id", "step_key", "status", "workable"];
+const MOVES_KEYS = ["limit", "cursor", "only"];
+
+type Row = { piece: StoredPiece; move: Transition };
+
+/** A piece's status after its row: a correction to no step cancels it, as erp-api records a cancel. */
+function statusAfter(move: Transition): ActionPiece["status"] {
+  if (move.kind === "correction" && !move.to_step) return "cancelled";
+  if (move.kind === "fail" && move.outcome === "scrap") return "scrapped";
+  return move.to_step ? "active" : "finished";
+}
+
+/** A fail, or a correction that put a piece at a step (erp-api `move-history.ts:29`). */
+const isFailRow = ({ move }: Row) => move.kind === "fail" || (move.kind === "correction" && move.to_step !== null);
+
+/** The step every row shares by id; null when they differ. */
+function shared(steps: Transition["from_step"][]): Transition["from_step"] {
+  const first = steps[0] ?? null;
+  return steps.every((step) => step?.id === first?.id) ? first : null;
+}
+
+/**
+ * One action from its rows in this group, as erp-api builds it (`move-history.ts:95`): pieces in label
+ * order, and what the rows share read from the first that didn't cancel its piece.
+ */
+function actionOf(rows: Row[]): LineAction {
+  const sorted = [...rows].sort((a, b) => a.piece.number - b.piece.number);
+  const { move } = sorted.find((row) => statusAfter(row.move) !== "cancelled") ?? sorted[0]!;
+  return {
+    id: move.move_id,
+    kind: move.kind,
+    outcome: move.outcome,
+    from_step: shared(sorted.map((row) => row.move.from_step)),
+    to_step: shared(sorted.map((row) => row.move.to_step)),
+    defect: move.defect,
+    override_reason: move.override_reason,
+    comment: move.comment,
+    answers: move.answers,
+    photos: move.photos,
+    actor: move.actor,
+    partner: sorted.find((row) => row.move.partner)?.move.partner ?? null,
+    inspected: move.inspected,
+    created_at: move.created_at,
+    pieces: sorted.map((row) => ({
+      id: row.piece.id,
+      label: `${row.piece.number}/${row.piece.quantity}`,
+      replacement: false,
+      from_step: row.move.from_step,
+      to_step: row.move.to_step,
+      status: statusAfter(row.move),
+    })),
+  };
+}
 
 export function createProductionStore(now: () => number) {
   const pieces = new Map(seedPieces(now()).map((piece) => [piece.id, piece]));
@@ -301,6 +364,7 @@ export function createProductionStore(now: () => number) {
     const respond = (): Answer<MoveResponse> => ({ ok: true, body: { data: moved.map(base) } });
     const atStep = STEPS.find((s) => s.key === body.at_step);
     const common = {
+      move_id: crypto.randomUUID(),
       answers: (body.answers ?? []).map((a) => answerOf(atStep, a)),
       comment: body.comment ?? null,
       photo_file_version_ids: body.photo_file_version_ids ?? [],
@@ -411,6 +475,37 @@ export function createProductionStore(now: () => number) {
         .sort((a, b) => a.number - b.number);
       const data = all.slice(offset, offset + limit).map(listItem);
       return { ok: true, body: { data, next_cursor: offset + limit < all.length ? String(offset + limit) : null } };
+    },
+
+    /** `GET /workflow/groups/{id}/moves`: one item per action, newest first, counts over every page. */
+    moves(groupId: string, params: URLSearchParams): Answer<MoveHistory> {
+      const extra = [...params.keys()].find((key) => !MOVES_KEYS.includes(key));
+      if (extra) return invalid(extra, `Unrecognized key: "${extra}"`);
+      const only = params.get("only");
+      if (only !== null && only !== "fails") return invalid("only", 'Invalid option: expected "fails"');
+      const limit = Number(params.get("limit") ?? 50);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 200) return invalid("limit", "must be 1 to 200");
+      const offset = Number(params.get("cursor") ?? 0);
+      if (!Number.isInteger(offset) || offset < 0) return invalid("cursor", "Invalid cursor");
+      const members = [...pieces.values()].filter((piece) => piece.groupId === groupId);
+      if (members.length === 0) return { ok: false, status: 404, detail: "Group not found" };
+
+      const byMove = new Map<string, Row[]>();
+      for (const piece of members) {
+        for (const move of piece.history) byMove.set(move.move_id, [...(byMove.get(move.move_id) ?? []), { piece, move }]);
+      }
+      const all = [...byMove.values()]
+        .map((rows) => ({ action: actionOf(rows), fail: rows.some(isFailRow) }))
+        .sort((a, b) => b.action.created_at.localeCompare(a.action.created_at) || b.action.id.localeCompare(a.action.id));
+      const kept = only === "fails" ? all.filter((one) => one.fail) : all;
+      return {
+        ok: true,
+        body: {
+          data: kept.slice(offset, offset + limit).map((one) => one.action),
+          next_cursor: offset + limit < kept.length ? String(offset + limit) : null,
+          counts: { all: all.length, fails: all.filter((one) => one.fail).length },
+        },
+      };
     },
 
     version(id: string, number: number): Answer<WorkflowVersion> {

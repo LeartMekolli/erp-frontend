@@ -1,11 +1,20 @@
 "use client";
 
-import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type InfiniteData, type QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
 import { idempotencyHeader } from "@/lib/api/idempotency";
 import { problemFrom } from "@/lib/api/problem";
-import type { Group, MoveBody, MoveResponse, WorkOrderDetail, WorkOrderListItem, WorkflowVersion } from "@/lib/api/schema-types";
+import type {
+  Group,
+  LineAction,
+  MoveBody,
+  MoveHistory,
+  MoveResponse,
+  WorkOrderDetail,
+  WorkOrderListItem,
+  WorkflowVersion,
+} from "@/lib/api/schema-types";
 import { downloadUrl } from "@/lib/files/download";
 import { invalidateOrders } from "@/lib/orders/queries";
 import { useApiMutation } from "@/lib/query/use-api-mutation";
@@ -14,13 +23,18 @@ import { useCursorList } from "@/lib/query/use-cursor-list";
 /** The pieces a step group can list: active ones at a step, or those off the path. */
 export type PieceListStatus = "active" | "finished" | "scrapped";
 
+/** A line's History: every action, or only fails and corrections that put pieces at a step. */
+export type MovesFilter = "all" | "fails";
+
 const PIECES_PAGE = 200;
+const MOVES_PAGE = 25;
 const PHOTO_LINK_RENEW_MS = 4 * 60_000;
 
 export const productionKeys = {
   all: ["production"] as const,
   group: (id: string) => ["production", "group", id] as const,
   pieces: (groupId: string, stepKey: string | null, status: PieceListStatus) => ["production", "pieces", groupId, stepKey, status] as const,
+  moves: (groupId: string, filter: MovesFilter) => ["production", "moves", groupId, filter] as const,
   version: (workflowId: string, version: number) => ["production", "version", workflowId, version] as const,
   piece: (id: string) => ["production", "piece", id] as const,
   photo: (versionId: string) => ["production", "photo", versionId] as const,
@@ -57,6 +71,25 @@ export function useStepPieces(groupId: string, stepKey: string | null, status: P
     },
     enabled,
   });
+}
+
+/**
+ * A line's moves, one item per action, newest first. `counts` covers every page whatever the filter, so
+ * while one filter loads its counts come from the other's cached list.
+ */
+export function useLineMoves(groupId: string, filter: MovesFilter) {
+  const client = useQueryClient();
+  const list = useCursorList<LineAction, MoveHistory>({
+    queryKey: productionKeys.moves(groupId, filter),
+    fetchPage: async (cursor) => {
+      const query = { limit: MOVES_PAGE, ...(filter === "fails" ? { only: "fails" as const } : {}), ...(cursor ? { cursor } : {}) };
+      const { data, error, response } = await api.GET("/workflow/groups/{id}/moves", { params: { path: { id: groupId }, query } });
+      if (!data) throw problemFrom(error, response);
+      return data;
+    },
+  });
+  const other = client.getQueryData<InfiniteData<MoveHistory>>(productionKeys.moves(groupId, filter === "all" ? "fails" : "all"));
+  return { ...list, counts: list.data?.pages[0]?.counts ?? other?.pages[0]?.counts ?? null };
 }
 
 /** Each step's checklist, defects and evidence, as the group's pieces were started on. */
