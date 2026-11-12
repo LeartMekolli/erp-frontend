@@ -93,8 +93,8 @@ describe("fake erp-api orders", () => {
 
   it("refuses to ship an order that is not ready, or already shipped", () => {
     const s = store();
-    expect(s.ship(byNumber(s, 1041).id, {}, "a")).toMatchObject({ ok: false, status: 409, detail: "Order is not ready to ship" });
-    expect(s.ship(byNumber(s, 1051).id, {}, "b")).toMatchObject({ ok: false, status: 409, detail: "Order already shipped" });
+    expect(s.ship(byNumber(s, 1041).id, {}, "a")).toMatchObject({ ok: false, status: 409, code: "order_not_ready" });
+    expect(s.ship(byNumber(s, 1051).id, {}, "b")).toMatchObject({ ok: false, status: 409, code: "order_already_shipped" });
   });
 
   it("fails one label with 503, then buys it on retry with the same key", () => {
@@ -112,7 +112,7 @@ describe("fake erp-api orders", () => {
     const order = byNumber(s, 1044);
     expect(s.ship(order.id, { label: {}, tracking: "X" }, "a")).toMatchObject({ ok: false, status: 400, errors: [{ path: "label" }] });
     s.setCourierAccount(false);
-    expect(s.ship(order.id, { label: {} }, "b")).toMatchObject({ ok: false, status: 409, detail: "No courier account" });
+    expect(s.ship(order.id, { label: {} }, "b")).toMatchObject({ ok: false, status: 409, code: "courier_account_missing" });
   });
 
   it("records a payment by hand and starts a waiting order", () => {

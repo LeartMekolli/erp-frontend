@@ -37,7 +37,7 @@ describe("BulkShipDialog", () => {
   it("skips orders that aren't ready", async () => {
     renderDialog(1041, 1042, 1044);
     const dialog = await screen.findByRole("dialog", { name: "Ship 2 orders" });
-    expect(within(dialog).getByRole("radio", { name: "Mark as shipped" })).toBeChecked();
+    expect(await within(dialog).findByRole("radio", { name: "Mark as shipped" })).toBeChecked();
     expect(within(dialog).getByText("Tracking numbers can be added one order at a time.")).toBeInTheDocument();
     expect(within(dialog).getByText("1 selected order isn't ready and is skipped.")).toBeInTheDocument();
     await userEvent.type(within(dialog).getByLabelText("Courier"), "DHL");
@@ -54,7 +54,7 @@ describe("BulkShipDialog", () => {
     fakeState().orders.failNextLabel(order(1043).id);
     const { onOpenChange, onShipped, invalidate } = renderDialog(1042, 1043, 1044);
     const dialog = await screen.findByRole("dialog", { name: "Ship 3 orders" });
-    await userEvent.click(within(dialog).getByRole("radio", { name: "Buy labels" }));
+    await userEvent.click(await within(dialog).findByRole("radio", { name: "Buy labels" }));
     expect(within(dialog).getByText("Each label takes a few seconds.")).toBeInTheDocument();
     expect(within(dialog).queryByLabelText("Courier")).not.toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole("button", { name: "Ship 3 orders" }));
@@ -81,7 +81,7 @@ describe("BulkShipDialog", () => {
   it("offers Print label links for bought labels", async () => {
     renderDialog(1042, 1044);
     const dialog = await screen.findByRole("dialog");
-    await userEvent.click(within(dialog).getByRole("radio", { name: "Buy labels" }));
+    await userEvent.click(await within(dialog).findByRole("radio", { name: "Buy labels" }));
     await userEvent.click(within(dialog).getByRole("button", { name: "Ship 2 orders" }));
 
     expect(await within(dialog).findByText("2 shipped")).toBeInTheDocument();
@@ -90,5 +90,14 @@ describe("BulkShipDialog", () => {
       expect(link).toHaveAttribute("href", `https://labels.example.test/${number}.pdf`);
       expect(link).toHaveAttribute("target", "_blank");
     }
+  });
+
+  it("offers only Mark as shipped when labels aren't set up", async () => {
+    fakeState().orders.setCourierAccount(false);
+    renderDialog(1042, 1044);
+    const dialog = await screen.findByRole("dialog", { name: "Ship 2 orders" });
+    expect(await within(dialog).findByLabelText("Courier")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("radio", { name: "Buy labels" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("radio", { name: "Mark as shipped" })).not.toBeInTheDocument();
   });
 });

@@ -34,7 +34,7 @@ describe("ShipDialog", () => {
   it("ships with courier and tracking", async () => {
     const { onOpenChange, onShipped, invalidate } = renderDialog(1042);
     const dialog = await screen.findByRole("dialog", { name: "Ship #1042" });
-    expect(within(dialog).getByRole("radio", { name: "Enter tracking" })).toBeChecked();
+    expect(await within(dialog).findByRole("radio", { name: "Enter tracking" })).toBeChecked();
     expect(within(dialog).getByText("The customer gets an email with the tracking number.")).toBeInTheDocument();
     await userEvent.type(within(dialog).getByLabelText("Courier"), "DHL");
     await userEvent.type(within(dialog).getByLabelText("Tracking number"), "JD014600006281");
@@ -60,7 +60,7 @@ describe("ShipDialog", () => {
   it("buys a label and offers Print label", async () => {
     const { onOpenChange, onShipped, invalidate } = renderDialog(1043);
     const dialog = await screen.findByRole("dialog");
-    await userEvent.click(within(dialog).getByRole("radio", { name: "Buy a label" }));
+    await userEvent.click(await within(dialog).findByRole("radio", { name: "Buy a label" }));
     expect(
       within(dialog).getByText("The label uses this order's shipping method (Standard courier). Buying it takes a few seconds."),
     ).toBeInTheDocument();
@@ -80,17 +80,19 @@ describe("ShipDialog", () => {
     expect(onShipped).not.toHaveBeenCalled();
   });
 
-  it("a 409 on a label offers Enter tracking instead", async () => {
-    fakeState().orders.setCourierAccount(false);
+  it("offers tracking when no courier service is set up", async () => {
     const { onOpenChange, invalidate } = renderDialog(1043);
     const dialog = await screen.findByRole("dialog");
-    await userEvent.click(within(dialog).getByRole("radio", { name: "Buy a label" }));
+    await userEvent.click(await within(dialog).findByRole("radio", { name: "Buy a label" }));
+    // Turned off after the dialog opened, so the label is still offered.
+    fakeState().orders.setCourierAccount(false);
     await userEvent.click(within(dialog).getByRole("button", { name: "Ship order" }));
 
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("No courier account");
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["orders"] });
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("No courier service is set up for labels.");
+    // The order itself hasn't changed, so the list isn't stale.
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ["orders"] });
     await userEvent.click(within(dialog).getByRole("button", { name: "Enter tracking instead" }));
-    expect(within(dialog).getByRole("radio", { name: "Enter tracking" })).toBeChecked();
+    expect(await within(dialog).findByRole("radio", { name: "Enter tracking" })).toBeChecked();
     expect(within(dialog).getByLabelText("Courier")).toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalled();
   });
@@ -99,7 +101,7 @@ describe("ShipDialog", () => {
     fakeState().orders.failNextLabel(order(1044).id);
     renderDialog(1044);
     const dialog = await screen.findByRole("dialog");
-    await userEvent.click(within(dialog).getByRole("radio", { name: "Buy a label" }));
+    await userEvent.click(await within(dialog).findByRole("radio", { name: "Buy a label" }));
     await userEvent.click(within(dialog).getByRole("button", { name: "Ship order" }));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("The courier service refused the label: address incomplete");
@@ -117,10 +119,30 @@ describe("ShipDialog", () => {
     const dialog = await screen.findByRole("dialog", { name: "Ship #1041" });
     await userEvent.click(within(dialog).getByRole("button", { name: "Ship order" }));
 
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Order is not ready to ship");
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("#1041 isn't ready to ship any more.");
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["orders"] });
     expect(within(dialog).queryByRole("button", { name: "Enter tracking instead" })).not.toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalled();
+    expect(onShipped).not.toHaveBeenCalled();
+  });
+
+  it("offers only tracking when labels aren't set up", async () => {
+    fakeState().orders.setCourierAccount(false);
+    renderDialog(1042);
+    const dialog = await screen.findByRole("dialog", { name: "Ship #1042" });
+    expect(await within(dialog).findByLabelText("Tracking number")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Courier")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("radio", { name: "Buy a label" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("radio", { name: "Enter tracking" })).not.toBeInTheDocument();
+  });
+
+  it("says an order is already shipped and refreshes the list", async () => {
+    const { onShipped, invalidate } = renderDialog(1051);
+    const dialog = await screen.findByRole("dialog", { name: "Ship #1051" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Ship order" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("#1051 is already shipped.");
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["orders"] });
     expect(onShipped).not.toHaveBeenCalled();
   });
 });

@@ -5,6 +5,7 @@ import { ExternalLink } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { Field } from "@/components/auth/field";
+import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -38,7 +39,11 @@ export function BulkShipDialog({
   onShipped: (ids: string[]) => void;
 }) {
   const client = useQueryClient();
-  const [choice, setChoice] = useState<Choice>("mark");
+  const { data: me } = useMe();
+  // Labels need the workspace's courier service (`/me`); until that's known, only marking is offered.
+  const labelsOffered = me?.workspace.labels_available ?? false;
+  const [picked, setChoice] = useState<Choice>("mark");
+  const choice: Choice = labelsOffered ? picked : "mark";
   const [courier, setCourier] = useState("");
   const [phase, setPhase] = useState<"form" | "running" | "done">("form");
   // How many orders the dialog set out to ship: its title from then on.
@@ -120,13 +125,15 @@ export function BulkShipDialog({
               start();
             }}
           >
-            <fieldset className="flex flex-col gap-2">
-              <legend className="sr-only">How to ship</legend>
-              <div className="grid grid-cols-2 gap-2">
-                <ShipChoice name="bulk-ship-choice" value="mark" label="Mark as shipped" choice={choice} onChoose={setChoice} />
-                <ShipChoice name="bulk-ship-choice" value="label" label="Buy labels" choice={choice} onChoose={setChoice} />
-              </div>
-            </fieldset>
+            {labelsOffered && (
+              <fieldset className="flex flex-col gap-2">
+                <legend className="sr-only">How to ship</legend>
+                <div className="grid grid-cols-2 gap-2">
+                  <ShipChoice name="bulk-ship-choice" value="mark" label="Mark as shipped" choice={choice} onChoose={setChoice} />
+                  <ShipChoice name="bulk-ship-choice" value="label" label="Buy labels" choice={choice} onChoose={setChoice} />
+                </div>
+              </fieldset>
+            )}
             {choice === "mark" ? (
               <Field id="bulk-ship-courier" label="Courier" hint="Tracking numbers can be added one order at a time.">
                 {(props) => (

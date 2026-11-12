@@ -302,12 +302,14 @@ export function createOrdersStore(now: () => number) {
       return once(key, { id, body }, () => {
         const order = orders.get(id);
         if (!order) return { ok: false, status: 404, detail: "Order not found" };
-        if (order.state === "shipped" || order.state === "delivered") return { ok: false, status: 409, detail: "Order already shipped" };
-        if (order.state !== "ready") return { ok: false, status: 409, detail: "Order is not ready to ship" };
+        if (order.state === "shipped" || order.state === "delivered")
+          return { ok: false, status: 409, code: "order_already_shipped", detail: "Only a ready order can be shipped" };
+        if (order.state !== "ready") return { ok: false, status: 409, code: "order_not_ready", detail: "Only a ready order can be shipped" };
         let shipping: StoredOrder["shipping"];
         const shippedAt = new Date(now()).toISOString();
         if (body.label) {
-          if (!courierAccount) return { ok: false, status: 409, detail: "No courier account" };
+          if (!courierAccount)
+            return { ok: false, status: 409, code: "courier_account_missing", detail: "No courier service is set up for this workspace" };
           if (failingLabels.delete(id))
             return { ok: false, status: 503, detail: "The courier service refused the label: address incomplete" };
           const tracking = `LBL${order.number}`;
@@ -382,6 +384,11 @@ export function createOrdersStore(now: () => number) {
     /** Whether the workspace has a courier account to buy labels from. */
     setCourierAccount(on: boolean): void {
       courierAccount = on;
+    },
+
+    /** What `/me` says as `workspace.labels_available`. */
+    labelsAvailable(): boolean {
+      return courierAccount;
     },
   };
 }
