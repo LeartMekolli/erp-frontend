@@ -85,6 +85,11 @@ export type WorkflowStep = WorkflowVersion["steps"][number];
 export type MoveBody = JsonBody<"/workflow/moves", "post">;
 export type MoveResponse = JsonOk<"/workflow/moves", "post">;
 
+/** `GET /workflow/groups/{id}/moves`: a line's moves, one item per action, with counts over every page. */
+export type MoveHistory = JsonOk<"/workflow/groups/{id}/moves", "get">;
+export type LineAction = MoveHistory["data"][number];
+export type ActionPiece = LineAction["pieces"][number];
+
 /** `GET /partners/eligible`: who can take a job, and who can't with why. */
 export type EligiblePartners = JsonOk<"/partners/eligible", "get">;
 

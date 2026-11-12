@@ -1,11 +1,13 @@
 import { LOCALE } from "./money";
 
-type Style = "date" | "dateTime" | "time";
+type Style = "date" | "dateTime" | "time" | "dayMonth" | "key";
 
 const OPTIONS: Record<Style, Intl.DateTimeFormatOptions> = {
   date: { dateStyle: "medium" },
   dateTime: { dateStyle: "medium", timeStyle: "short" },
   time: { timeStyle: "short" },
+  dayMonth: { day: "numeric", month: "short" },
+  key: { year: "numeric", month: "2-digit", day: "2-digit" },
 };
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
@@ -14,7 +16,8 @@ function format(style: Style, timeZone: string, date: Date): string {
   const key = `${style} ${timeZone}`;
   let formatter = formatters.get(key);
   if (!formatter) {
-    formatter = new Intl.DateTimeFormat(LOCALE, { ...OPTIONS[style], timeZone });
+    // Canadian English writes a day as `YYYY-MM-DD`, the shape a key needs.
+    formatter = new Intl.DateTimeFormat(style === "key" ? "en-CA" : LOCALE, { ...OPTIONS[style], timeZone });
     formatters.set(key, formatter);
   }
   return formatter.format(date);
@@ -33,6 +36,16 @@ export function formatDateTime(iso: string, timeZone: string): string {
 /** `14:05`, in the workspace's zone. */
 export function formatTime(iso: string, timeZone: string): string {
   return format("time", timeZone, new Date(iso));
+}
+
+/** `11 Nov`, in the workspace's zone. */
+export function formatDayMonth(iso: string, timeZone: string): string {
+  return format("dayMonth", timeZone, new Date(iso));
+}
+
+/** An instant's calendar day in the zone, as `YYYY-MM-DD`: what two instants on the same day share. */
+export function dayKey(iso: string, timeZone: string): string {
+  return format("key", timeZone, new Date(iso));
 }
 
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
