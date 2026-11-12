@@ -69,6 +69,12 @@ export function createNotificationsStore(now: () => number) {
       return { ok: true, body: null };
     },
 
+    /** Entries read before keep their first read time. */
+    readAll(userId: string): void {
+      const readAt = new Date(now()).toISOString();
+      for (const e of entries) if (e.userId === userId) e.entry.read_at ??= readAt;
+    },
+
     unread(userId: string): number {
       return entries.filter((e) => e.userId === userId && e.entry.read_at === null).length;
     },

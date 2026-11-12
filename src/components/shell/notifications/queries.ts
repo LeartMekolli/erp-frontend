@@ -59,3 +59,17 @@ export function useMarkRead() {
     { onSettled: () => client.invalidateQueries({ queryKey: notificationsKeys.all }) },
   );
 }
+
+/** Marks every notification read; the count and the list fetch again. */
+export function useMarkAllRead() {
+  const client = useQueryClient();
+  return useApiMutation<void, void>(
+    async (_, key) => {
+      const { error, response } = await api.POST("/notifications/read-all", {
+        params: { header: idempotencyHeader(key) },
+      });
+      if (!response.ok) throw problemFrom(error, response);
+    },
+    { onSettled: () => client.invalidateQueries({ queryKey: notificationsKeys.all }) },
+  );
+}

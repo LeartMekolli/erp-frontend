@@ -67,6 +67,42 @@ describe("Bell", () => {
     expect(screen.getByRole("dialog", { name: "Notifications" })).toBeInTheDocument();
   });
 
+  it("marks every notification read", async () => {
+    renderAs(STAFF, <Bell />);
+    await screen.findByRole("button", { name: "Notifications, 3 unread" });
+    const panel = await openPanel();
+    await within(panel).findAllByRole("listitem");
+    await userEvent.click(within(panel).getByRole("button", { name: "Mark all as read" }));
+    await waitFor(() => expect(within(panel).queryByText("Unread")).not.toBeInTheDocument());
+    expect(fakeState().notifications.unread(STAFF.id)).toBe(0);
+    expect(within(panel).queryByRole("button", { name: "Mark all as read" })).not.toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    expect(await screen.findByRole("button", { name: "Notifications" })).toBeInTheDocument();
+  });
+
+  it("hides Mark all as read when nothing is unread", async () => {
+    renderAs(CLERK, <Bell />);
+    await screen.findByRole("button", { name: "Notifications" });
+    const panel = await openPanel();
+    await within(panel).findByText("You're all caught up.");
+    expect(within(panel).queryByRole("button", { name: "Mark all as read" })).not.toBeInTheDocument();
+  });
+
+  it("says when marking all read fails", async () => {
+    server.use(
+      http.post(`${FAKE_API_URL}/notifications/read-all`, () =>
+        HttpResponse.json({ type: "about:blank", title: "Error", status: 503, detail: "erp-api is busy. Try again shortly." }, { status: 503 }),
+      ),
+    );
+    renderAs(STAFF, <Bell />);
+    await screen.findByRole("button", { name: "Notifications, 3 unread" });
+    const panel = await openPanel();
+    await userEvent.click(await within(panel).findByRole("button", { name: "Mark all as read" }));
+    expect(await within(panel).findByText("erp-api is busy. Try again shortly.")).toBeInTheDocument();
+    expect(fakeState().notifications.unread(STAFF.id)).toBe(3);
+    expect(within(panel).getByRole("button", { name: "Mark all as read" })).toBeEnabled();
+  });
+
   it("says when you're all caught up", async () => {
     renderAs(CLERK, <Bell />);
     expect(await screen.findByRole("button", { name: "Notifications" })).toBeInTheDocument();

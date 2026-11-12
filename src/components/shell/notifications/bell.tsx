@@ -2,7 +2,7 @@
 
 import { Bell as BellIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useId, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 
 import { ListEnd } from "@/components/data/list-end";
 import { useMe } from "@/components/session/session-gate";
@@ -14,7 +14,7 @@ import type { FeedEntry } from "@/lib/api/schema-types";
 import { useFormat } from "@/lib/format/use-format";
 import { useMediaQuery } from "@/lib/use-media-query";
 
-import { useFeed, useMarkRead, useUnreadCount } from "./queries";
+import { useFeed, useMarkAllRead, useMarkRead, useUnreadCount } from "./queries";
 import { subjectHref } from "./subject-href";
 
 const TITLE = "Notifications";
@@ -76,9 +76,11 @@ export function Bell() {
           aria-labelledby={titleId}
           className="max-h-[min(36rem,calc(100dvh-5rem))] w-96 gap-0 overflow-hidden rounded-xl p-0"
         >
-          <h2 id={titleId} className="border-b border-line px-4 py-3 text-sm font-semibold text-ink">
-            {TITLE}
-          </h2>
+          <PanelHeader unread={unread} className="px-4">
+            <h2 id={titleId} className="text-sm font-semibold text-ink">
+              {TITLE}
+            </h2>
+          </PanelHeader>
           <Feed onChoose={choose} />
         </PopoverContent>
       </Popover>
@@ -93,12 +95,37 @@ export function Bell() {
         aria-describedby={undefined}
         className="gap-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] data-[side=right]:w-full data-[side=right]:border-l-0 data-[side=right]:sm:max-w-none"
       >
-        <SheetHeader className="border-b border-line px-4 py-3">
-          <SheetTitle className="text-sm font-semibold text-ink">{TITLE}</SheetTitle>
+        <SheetHeader className="p-0">
+          {/* Clear of the sheet's close button in the corner. */}
+          <PanelHeader unread={unread} className="pr-16 pl-4">
+            <SheetTitle className="text-sm font-semibold text-ink">{TITLE}</SheetTitle>
+          </PanelHeader>
         </SheetHeader>
         <Feed onChoose={choose} />
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** The panel's title, with "Mark all as read" while anything is unread and a line when it fails. */
+function PanelHeader({ unread, className, children }: { unread: number; className: string; children: ReactNode }) {
+  const markAll = useMarkAllRead();
+  return (
+    <div className={`flex flex-col gap-1 border-b border-line py-1.5 ${className}`}>
+      <div className="flex min-h-11 items-center justify-between gap-3">
+        {children}
+        {unread > 0 && (
+          <Button variant="ghost" className="-mr-3 px-3" disabled={markAll.isPending} onClick={() => markAll.mutate()}>
+            Mark all as read
+          </Button>
+        )}
+      </div>
+      {markAll.isError && (
+        <p role="alert" className="pb-1.5 text-caption text-ink-2">
+          {errorMessage(markAll.error)}
+        </p>
+      )}
+    </div>
   );
 }
 
