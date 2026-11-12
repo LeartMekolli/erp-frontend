@@ -28,6 +28,11 @@ export type PartnerPaths = {
   [P in keyof paths as P extends `/partner-portal/${string}` | "/me" ? P : never]: paths[P];
 };
 
+/** The notification routes: the feed both areas read. */
+export type NotificationPaths = {
+  [P in keyof paths as P extends "/notifications" | `/notifications/${string}` ? P : never]: paths[P];
+};
+
 type JsonBody<P extends keyof paths, M extends "post"> = paths[P][M] extends {
   requestBody: { content: { "application/json": infer Body } };
 }

@@ -5,14 +5,22 @@ import { useState, type ReactNode } from "react";
 
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
-import { Sidebar } from "./sidebar";
-import { TopBar } from "./top-bar";
-
 /**
- * The frame of every staff page: the sidebar (full from 1280 px, an icon rail
- * from 1024, a drawer below), the top bar, and the page.
+ * The frame of every page in both areas: the sidebar (full from 1280 px, an
+ * icon rail from 1024, a drawer below), the top bar, an optional banner, and
+ * the page. Each area passes its own sidebar and top bar.
  */
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  sidebar,
+  topBar,
+  banner,
+  children,
+}: {
+  sidebar: (props: { expanded: boolean; onToggle?: () => void; onNavigate?: () => void }) => ReactNode;
+  topBar: (onOpenMenu: () => void) => ReactNode;
+  banner?: ReactNode;
+  children: ReactNode;
+}) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -31,18 +39,19 @@ export function AppShell({ children }: { children: ReactNode }) {
           expanded ? "w-60" : "w-[76px] xl:w-60",
         )}
       >
-        <Sidebar expanded={expanded} onToggle={() => setExpanded((open) => !open)} />
+        {sidebar({ expanded, onToggle: () => setExpanded((open) => !open) })}
       </aside>
 
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
         <SheetContent side="left" className="w-72 max-w-[85vw] bg-card p-0 lg:hidden">
           <SheetTitle className="sr-only">Menu</SheetTitle>
-          <Sidebar expanded onNavigate={() => setDrawerOpen(false)} />
+          {sidebar({ expanded: true, onNavigate: () => setDrawerOpen(false) })}
         </SheetContent>
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar onOpenMenu={() => setDrawerOpen(true)} />
+        {topBar(() => setDrawerOpen(true))}
+        {banner}
         <main id="main" tabIndex={-1} className="flex flex-1 flex-col gap-4 px-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] outline-none sm:px-5 max-md:has-[[data-move-bar]]:pb-40">
           {children}
         </main>
