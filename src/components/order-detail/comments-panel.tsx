@@ -23,11 +23,14 @@ import { submitErrorText } from "./submit-error";
 
 const KIND: Record<OrderComment["author"]["kind"], string> = { staff: "Staff", customer: "Customer", partner: "Partner" };
 
+/** Who else reads a staff comment. A customer's or partner's own comment needs no word for it. */
+const READERS: Record<OrderComment["visibility"], string> = { staff: "Staff only", customer: "To the customer", partner: "To the partner" };
+
 // erp-api's limit (`orders/order-response.ts:346`).
 const schema = z.object({
   body: z.string().trim().min(1, "Write something first.").max(5000, "Use at most 5,000 characters."),
   lineId: z.string(),
-  forPartner: z.boolean(),
+  reader: z.enum(["staff", "customer", "partner"]),
 });
 type Values = z.infer<typeof schema>;
 
@@ -44,6 +47,7 @@ function Comment({ comment, order, lines }: { comment: OrderComment; order: Orde
   const { dateTime } = useFormat();
   const [failure, setFailure] = useState<string | null>(null);
   const line = lines.find((candidate) => candidate.id === comment.line_id);
+  const readers = comment.author.kind === "staff" ? READERS[comment.visibility] : null;
 
   return (
     <li className="flex flex-col gap-1 border-t border-line py-2.5 first:border-t-0 first:pt-0">
@@ -52,10 +56,10 @@ function Comment({ comment, order, lines }: { comment: OrderComment; order: Orde
         <span className="text-caption text-ink-2">{KIND[comment.author.kind]}</span>
         <span className="ml-auto text-caption text-ink-2">{dateTime(comment.created_at)}</span>
       </div>
-      {(line || comment.for_partner) && (
+      {(line || readers) && (
         <div className="flex flex-wrap gap-x-2 text-caption font-medium text-ink-2">
           {line && <span className="break-words">{lineTitle(line)}</span>}
-          {comment.for_partner && <span>To the partner</span>}
+          {readers && <span>{readers}</span>}
         </div>
       )}
       <p className="text-sm break-words whitespace-pre-wrap">{comment.body}</p>
@@ -85,25 +89,29 @@ function CommentForm({ order, lines }: { order: Order; lines: AnyLine[] }) {
     handleSubmit,
     reset,
     setError,
+    setValue,
+    getValues,
     control,
     formState: { errors },
-  } = useForm<Values>({ resolver: zodResolver(schema), defaultValues: { body: "", lineId: "", forPartner: false } });
-  const [lineId, forPartner] = useWatch({ control, name: ["lineId", "forPartner"] });
-  const picked = lines.find((line) => line.id === lineId);
-  // A partner reads only what's on a job it has accepted (`orders/comments.service.ts:197`).
-  const holder = picked?.partner?.status === "accepted" ? picked.partner : null;
-  const toPartner = holder !== null && forPartner;
+  } = useForm<Values>({ resolver: zodResolver(schema), defaultValues: { body: "", lineId: "", reader: "staff" } });
+  const [lineId, reader] = useWatch({ control, name: ["lineId", "reader"] });
+  const line = lines.find((candidate) => candidate.id === lineId);
+  // A partner reads only what's on a job it has accepted (`partnerScope` in erp-api's `orders/comments.service.ts`).
+  const holder = line?.partner?.status === "accepted" ? line.partner : null;
 
   const onSubmit = async (values: Values) => {
     setMessage(null);
     try {
-      await post.mutateAsync({ body: values.body, ...(values.lineId ? { line_id: values.lineId } : {}), ...(toPartner ? { for_partner: true } : {}) });
+      await post.mutateAsync({ body: values.body, ...(values.lineId ? { line_id: values.lineId } : {}), visibility: values.reader });
     } catch (error) {
       setMessage(isApiProblem(error) && error.status === 400 ? applyFieldErrors(error, setError, ["body"]) : submitErrorText(error));
       return;
     }
     reset();
   };
+
+  const notice =
+    reader === "partner" && holder ? `${holder.name} will read this, not the customer` : reader === "customer" ? "The customer will read this" : "Only staff will read this";
 
   return (
     <form onSubmit={(event) => void handleSubmit(onSubmit)(event)} noValidate className="flex flex-col gap-3 border-t border-line pt-3">
@@ -114,7 +122,15 @@ function CommentForm({ order, lines }: { order: Order; lines: AnyLine[] }) {
         </Field>
         <Field id="comment-line" label="About">
           {(props) => (
-            <NativeSelect {...props} {...register("lineId")}>
+            <NativeSelect
+              {...props}
+              {...register("lineId", {
+                // The partner is offered only on its own line, so another line falls back to staff only.
+                onChange: () => {
+                  if (getValues("reader") === "partner") setValue("reader", "staff");
+                },
+              })}
+            >
               <option value="">The whole order</option>
               {lines.map((line) => (
                 <option key={line.id} value={line.id}>
@@ -124,13 +140,16 @@ function CommentForm({ order, lines }: { order: Order; lines: AnyLine[] }) {
             </NativeSelect>
           )}
         </Field>
-        {holder && (
-          <label className="inline-flex min-h-11 items-center gap-2 text-sm text-ink">
-            <input type="checkbox" className="size-4 accent-violet" {...register("forPartner")} />
-            Send to partner
-          </label>
-        )}
-        <p className="text-caption font-medium text-ink">{toPartner ? `${holder.name} will read this, not the customer` : "The customer will read this"}</p>
+        <Field id="comment-reader" label="Who reads it">
+          {(props) => (
+            <NativeSelect {...props} {...register("reader")}>
+              <option value="staff">Staff only</option>
+              <option value="customer">The customer</option>
+              {holder && <option value="partner">{holder.name}</option>}
+            </NativeSelect>
+          )}
+        </Field>
+        <p className="text-caption font-medium text-ink">{notice}</p>
         <Button type="submit" className="self-end">
           {post.isPending ? "Posting…" : "Post comment"}
         </Button>

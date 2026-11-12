@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { OrderState } from "@/lib/api/schema-types";
 import { useCan } from "@/lib/auth/permissions";
 import { useGroup } from "@/lib/production/queries";
+import { failedOnLine } from "@/lib/production/quality";
 
 import { LoadFailure } from "./load-failure";
 import { PiecesTab } from "./pieces-tab";
@@ -43,13 +44,22 @@ function Progress({ groupId, index, orderState, partnerName = null }: LineTabsPr
     return <LoadFailure error={group.error} fallback="This line's progress couldn't be loaded." onRetry={() => void group.refetch()} />;
   }
 
+  const failed = failedOnLine(group.data.steps);
   return (
     <>
       <StepStrip group={group.data} />
       <Tabs defaultValue="pieces" className="min-w-0 pt-2">
         <TabsList variant="line" aria-label="Pieces and quality">
           <TabsTrigger value="pieces">Pieces</TabsTrigger>
-          <TabsTrigger value="quality">Quality</TabsTrigger>
+          <TabsTrigger value="quality">
+            Quality
+            {failed > 0 && (
+              <>
+                {" "}
+                <span className="rounded-full bg-collect/20 px-1.5 text-caption font-medium text-ink tabular-nums">{`${failed} failed`}</span>
+              </>
+            )}
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="pieces">
           <PiecesTab group={group.data} orderState={orderState} partnerName={partnerName} />

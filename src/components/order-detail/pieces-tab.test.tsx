@@ -63,7 +63,37 @@ describe("LineTabs", () => {
   it("has Pieces and Quality tabs", async () => {
     renderTabs();
     expect(await screen.findByRole("tab", { name: "Pieces" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "Quality" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /^Quality/ })).toBeInTheDocument();
+  });
+
+  it("says on the Quality tab how many checks failed on the line", async () => {
+    renderTabs();
+    expect(await screen.findByRole("tab", { name: "Quality 2 failed" })).toBeInTheDocument();
+  });
+
+  it("names the Quality tab alone when nothing failed", async () => {
+    const clean = groupBody();
+    clean.steps = clean.steps.map((step) => ({ ...step, failed: 0 }));
+    server.use(http.get(`${FAKE_API_URL}/workflow/groups/:id`, () => HttpResponse.json(clean)));
+    renderTabs();
+    expect(await screen.findByRole("tab", { name: "Quality" })).toBeInTheDocument();
+  });
+
+  it("marks a piece being redone and says what last happened to it", async () => {
+    renderTabs();
+    await userEvent.click(await section(/^Finish\b/));
+    const redone = (await screen.findByText("3/12")).closest("li")!;
+    expect(redone).toHaveTextContent("Being redone");
+    expect(redone).toHaveTextContent("Failed at Final QC: Porosity");
+    const passed = screen.getByText("4/12").closest("li")!;
+    expect(passed).toHaveTextContent("Passed Print");
+    expect(passed).not.toHaveTextContent("Being redone");
+  });
+
+  it("says nothing about the last move of a piece that hasn't moved", async () => {
+    renderTabs();
+    const first = (await screen.findByText("1/12")).closest("li")!;
+    expect(first).not.toHaveTextContent(/Passed|Failed|Corrected/);
   });
 
   it("opens only the first step with pieces", async () => {

@@ -156,6 +156,30 @@ describe("CancelDialog", () => {
     expect(sent).toHaveLength(0);
   });
 
+  it("limits the refund to what erp-api says can still be refunded", async () => {
+    const paid = order(1049);
+    const pending = { ...paid, payment: { ...paid.payment, paid: "500.00", refunded: "0.00", refundable: "200.00" } };
+    renderDialog(pending);
+    await dialog(1049);
+    const most = formatMoney("200.00", paid.currency);
+    expect(screen.getByText(`Up to ${most}. Enter 0.00 to refund nothing.`)).toBeInTheDocument();
+    await type("Reason", "Project dropped");
+    await type("Refund", "300.00");
+    await submit();
+    expect(await screen.findByText(`Refund at most ${most}.`)).toBeInTheDocument();
+    expect(sent).toHaveLength(0);
+  });
+
+  it("asks for no refund once nothing is left to refund, even without refund rights", async () => {
+    const paid = order(1049);
+    const settled = { ...paid, payment: { ...paid.payment, paid: "500.00", refunded: "300.00", refundable: "0.00" } };
+    renderDialog(settled, ORDER_WRITER);
+    await dialog(1049);
+    expect(screen.queryByLabelText("Refund")).not.toBeInTheDocument();
+    expect(screen.queryByText(/needs permission to refund/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel order" })).toBeEnabled();
+  });
+
   it("says why a paid order can't be cancelled without refund rights", async () => {
     renderDialog(order(1049), ORDER_WRITER);
     await dialog(1049);

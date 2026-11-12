@@ -162,6 +162,7 @@ function decodeCursor(cursor: string): { sort: string; offset: number } | null {
 
 /** Whole cents, so the fake's sums never go through a fractional number. */
 const cents = (amount: string) => Number(amount.replace(".", ""));
+const fromCents = (total: number) => `${Math.trunc(total / 100)}.${String(total % 100).padStart(2, "0")}`;
 
 /** What is still owed on the to-collect orders, per currency, leaving out any currency owing nothing. */
 function toCollectAmounts(orders: Order[]): OrderCounts["to_collect_amounts"] {
@@ -261,7 +262,7 @@ export function createOrdersStore(now: () => number) {
         const order = orders.get(id);
         if (!order) return { ok: false, status: 404, detail: "Order not found" };
         if (order.state === "shipped" || order.state === "delivered") return { ok: false, status: 409, detail: "A shipped order can't be cancelled" };
-        const paidLeft = cents(order.payment.paid) - cents(order.payment.refunded);
+        const paidLeft = cents(order.payment.refundable);
         if ((paidLeft > 0 || body.refund) && !mayRefund) return { ok: false, status: 403, detail: "Cancelling a paid order refunds it, which needs the payment.refund permission" };
         if (paidLeft > 0 && !body.refund) return invalid("refund.amount", "required: up to the amount paid, or 0.00 to refund nothing");
         const open = order.lines.filter((line) => line.state !== "cancelled").map((line) => line.position);
@@ -282,7 +283,13 @@ export function createOrdersStore(now: () => number) {
           lines,
           state: whole ? "cancelled" : order.state,
           cancelled: whole ? { at: new Date(now()).toISOString(), reason: body.reason } : order.cancelled,
-          payment: body.refund ? { ...order.payment, refunded: body.refund.amount } : order.payment,
+          payment: body.refund
+            ? {
+                ...order.payment,
+                refunded: fromCents(cents(order.payment.refunded) + cents(body.refund.amount)),
+                refundable: fromCents(paidLeft - cents(body.refund.amount)),
+              }
+            : order.payment,
         };
         orders.set(id, cancelled);
         return { ok: true, body: view(cancelled) };
@@ -344,6 +351,7 @@ export function createOrdersStore(now: () => number) {
             ...order.payment,
             state: "paid",
             paid: order.total,
+            refundable: order.total,
             invoice: order.payment.invoice ? { ...order.payment.invoice, status: "paid" } : null,
           },
         };

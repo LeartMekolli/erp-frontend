@@ -127,8 +127,9 @@ function CancelForm({ order, onCancelled }: CancelProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [chosen, setChosen] = useState<number[]>([]);
   const open = [...order.lines].sort((a, b) => a.position - b.position).filter((line) => line.state !== "cancelled");
-  const paidLeft = cents(order.payment.paid) - cents(order.payment.refunded);
-  const maxRefund = money(amountOf(paidLeft > ZERO ? paidLeft : ZERO), order.currency);
+  // What was paid less refunds made or still being made, the limit erp-api's cancel enforces.
+  const paidLeft = cents(order.payment.refundable);
+  const maxRefund = money(amountOf(paidLeft), order.currency);
   const blocked = paidLeft > ZERO && !mayRefund;
 
   const {

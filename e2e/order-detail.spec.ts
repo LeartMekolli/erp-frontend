@@ -100,13 +100,40 @@ test("a line goes to a partner and the offer shows on it", async ({ page }) => {
   await expect(line.getByRole("button", { name: "Withdraw offer" })).toBeVisible();
 });
 
-test("a comment posts and says who will read it", async ({ page }) => {
+test("a failed check shows on the Quality tab", async ({ page }) => {
+  await openOrder(page, 1048);
+  await expect(page.getByRole("tab", { name: "Quality 2 failed" })).toBeVisible();
+  await section(page, /^Final QC\b/).click();
+  await tick(page, "7/12");
+  await page.getByRole("button", { name: "Fail…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Fail 1 piece at Final QC" });
+  await dialog.getByLabel("Defect").selectOption({ label: "Porosity" });
+  await dialog.getByLabel("Comment").fill("Pitted on the inside");
+  await dialog.getByRole("button", { name: "Fail", exact: true }).click();
+  await expect(page.getByText("1 piece failed at Final QC.")).toBeVisible();
+
+  await page.getByRole("tab", { name: "Quality 3 failed" }).click();
+  const card = page.getByRole("article", { name: "Final QC" });
+  await expect(card.getByText("2 failed", { exact: true })).toBeVisible();
+  await expect(card.getByRole("list", { name: "Defects at Final QC" })).toContainText("Porosity");
+  await expect(card.getByText("Latest check by Ana Ruiz")).toBeVisible();
+});
+
+test("a comment posts for staff only unless another reader is picked", async ({ page }) => {
   await openOrder(page, 1049);
   const comments = page.getByRole("region", { name: "Comments" });
+  await expect(comments.getByText("Only staff will read this")).toBeVisible();
+  await comments.getByLabel("Add a comment").fill("Check the finish first");
+  await comments.getByRole("button", { name: "Post comment" }).click();
+  const posted = comments.getByRole("list", { name: "Comments" }).getByRole("listitem").filter({ hasText: "Check the finish first" });
+  await expect(posted.getByText("Staff only")).toBeVisible();
+
+  await comments.getByLabel("Who reads it").selectOption({ label: "The customer" });
   await expect(comments.getByText("The customer will read this")).toBeVisible();
   await comments.getByLabel("Add a comment").fill("Ready on Friday");
   await comments.getByRole("button", { name: "Post comment" }).click();
-  await expect(comments.getByRole("list", { name: "Comments" }).getByText("Ready on Friday")).toBeVisible();
+  const toCustomer = comments.getByRole("list", { name: "Comments" }).getByRole("listitem").filter({ hasText: "Ready on Friday" });
+  await expect(toCustomer.getByText("To the customer")).toBeVisible();
 });
 
 test("an order is cancelled with a reason", async ({ page }) => {

@@ -4,9 +4,11 @@ import type { Group, WorkOrderListItem } from "@/lib/api/schema-types";
 
 import { nextStepName, pruneSelection } from "./selection";
 
+const NO_CHECKS = { passed: 0, failed: 0, not_inspected: 0, defects: [], latest_check: null };
+
 const steps: Group["steps"] = [
-  { key: "print", name: "Print", count: 1, in_rework: 0 },
-  { key: "packing", name: "Packing", count: 0, in_rework: 0 },
+  { key: "print", name: "Print", count: 1, in_rework: 0, ...NO_CHECKS },
+  { key: "packing", name: "Packing", count: 0, in_rework: 0, ...NO_CHECKS },
 ];
 
 function piece(id: string, fields: Partial<WorkOrderListItem> = {}): WorkOrderListItem {
@@ -21,6 +23,8 @@ function piece(id: string, fields: Partial<WorkOrderListItem> = {}): WorkOrderLi
     created_at: "2026-11-04T10:00:00.000Z",
     to_inspect: null,
     may_work: true,
+    in_rework: false,
+    last_move: null,
     ...fields,
   };
 }

@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
@@ -31,15 +31,22 @@ const version = (): WorkflowVersion => {
   return ok(fakeState().production.version(workflow.id, workflow.version));
 };
 
+/** The fake group with one step's fields replaced. */
+function withStep(key: string, fields: Partial<Group["steps"][number]>): Group {
+  const changed = group();
+  changed.steps = changed.steps.map((step) => (step.key === key ? { ...step, ...fields } : step));
+  return changed;
+}
+
 function WithMe({ children }: { children: ReactNode }) {
   return useMe().data ? <StepSelectionProvider>{children}</StepSelectionProvider> : null;
 }
 
-function renderTab() {
+function renderTab(shown: Group = group()) {
   renderAs(
     STAFF,
     <WithMe>
-      <QualityTab group={group()} />
+      <QualityTab group={shown} />
     </WithMe>,
   );
 }
@@ -58,19 +65,89 @@ describe("QualityTab", () => {
     expect(await screen.findByText("No checks at Print and Packing.")).toBeInTheDocument();
   });
 
-  it("says how many are waiting and being redone", async () => {
+  it("counts passed, failed and waiting, with a bar of the same", async () => {
     renderTab();
-    expect(within(await card("Finish")).getByText("4 waiting, 1 of them being redone")).toBeInTheDocument();
-    expect(within(await card("Final QC")).getByText("3 waiting")).toBeInTheDocument();
+    const finish = await card("Finish");
+    expect(within(finish).getByText("6 passed · 1 failed · 4 waiting")).toBeInTheDocument();
+    expect(within(finish).getByRole("img", { name: "6 passed, 1 failed, 4 waiting" })).toBeInTheDocument();
+    expect(within(await card("Final QC")).getByText("2 passed · 1 failed · 3 waiting")).toBeInTheDocument();
   });
 
-  it("says a sampled step is sampled", async () => {
+  it("says how many waiting pieces are being redone", async () => {
+    renderTab();
+    expect(within(await card("Finish")).getByText("1 being redone")).toBeInTheDocument();
+    expect(within(await card("Final QC")).queryByText(/being redone/)).not.toBeInTheDocument();
+  });
+
+  it("puts failures first, in amber with the word", async () => {
+    renderTab();
+    const finish = await card("Finish");
+    expect(within(finish).getByText("1 failed")).toBeInTheDocument();
+    expect(finish).toHaveClass("border-collect");
+  });
+
+  it("says waiting, all through or not reached when nothing failed", async () => {
+    renderTab(withStep("finish", { failed: 0, defects: [], count: 4, in_rework: 0 }));
+    expect(within(await card("Finish")).getByText("4 waiting")).toBeInTheDocument();
+    expect(await card("Finish")).not.toHaveClass("border-collect");
+  });
+
+  it("says all through once no piece is left before the step", async () => {
+    const cleared = withStep("finish", { failed: 0, defects: [], count: 0, in_rework: 0 });
+    cleared.steps = cleared.steps.map((step) => (step.key === "print" ? { ...step, count: 0 } : step));
+    renderTab(cleared);
+    expect(within(await card("Finish")).getByText("All through")).toBeInTheDocument();
+  });
+
+  it("says how many passed so far while pieces are still at earlier steps", async () => {
+    renderTab(withStep("finish", { failed: 0, defects: [], count: 0, in_rework: 0 }));
+    const finish = await card("Finish");
+    expect(within(finish).getByText("6 passed so far")).toBeInTheDocument();
+    expect(within(finish).queryByText("All through")).not.toBeInTheDocument();
+  });
+
+  it("says when no piece has reached a step", async () => {
+    renderTab(withStep("final_qc", { passed: 0, failed: 0, not_inspected: 0, defects: [], count: 0, latest_check: null }));
+    const finalQc = await card("Final QC");
+    expect(within(finalQc).getByText("Not reached yet")).toBeInTheDocument();
+    expect(within(finalQc).queryByText(/^Latest check/)).not.toBeInTheDocument();
+  });
+
+  it("lists the defects with their counts, in erp-api's order", async () => {
+    const defects = [
+      { key: "scratch", name: "Scratch", count: 3 },
+      { key: "crack", name: "Crack", count: 1 },
+    ];
+    renderTab(withStep("finish", { defects }));
+    const list = within(await card("Finish")).getByRole("list", { name: "Defects at Finish" });
+    const items = within(list).getAllByRole("listitem");
+    expect(items[0]).toHaveTextContent(/Scratch\s*3/);
+    expect(items[1]).toHaveTextContent(/Crack\s*1/);
+  });
+
+  it("shows the latest check, who made it and its photo", async () => {
+    renderTab();
+    const finalQc = await card("Final QC");
+    expect(within(finalQc).getByText("Latest check by Ana Ruiz")).toBeInTheDocument();
+    const photo = within(finalQc).getByRole("img", { name: "Latest check at Final QC" });
+    await waitFor(() => expect(photo.getAttribute("src")).toMatch(/^https:\/\/storage\.example\.test\//));
+  });
+
+  it("names the partner a check was made for", async () => {
+    const { latest_check } = group().steps.find((step) => step.key === "final_qc")!;
+    renderTab(withStep("final_qc", { latest_check: { ...latest_check!, partner: { id: "p", name: "Northcast Foundry" } } }));
+    expect(within(await card("Final QC")).getByText("Latest check by Ana Ruiz at Northcast Foundry")).toBeInTheDocument();
+  });
+
+  it("says a sampled step is sampled, with how many were inspected and left out", async () => {
     const sampled = version();
     sampled.steps[1]!.sampling = { inspect: 1, of_every: 3 };
     server.use(http.get(VERSIONS, () => HttpResponse.json(sampled)));
-    renderTab();
-    expect(within(await card("Finish")).getByText("Sampled: 1 of every 3")).toBeInTheDocument();
-    expect(within(await card("Final QC")).queryByText(/^Sampled/)).not.toBeInTheDocument();
+    renderTab(withStep("finish", { passed: 6, failed: 1, not_inspected: 2 }));
+    const finish = await card("Finish");
+    expect(within(finish).getByText("Sampled: 1 of every 3")).toBeInTheDocument();
+    expect(within(finish).getByText("Inspected 5, left out 2")).toBeInTheDocument();
+    expect(within(await card("Final QC")).queryByText(/^Sampled|^Inspected/)).not.toBeInTheDocument();
   });
 
   it("doesn't link the cards anywhere", async () => {
@@ -78,12 +155,6 @@ describe("QualityTab", () => {
     await card("Finish");
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
-  });
-
-  it("shows no passed or failed numbers until erp-api has them", async () => {
-    renderTab();
-    await card("Finish");
-    expect(screen.queryByText(/passed|failed/i)).not.toBeInTheDocument();
   });
 
   it("says when no step has checks", async () => {
@@ -110,7 +181,7 @@ describe("QualityTab", () => {
         <LineTabs groupId={GROUP} index={0} orderState="in_production" />
       </WithMe>,
     );
-    await userEvent.click(await screen.findByRole("tab", { name: "Quality" }));
+    await userEvent.click(await screen.findByRole("tab", { name: /^Quality/ }));
     expect(await card("Final QC")).toBeInTheDocument();
   });
 });

@@ -187,6 +187,7 @@ export function seedOrders(today: string, now: number): StoredOrder[] {
         released: null,
         paid: row.payment === "paid" ? row.total : "0.00",
         refunded: row.payment === "refunded" ? row.total : "0.00",
+        refundable: row.payment === "paid" ? row.total : "0.00",
         pay_url: null,
         invoice:
           row.payment === "invoiced" || row.payment === "overdue"

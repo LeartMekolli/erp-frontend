@@ -8,6 +8,7 @@ import { createProductionStore } from "./production";
 
 const NOW = Date.parse("2026-11-04T10:00:00Z");
 const GROUP = groupIdOf(1048, 0);
+const WORKFLOW_ID = "b2b2b2b2-0000-4000-8000-000000000001";
 
 function store() {
   return createProductionStore(() => NOW);
@@ -154,5 +155,34 @@ describe("fake erp-api production", () => {
     const s = store();
     const inRework = idsAt(s, "finish")[0]!;
     expect(ok(s.piece(inRework)).history.map((move) => move.kind)).toEqual(["pass", "pass", "fail"]);
+  });
+
+  it("adds up each step's checks from the seeded moves", () => {
+    const steps = ok(store().group(GROUP)).steps;
+    const finish = steps.find((step) => step.key === "finish")!;
+    expect(finish).toMatchObject({ passed: 6, failed: 1, not_inspected: 0, defects: [{ key: "scratch", name: "Scratch", count: 1 }] });
+    const finalQc = steps.find((step) => step.key === "final_qc")!;
+    expect(finalQc).toMatchObject({ passed: 2, failed: 1, defects: [{ key: "porosity", name: "Porosity", count: 1 }] });
+    expect(finalQc.latest_check).toMatchObject({ actor: { name: "Ana Ruiz" }, partner: null, photos: [{ file_version_id: expect.any(String) }] });
+  });
+
+  it("counts a new fail and pass at a step, but not a correction", () => {
+    const s = store();
+    const scratch = ok(s.version(WORKFLOW_ID, 1)).steps[1]!.defects[0]!;
+    const [, one, two] = idsAt(s, "finish");
+    ok(s.move({ kind: "fail", work_order_ids: [one!], at_step: "finish", defect_id: scratch.defect_id }, null));
+    ok(s.move(passFinish([two!]), null));
+    ok(s.move({ kind: "correction", work_order_ids: [two!], to_step: "finish", comment: "Not done" }, null));
+    const finish = ok(s.group(GROUP)).steps.find((step) => step.key === "finish")!;
+    expect(finish).toMatchObject({ passed: 7, failed: 2, defects: [{ key: "scratch", count: 2 }] });
+    expect(finish.latest_check?.created_at).toBe(new Date(NOW).toISOString());
+  });
+
+  it("says which listed pieces are being redone and what last happened to them", () => {
+    const s = store();
+    const [redone, passed] = pieces(s, { step_key: "finish", status: "active" }).data;
+    expect(redone).toMatchObject({ in_rework: true, last_move: { kind: "fail", outcome: "rework", from_step: { key: "final_qc" }, defect: { key: "porosity" } } });
+    expect(passed).toMatchObject({ in_rework: false, last_move: { kind: "pass", from_step: { key: "print" } } });
+    expect(pieces(s, { step_key: "print", status: "active" }).data[0]!.last_move).toBeNull();
   });
 });
