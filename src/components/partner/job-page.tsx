@@ -1,21 +1,22 @@
 "use client";
 
-import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { LoadFailure } from "@/components/data/load-failure";
 import { Button } from "@/components/ui/button";
 import { isApiProblem } from "@/lib/api/problem";
-import type { PartnerJob } from "@/lib/api/schema-types";
-import { useFormat } from "@/lib/format/use-format";
-import { doneText, jobTitle, piecesText, scrappedText, timeLeft } from "@/lib/partner-jobs/labels";
+import type { PartnerJobDetail } from "@/lib/api/schema-types";
+import { doneText, scrappedText, timeLeft } from "@/lib/partner-jobs/labels";
 import { usePartnerJob } from "@/lib/partner-jobs/queries";
 import { useNow } from "@/lib/use-now";
 
+import { BackToJobs, JobHeader } from "./job-header";
+import { JobTabs } from "./job-tabs";
 import { partnerHref } from "./nav";
 import { OfferActions } from "./offer-actions";
+import { PartnerSelectionProvider } from "./partner-pieces";
 import { TimeLeft } from "./time-left";
 import { useWorkshop } from "./use-workshop";
 
@@ -23,9 +24,9 @@ import { useWorkshop } from "./use-workshop";
 const TICK_MS = 15_000;
 
 /**
- * `/partner-portal/:partnerId/jobs/:groupId`: one job's header. An offer has
- * its time left with Accept and Decline; an accepted or finished job has its
- * progress, and part 2 adds its pieces, quality, history and comments.
+ * `/partner-portal/:partnerId/jobs/:groupId`: one job. An offer has its time
+ * left with Accept and Decline; an accepted or finished job has its progress,
+ * then its pieces, quality, history and comments.
  */
 export function JobPage() {
   const { partnerId } = useWorkshop();
@@ -75,10 +76,14 @@ export function JobPage() {
       }}
     />
   ) : (
-    <Header job={job} jobs={jobs}>
-      <p className="text-sm text-ink-2">{[doneText(job), scrappedText(job)].filter((part) => part !== null).join(" · ")}</p>
-      <p className="text-sm text-ink-2">Pieces, quality, history and comments for this job are coming soon.</p>
-    </Header>
+    <PartnerSelectionProvider>
+      <div className="flex flex-col gap-3.5">
+        <JobHeader job={job} jobs={jobs} held>
+          <p className="text-sm text-ink-2">{[doneText(job), scrappedText(job)].filter((part) => part !== null).join(" · ")}</p>
+        </JobHeader>
+        <JobTabs job={job} partnerId={partnerId} />
+      </div>
+    </PartnerSelectionProvider>
   );
 }
 
@@ -96,7 +101,7 @@ function Offer({
   onRanOut,
   onDeclined,
 }: {
-  job: PartnerJob;
+  job: PartnerJobDetail;
   jobs: string;
   leaving: boolean;
   onRanOut: () => void;
@@ -117,7 +122,7 @@ function Offer({
   });
 
   return (
-    <Header job={job} jobs={jobs}>
+    <JobHeader job={job} jobs={jobs} held={false}>
       {job.expires_at && <TimeLeft expiresAt={job.expires_at} now={now} />}
       {!over && !leaving && (
         <div className="pt-2">
@@ -129,37 +134,7 @@ function Offer({
           />
         </div>
       )}
-    </Header>
-  );
-}
-
-/** The `Jobs` link, the title, then pieces, due date and pay, then what the job's status adds. */
-function Header({ job, jobs, children }: { job: PartnerJob; jobs: string; children: ReactNode }) {
-  const format = useFormat();
-  const details = [
-    piecesText(job.quantity),
-    job.due_on ? `Due ${format.day(job.due_on)}` : null,
-    `You're paid ${format.money(job.cost, format.currency)}`,
-  ]
-    .filter((part) => part !== null)
-    .join(" · ");
-
-  return (
-    <header className="flex flex-col gap-1 rounded-[20px] bg-card px-4 py-5 sm:px-6">
-      <BackToJobs href={jobs} />
-      <h1 className="text-title font-semibold break-words">{jobTitle(job)}</h1>
-      <p className="text-sm text-ink-2">{details}</p>
-      {children}
-    </header>
-  );
-}
-
-function BackToJobs({ href }: { href: string }) {
-  return (
-    <Link href={href} className="inline-flex min-h-11 items-center gap-1 self-start font-medium text-ink-2 hover:text-ink">
-      <ChevronLeft aria-hidden className="size-4" />
-      Jobs
-    </Link>
+    </JobHeader>
   );
 }
 

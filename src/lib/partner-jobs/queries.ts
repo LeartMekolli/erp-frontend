@@ -59,8 +59,11 @@ export function usePartnerJobs(partnerId: string, status: PartnerJobStatus, enab
   });
 }
 
-/** One job offered to or accepted by the workshop. */
-export function usePartnerJob(partnerId: string, groupId: string) {
+/** How often a job whose AI brief is still being written is asked again. */
+const BRIEF_POLL_MS = 10_000;
+
+/** One job offered to or accepted by the workshop, asked again while its AI brief is being written. */
+export function usePartnerJob(partnerId: string, groupId: string, enabled = true) {
   return useQuery({
     queryKey: partnerJobsKeys.detail(partnerId, groupId),
     queryFn: async (): Promise<PartnerJobDetail> => {
@@ -70,6 +73,8 @@ export function usePartnerJob(partnerId: string, groupId: string) {
       if (!data) throw problemFrom(error, response);
       return data;
     },
+    enabled,
+    refetchInterval: (query) => (query.state.data?.summary?.status === "pending" ? BRIEF_POLL_MS : false),
   });
 }
 
