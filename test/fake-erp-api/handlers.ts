@@ -3,7 +3,7 @@ import { createOpenApiHttp } from "openapi-msw";
 
 import type { paths, Permission } from "../../src/lib/api/schema-types";
 import type { Answer } from "./orders";
-import type { FakeUser } from "./seed";
+import { PARTNER_NAMES, type FakeUser } from "./seed";
 import { search } from "./search";
 import { fakeState } from "./state";
 
@@ -68,11 +68,17 @@ function fileCaller(request: Request, partnerId?: string): 200 | 401 | 404 {
  * Returns the problem to send, or null when the call may go on.
  */
 function partnerCaller(request: Request, partnerId: string, write = false): Response | null {
+  const caller = partnerPerson(request, partnerId, write);
+  return caller instanceof Response ? caller : null;
+}
+
+/** As `partnerCaller`, but gives the person when the call may go on. */
+function partnerPerson(request: Request, partnerId: string, write = false): FakeUser | Response {
   const user = fakeState().authenticate(bearer(request));
   if (!user) return problem(401, "Unauthorized");
   if (user.kind !== "partner" || !user.organisations.includes(partnerId)) return problem(404, "Partner not found");
   if (write && fakeState().isPartnerSuspended(partnerId)) return problem(403, "The partner is suspended");
-  return null;
+  return user;
 }
 
 function refused(status: 401 | 404) {
@@ -218,6 +224,83 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       const refusedCall = partnerCaller(request, params.partnerId, true);
       if (refusedCall) return response.untyped(refusedCall);
       const answer = fakeState().partnerJobs.answer(params.partnerId, params.groupId, "decline", request.headers.get("idempotency-key"));
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    // A job the partner holds (`partner-jobs.controller.ts`, `job-moves.controller.ts`, `job-comments.controller.ts`):
+    // anything of an offer, or of anyone else's job, is a 404.
+    http.get("/partner-portal/partners/{partnerId}/jobs/{groupId}/work-orders/{workOrderId}", ({ request, params, response }) => {
+      const refusedCall = partnerCaller(request, params.partnerId);
+      if (refusedCall) return response.untyped(refusedCall);
+      const answer = fakeState().partnerJobs.piece(params.partnerId, params.groupId, params.workOrderId);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/partner-portal/partners/{partnerId}/jobs/{groupId}/moves", ({ request, params, response }) => {
+      const refusedCall = partnerCaller(request, params.partnerId);
+      if (refusedCall) return response.untyped(refusedCall);
+      const answer = fakeState().partnerJobs.moves(params.partnerId, params.groupId, new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/partner-portal/partners/{partnerId}/jobs/{groupId}/moves/{moveId}/photos/{fileVersionId}/url", ({ request, params, response }) => {
+      const refusedCall = partnerCaller(request, params.partnerId);
+      if (refusedCall) return response.untyped(refusedCall);
+      const answer = fakeState().partnerJobs.photoUrl(params.partnerId, params.groupId, params.moveId, params.fileVersionId);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/partner-portal/partners/{partnerId}/jobs/{groupId}/design", ({ request, params, response }) => {
+      const refusedCall = partnerCaller(request, params.partnerId);
+      if (refusedCall) return response.untyped(refusedCall);
+      const answer = fakeState().partnerJobs.design(params.partnerId, params.groupId);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/partner-portal/partners/{partnerId}/jobs/{groupId}/steps/{stepKey}/sop", ({ request, params, response }) => {
+      const refusedCall = partnerCaller(request, params.partnerId);
+      if (refusedCall) return response.untyped(refusedCall);
+      const answer = fakeState().partnerJobs.sop(params.partnerId, params.groupId, params.stepKey);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    // A suspended partner can still move the pieces of jobs it holds, so it can finish them (`partner-jobs.controller.ts:146`).
+    http.post("/partner-portal/partners/{partnerId}/moves", async ({ request, params, response }) => {
+      const person = partnerPerson(request, params.partnerId);
+      if (person instanceof Response) return response.untyped(person);
+      const body = await request.json();
+      const answer = fakeState().partnerJobs.move(params.partnerId, body, request.headers.get("idempotency-key"), { id: person.id, name: person.name });
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/partner-portal/partners/{partnerId}/jobs/{groupId}/comments", ({ request, params, response }) => {
+      const refusedCall = partnerCaller(request, params.partnerId);
+      if (refusedCall) return response.untyped(refusedCall);
+      if (!fakeState().partnerJobs.holds(params.partnerId, params.groupId)) return response.untyped(problem(404, "Job not found"));
+      const answer = fakeState().comments.partnerList(params.groupId, params.partnerId, new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/partner-portal/partners/{partnerId}/jobs/{groupId}/comments", async ({ request, params, response }) => {
+      const person = partnerPerson(request, params.partnerId, true);
+      if (person instanceof Response) return response.untyped(person);
+      if (!fakeState().partnerJobs.holds(params.partnerId, params.groupId)) return response.untyped(problem(404, "Job not found"));
+      const partner = { id: params.partnerId, name: PARTNER_NAMES[params.partnerId] ?? "Workshop" };
+      const answer = fakeState().comments.partnerPost(
+        params.groupId,
+        partner,
+        { id: person.id, name: person.name },
+        (await request.json()) as Record<string, unknown>,
+        request.headers.get("idempotency-key"),
+      );
+      return answer.ok ? response(201).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/partner-portal/partners/{partnerId}/jobs/{groupId}/comments/{commentId}/attachments/{fileVersionId}/url", ({ request, params, response }) => {
+      const refusedCall = partnerCaller(request, params.partnerId);
+      if (refusedCall) return response.untyped(refusedCall);
+      if (!fakeState().partnerJobs.holds(params.partnerId, params.groupId)) return response.untyped(problem(404, "Job not found"));
+      const answer = fakeState().comments.partnerAttachmentUrl(params.groupId, params.partnerId, params.commentId, params.fileVersionId);
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 

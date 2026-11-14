@@ -83,7 +83,7 @@ export function createFakeState(now: () => number = Date.now) {
   const comments = createCommentsStore(now, orders);
   const notifications = createNotificationsStore(now);
   const ai = createAiStore(now);
-  const partnerJobs = createPartnerJobsStore(now);
+  const partnerJobs = createPartnerJobsStore(now, production);
   const suspended = new Set<string>();
 
   /** The file, if the caller may see it: a partner route only sees that workshop's files. */

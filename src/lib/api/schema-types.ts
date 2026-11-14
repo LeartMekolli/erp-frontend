@@ -119,6 +119,15 @@ export type PartnerJobStatus = PartnerJob["status"];
 /** One job with its pieces, from `GET /partner-portal/partners/{partnerId}/jobs/{groupId}`. */
 export type PartnerJobDetail = JsonOk<"/partner-portal/partners/{partnerId}/jobs/{groupId}", "get">;
 
+/** One piece of a partner's job and its moves, from `GET .../jobs/{groupId}/work-orders/{workOrderId}`. */
+export type PartnerWorkOrder = JsonOk<"/partner-portal/partners/{partnerId}/jobs/{groupId}/work-orders/{workOrderId}", "get">;
+
+/** A partner's job's moves, one item per action, from `GET .../jobs/{groupId}/moves`. */
+export type PartnerMoveHistory = JsonOk<"/partner-portal/partners/{partnerId}/jobs/{groupId}/moves", "get">;
+
+/** One comment on a partner's job as the partner reads it, from `GET .../jobs/{groupId}/comments`. */
+export type PartnerJobComment = JsonOk<"/partner-portal/partners/{partnerId}/jobs/{groupId}/comments", "get">["data"][number];
+
 /** One comment as staff read it, from `GET /orders/{id}/comments`, with the partner that reads it too, if any. */
 export type OrderComment = JsonOk<"/orders/{id}/comments", "get">["data"][number];
 

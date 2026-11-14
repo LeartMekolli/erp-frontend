@@ -3,13 +3,16 @@
  * `src/modules/partners/partner-jobs.service.ts`, `partner-jobs.controller.ts`
  * and `jobs.controller.ts`). They are their own list, not taken from the
  * fake's orders, so the staff tests don't change. Each workshop reads only its
- * own jobs; an offer past its deadline is let go on the spot.
+ * own jobs; an offer past its deadline is let go on the spot. A job whose group
+ * has pieces in the fake's production (Ring band, order #1048's line) takes its
+ * steps, counts and pieces from there, so a move on either side shows on both.
  */
 
-import type { JobAssignment, PartnerJob, PartnerJobDetail, PartnerJobStatus } from "../../src/lib/api/schema-types";
+import type { JobAssignment, MoveBody, MoveResponse, PartnerJob, PartnerJobDetail, PartnerJobStatus } from "../../src/lib/api/schema-types";
 
 import type { Answer, Page } from "./orders";
 import { groupIdOf, uuid } from "./orders-seed";
+import type { ProductionStore } from "./production";
 import { LAYERLINE_ID, NORTHCAST_ID, PARTNER_NAMES } from "./seed";
 
 const id = (n: number) => uuid("c1c1c1c1", n);
@@ -27,15 +30,19 @@ export const FACADE_OFFER_ID = id(6);
 /** The longest a product name gets: 60 characters. */
 export const LONG_PRODUCT_NAME = "Architectural facade panel with ventilation slots, 2 mm skin";
 
+/** Ring band's design file, the only job with one. */
+export const RING_BAND_DESIGN_ID = uuid("c5c5c5c5", 1);
+
 const HOUR_MS = 3_600_000;
 const MINUTE_MS = 60_000;
 const DAY_MS = 24 * HOUR_MS;
 
-/** A job as stored: what erp-api answers, and whether the partner declined it. */
+/** A job as stored: what erp-api answers, whether the partner declined it, and when it answered. */
 interface Row {
   partnerId: string;
   job: PartnerJob;
   declined: boolean;
+  respondedAt: string | null;
 }
 
 type Seed = {
@@ -105,7 +112,9 @@ const withRules = (step: PartnerJob["steps"][number]): DetailStep => ({
 const notOffered = (detail: string): Answer<never> => ({ ok: false, status: 409, detail });
 const jobNotFound: Answer<never> = { ok: false, status: 404, detail: "Job not found" };
 
-export function createPartnerJobsStore(now: () => number) {
+const link = (fileVersionId: string, expiresAt: string) => ({ url: `https://storage.example.test/${fileVersionId}`, expires_at: expiresAt });
+
+export function createPartnerJobsStore(now: () => number, production: ProductionStore) {
   const stamp = (ms = now()) => new Date(ms).toISOString();
   const day = (offsetDays: number) => stamp(now() + offsetDays * DAY_MS).slice(0, 10);
   const keys = new Map<string, { input: string; body: JobAssignment }>();
@@ -113,6 +122,7 @@ export function createPartnerJobsStore(now: () => number) {
   const rows: Row[] = SEEDS.map((seed) => ({
     partnerId: seed.partnerId,
     declined: false,
+    respondedAt: null,
     job: {
       id: seed.id,
       status: seed.status,
@@ -122,7 +132,7 @@ export function createPartnerJobsStore(now: () => number) {
       product: { name: seed.name },
       options: seed.options,
       quantity: seed.quantity,
-      design_file_version_id: null,
+      design_file_version_id: seed.id === RING_BAND_JOB_ID ? RING_BAND_DESIGN_ID : null,
       steps: [
         seed.partnerId === NORTHCAST_ID
           ? { key: "casting", name: "Casting", sop_file_version_id: null }
@@ -136,12 +146,33 @@ export function createPartnerJobsStore(now: () => number) {
   /** An offer still before its deadline. */
   const open = (row: Row) => row.job.status === "offered" && !row.declined && Date.parse(row.job.expires_at ?? "") > now();
   /** What erp-api calls the job: an accepted job with no active piece left is finished. */
-  const statusOf = (row: Row): PartnerJobStatus =>
-    row.job.status === "offered" ? "offered" : row.job.pieces.active > 0 ? "accepted" : "finished";
+  const statusOf = (row: Row): PartnerJobStatus => view(row).status;
   /** The partner's own jobs: open offers and accepted jobs (`partner-jobs.service.ts:18`). */
   const visible = (row: Row) => open(row) || row.job.status !== "offered";
   const mine = (partnerId: string, groupId: string) => rows.find((r) => r.partnerId === partnerId && r.job.id === groupId);
-  const view = (row: Row): PartnerJob => ({ ...structuredClone(row.job), status: statusOf(row) });
+  /** A job the partner holds: accepted and not declined (erp-api `heldJob`); an offer, or anyone else's, isn't. */
+  const held = (partnerId: string, groupId: string) => {
+    const row = mine(partnerId, groupId);
+    return row && row.job.status !== "offered" && !row.declined ? row : undefined;
+  };
+  /** When the job came to the partner: it accepted the offer, or else staff handed it over (erp-api `handedOverAt`). */
+  const handedOverAt = (row: Row) => row.respondedAt ?? row.job.offered_at;
+
+  /** A job's steps and counts from production where its group has pieces there. */
+  function current(row: Row): PartnerJob {
+    const group = production.group(row.job.id);
+    if (!group.ok) return row.job;
+    const view = production.partnerView(row.job.id, row.partnerId, null)!;
+    return {
+      ...row.job,
+      pieces: group.body.pieces,
+      steps: view.steps.map((step) => ({ key: step.key, name: step.name, sop_file_version_id: step.sop_file_version_id })),
+    };
+  }
+  const view = (row: Row): PartnerJob => {
+    const job = structuredClone(current(row));
+    return { ...job, status: job.status === "offered" ? "offered" : job.pieces.active > 0 ? "accepted" : "finished" };
+  };
 
   /** `once()` as in `jobs.ts`: the same key and request replays the first answer. */
   function once(key: string | null, input: unknown, run: () => Answer<JobAssignment>): Answer<JobAssignment> {
@@ -181,15 +212,64 @@ export function createPartnerJobsStore(now: () => number) {
     },
 
     /**
-     * `GET .../jobs/{groupId}` (`partner-jobs.service.ts:72-121`): a job offered
-     * to or accepted by this partner; any other is a 404. Part 2 fills in
-     * `work_orders` and `summary`.
+     * `GET .../jobs/{groupId}` (`partner-jobs.service.ts:107-210`): a job offered
+     * to or accepted by this partner; any other is a 404. A job with pieces in
+     * production sends its steps' rules and checks and every piece with its stage;
+     * on an offer nothing is counted yet. The rest have no pieces and no summary.
      */
     detail(partnerId: string, groupId: string): Answer<PartnerJobDetail> {
       const row = mine(partnerId, groupId);
       if (!row || !visible(row)) return jobNotFound;
       const job = view(row);
-      return { ok: true, body: { ...job, steps: job.steps.map(withRules), work_orders: [], summary: null } };
+      const pieces = production.partnerView(groupId, partnerId, row.job.status === "offered" ? null : handedOverAt(row));
+      return { ok: true, body: { ...job, ...(pieces ?? { steps: job.steps.map(withRules), work_orders: [] }), summary: null } };
+    },
+
+    /** Whether the partner holds the job: the job's pieces, moves, files and comments are its own only then. */
+    holds(partnerId: string, groupId: string): boolean {
+      return held(partnerId, groupId) !== undefined;
+    },
+
+    /** `GET .../jobs/{groupId}/work-orders/{workOrderId}`: a piece of a job the partner holds; else a 404. */
+    piece(partnerId: string, groupId: string, workOrderId: string) {
+      if (!held(partnerId, groupId)) return jobNotFound;
+      return production.partnerPiece(groupId, workOrderId, partnerId);
+    },
+
+    /** `GET .../jobs/{groupId}/moves`: every move on the job's pieces, with when it came to the partner. */
+    moves(partnerId: string, groupId: string, params: URLSearchParams) {
+      const row = held(partnerId, groupId);
+      if (!row) return jobNotFound;
+      return production.partnerMoves(groupId, params, partnerId, handedOverAt(row));
+    },
+
+    /** `GET .../jobs/{groupId}/moves/{moveId}/photos/{fileVersionId}/url`. */
+    photoUrl(partnerId: string, groupId: string, moveId: string, fileVersionId: string) {
+      if (!held(partnerId, groupId)) return jobNotFound;
+      return production.partnerPhoto(groupId, moveId, fileVersionId);
+    },
+
+    /** `GET .../jobs/{groupId}/design`: the design file's link, once the partner holds the job (`partner-jobs.service.ts:262`). */
+    design(partnerId: string, groupId: string): Answer<{ url: string; expires_at: string }> {
+      const row = held(partnerId, groupId);
+      if (!row) return jobNotFound;
+      const version = row.job.design_file_version_id;
+      if (!version) return { ok: false, status: 404, detail: "Design file not found" };
+      return { ok: true, body: link(version, stamp(now() + 5 * MINUTE_MS)) };
+    },
+
+    /** `GET .../jobs/{groupId}/steps/{stepKey}/sop`: instructions of one of the partner's steps on a job it holds. */
+    sop(partnerId: string, groupId: string, stepKey: string): Answer<{ url: string; expires_at: string }> {
+      if (!held(partnerId, groupId)) return jobNotFound;
+      const version = production.partnerView(groupId, partnerId, null)?.steps.find((step) => step.key === stepKey)?.sop_file_version_id;
+      if (!version) return { ok: false, status: 404, detail: "Step instructions not found" };
+      return { ok: true, body: link(version, stamp(now() + 5 * MINUTE_MS)) };
+    },
+
+    /** `POST /partner-portal/partners/{partnerId}/moves`: moves pieces of the partner's jobs, by one of its people. */
+    move(partnerId: string, body: MoveBody, key: string | null, person: { id: string; name: string }): Answer<MoveResponse> {
+      const partner = { id: partnerId, name: PARTNER_NAMES[partnerId] ?? "Workshop" };
+      return production.partnerMove(body, key, { actor: person, partner }, (groupId) => held(partnerId, groupId) !== undefined);
     },
 
     /**
@@ -205,6 +285,7 @@ export function createPartnerJobsStore(now: () => number) {
         // erp-api keeps the offer's deadline on the accepted job (`partner-jobs.service.ts:316`).
         if (answer === "accept") row.job = { ...row.job, status: "accepted" };
         else row.declined = true;
+        row.respondedAt = stamp();
         return {
           ok: true,
           body: {

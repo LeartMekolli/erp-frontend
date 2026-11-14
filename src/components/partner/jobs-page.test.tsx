@@ -64,7 +64,7 @@ describe("JobsPage", () => {
     const ringBand = await screen.findByRole("link", { name: /^Ring band · Brass\b/ });
     expect(ringBand).toHaveAttribute("href", `/partner-portal/${NORTHCAST_ID}/jobs/${RING_BAND_JOB_ID}`);
     expect(ringBand).toHaveTextContent("12 pieces");
-    expect(ringBand).toHaveTextContent("2 of 12 done");
+    expect(ringBand).toHaveTextContent("1 of 12 done");
     expect(ringBand).toHaveTextContent("1 scrapped");
     expect(ringBand).toHaveTextContent("Due ");
     expect(ringBand).toHaveTextContent("€180.00");
