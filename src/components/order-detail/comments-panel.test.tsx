@@ -147,20 +147,20 @@ describe("posting a comment", () => {
     expect(screen.getByText("Only staff will read this.")).toBeInTheDocument();
   });
 
-  it("posts without a reader", async () => {
+  it("posts with who the box said would read it", async () => {
     const parent = renderPanel(1048);
     await userEvent.type(await screen.findByLabelText("Add a comment"), "Ready on Friday");
     await userEvent.click(postButton());
     expect(await screen.findByText("Ready on Friday")).toBeInTheDocument();
     await waitFor(() => expect(posted).toHaveLength(1));
-    expect(posted[0]).toEqual({ body: "Ready on Friday" });
+    expect(posted[0]).toEqual({ body: "Ready on Friday", readers: "staff" });
     await waitFor(() => expect(screen.getByLabelText("Add a comment")).toHaveValue(""));
 
     await userEvent.selectOptions(screen.getByLabelText("About"), "12 × Ring band");
     await userEvent.type(screen.getByLabelText("Add a comment"), "Keep the polish matte");
     await userEvent.click(postButton());
     await waitFor(() => expect(posted).toHaveLength(2));
-    expect(posted[1]).toEqual({ body: "Keep the polish matte", line_id: parent.lines[0]!.id });
+    expect(posted[1]).toEqual({ body: "Keep the polish matte", line_id: parent.lines[0]!.id, readers: parent.lines[0]!.partner!.id });
     const comment = (await screen.findByText("Keep the polish matte")).closest("li")!;
     expect(within(comment).getByText("With Northcast Foundry")).toBeInTheDocument();
     expect(screen.getByLabelText("About")).toHaveDisplayValue("The whole order");
@@ -182,6 +182,63 @@ describe("posting a comment", () => {
     };
     rerender(panel(released));
     expect(screen.getByText("Only staff will read this.")).toBeInTheDocument();
+  });
+
+  describe("when a workshop accepted the line meanwhile", () => {
+    /** Order #1048 as a page loaded before Northcast accepted its line: the fake erp-api knows better. */
+    function renderStale() {
+      const parent = order(1048);
+      const stale: Order = {
+        ...parent,
+        lines: parent.lines.map((line, index) => (index === 0 ? { ...line, partner: { ...line.partner!, status: "offered" } } : line)),
+      };
+      renderAs(
+        STAFF,
+        <WithMe>
+          <CommentsPanel order={stale} now={Date.now()} />
+        </WithMe>,
+      );
+      return parent;
+    }
+
+    async function postStale() {
+      const parent = renderStale();
+      await userEvent.selectOptions(await screen.findByLabelText("About"), "12 × Ring band");
+      expect(screen.getByText("Only staff will read this.")).toBeInTheDocument();
+      await userEvent.type(screen.getByLabelText("Add a comment"), "Keep the price low");
+      await userEvent.click(postButton());
+      expect(await screen.findByText("Not posted. Northcast Foundry accepted this line meanwhile and will read this.")).toBeInTheDocument();
+      expect(posted[0]).toEqual({ body: "Keep the price low", line_id: parent.lines[0]!.id, readers: "staff" });
+      return parent;
+    }
+
+    it("posts nothing and names who would read it now", async () => {
+      await postStale();
+      expect(screen.getByText("Northcast Foundry will read this.")).toBeInTheDocument();
+      expect(screen.getByLabelText("Add a comment")).toHaveValue("Keep the price low");
+      expect(screen.queryByText("Keep the price low", { selector: "li *" })).not.toBeInTheDocument();
+    });
+
+    it("posts anyway for that workshop to read", async () => {
+      const parent = await postStale();
+      await userEvent.click(screen.getByRole("button", { name: "Post anyway" }));
+      await waitFor(() => expect(posted).toHaveLength(2));
+      expect(posted[1]).toEqual({ body: "Keep the price low", line_id: parent.lines[0]!.id, readers: parent.lines[0]!.partner!.id });
+      const comment = (await screen.findByText("Keep the price low", { selector: "li *" })).closest("li")!;
+      expect(within(comment).getByText("With Northcast Foundry")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Post comment" })).toBeInTheDocument();
+    });
+
+    it("posts on the order instead, for staff only", async () => {
+      await postStale();
+      await userEvent.click(screen.getByRole("button", { name: "Post on the order instead" }));
+      await waitFor(() => expect(posted).toHaveLength(2));
+      expect(posted[1]).toEqual({ body: "Keep the price low", readers: "staff" });
+      const comment = (await screen.findByText("Keep the price low", { selector: "li *" })).closest("li")!;
+      expect(within(comment).getByText("Staff only")).toBeInTheDocument();
+      expect(screen.getByLabelText("About")).toHaveDisplayValue("The whole order");
+      expect(screen.queryByRole("button", { name: "Post on the order instead" })).not.toBeInTheDocument();
+    });
   });
 
   it("shows erp-api's refusal above the form", async () => {

@@ -3599,7 +3599,7 @@ export interface paths {
         put?: never;
         /**
          * Comment on an order or one of its lines, with files attached.
-         * @description Where it is posted decides who reads it. On the order, or on a line no partner has accepted yet, only staff do. On a line a partner has accepted, that partner reads it too, named in `partner`, and it stays that partner's when the line changes hands. A `line_id` of another order is a 400. Any uploaded file of the workspace can be attached, at most 10; one not found, or not uploaded yet, is a 404 naming it. Comments cannot be edited or deleted.
+         * @description Where it is posted decides who reads it. On the order, or on a line no partner has accepted yet, only staff do. On a line a partner has accepted, that partner reads it too, named in `partner`, and it stays that partner's when the line changes hands. A `line_id` of another order is a 400. Any uploaded file of the workspace can be attached, at most 10; one not found, or not uploaded yet, is a 404 naming it. Comments cannot be edited or deleted. With `readers`, `staff` or a partner's id, saying who staff were told would read it, a comment that would reach anyone else (say a partner accepted the line meanwhile) is not saved: the 409 has `code: 'readers_changed'` and the `partner` that would read it now, or null for staff alone.
          *
          *     Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
          *
@@ -24869,6 +24869,7 @@ export interface operations {
                     /** Format: uuid */
                     line_id?: string;
                     attachments?: string[];
+                    readers?: "staff" | string;
                 };
             };
         };

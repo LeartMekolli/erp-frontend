@@ -9,7 +9,7 @@ import { CommentThread, type ThreadComment } from "@/components/production/comme
 import { NativeSelect } from "@/components/ui/native-select";
 import type { Order, OrderComment, OrderPart } from "@/lib/api/schema-types";
 import { useCan } from "@/lib/auth/permissions";
-import { commentAttachmentUrl, useOrderComments, usePostComment } from "@/lib/orders/comments";
+import { commentAttachmentUrl, readersChanged, useOrderComments, usePostComment, type CommentReader } from "@/lib/orders/comments";
 import { partnerStatus } from "@/lib/orders/line-partner";
 
 import { Panel } from "./payment-panel";
@@ -41,24 +41,54 @@ function threadComment(comment: OrderComment, lines: AnyLine[]): ThreadComment {
   };
 }
 
-/** Where a comment is posted decides who reads it: a partner reads only a line it has accepted (`orders/comments.service.ts:19`). */
+/**
+ * Where a comment is posted decides who reads it: a partner reads only a line it has accepted (`orders/comments.service.ts:19`).
+ * The page's view of the line can be old, so each post says who the box named. When erp-api answers that someone else
+ * would read it now, nothing was posted: the box names them, and staff post anyway or on the order instead.
+ */
 function CommentForm({ order, lines, now }: { order: Order; lines: AnyLine[]; now: number }) {
   const post = usePostComment(order.id);
   const [lineId, setLineId] = useState("");
+  // Who erp-api said would read a comment on this line, newer than the page's view of it.
+  const [changed, setChanged] = useState<{ lineId: string; reader: CommentReader } | null>(null);
   const line = lines.find((candidate) => candidate.id === lineId);
   const status = partnerStatus(line?.partner ?? null, now);
-  const readers = status.kind === "accepted" ? `${status.name} will read this.` : "Only staff will read this.";
+  const held: CommentReader = line?.partner && status.kind === "accepted" ? { id: line.partner.id, name: line.partner.name } : null;
+  const fresh = changed && changed.lineId === lineId ? changed : null;
+  const reader = fresh ? fresh.reader : held;
+  const readers = reader ? `${reader.name} will read this.` : "Only staff will read this.";
 
-  const onPost = async (body: string) => {
-    await post.mutateAsync({ body, ...(lineId ? { line_id: lineId } : {}) });
-    setLineId("");
+  const pickLine = (id: string) => {
+    setLineId(id);
+    setChanged(null);
+  };
+
+  const send = async (body: string, onLine: boolean) => {
+    const target = onLine ? lineId : "";
+    try {
+      await post.mutateAsync({ body, ...(target ? { line_id: target } : {}), readers: (target && reader?.id) || "staff" });
+    } catch (error) {
+      const current = readersChanged(error);
+      if (current === undefined || !target) throw error;
+      setChanged({ lineId: target, reader: current });
+      const news = current
+        ? `${current.name} accepted this line meanwhile and will read this.`
+        : "No workshop holds this line any more, so only staff will read this.";
+      throw { ...(error as object), detail: `Not posted. ${news}` };
+    }
+    pickLine("");
   };
 
   return (
-    <CommentBox readers={readers} onPost={onPost}>
+    <CommentBox
+      readers={readers}
+      onPost={(body) => send(body, true)}
+      postLabel={fresh?.reader ? "Post anyway" : undefined}
+      alternative={fresh?.reader ? { label: "Post on the order instead", onPost: (body) => send(body, false) } : undefined}
+    >
       <Field id="comment-line" label="About">
         {(props) => (
-          <NativeSelect {...props} value={lineId} onChange={(event) => setLineId(event.target.value)}>
+          <NativeSelect {...props} value={lineId} onChange={(event) => pickLine(event.target.value)}>
             <option value="">The whole order</option>
             {lines.map((candidate) => (
               <option key={candidate.id} value={candidate.id}>

@@ -38,6 +38,21 @@ describe("fake erp-api handlers", () => {
     expect(answer.ok && answer.body.data).toEqual([]);
   });
 
+  it("saves nothing when a comment would reach other readers than staff were told", async () => {
+    const login = await post("/auth/login", { workspace: WORKSPACE, email: STAFF.email, password: FAKE_PASSWORD });
+    const { access_token } = (await login.json()) as { access_token: string };
+    const order = fakeState().orders.all().find((candidate) => candidate.number === 1048)!;
+    const line = order.lines[0]!;
+    const before = fakeState().comments.list(order.id, new URLSearchParams());
+    const res = await post(`/orders/${order.id}/comments`, { body: "Keep the price low", line_id: line.id, readers: "staff" }, { authorization: `Bearer ${access_token}` });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: "readers_changed", partner: { id: line.partner!.id, name: "Northcast Foundry" } });
+    expect(fakeState().comments.list(order.id, new URLSearchParams())).toEqual(before);
+
+    const right = await post(`/orders/${order.id}/comments`, { body: "Matte, please", line_id: line.id, readers: line.partner!.id }, { authorization: `Bearer ${access_token}` });
+    expect(right.status).toBe(201);
+  });
+
   it("puts a short password on the password field", async () => {
     const res = await post("/auth/password-reset/confirm", { token: "x", password: "short" });
     expect(res.status).toBe(400);

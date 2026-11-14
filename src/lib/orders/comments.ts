@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
 import { idempotencyHeader } from "@/lib/api/idempotency";
-import { problemFrom } from "@/lib/api/problem";
+import { isApiProblem, problemFrom } from "@/lib/api/problem";
 import type { Claim, OrderComment, StaffCommentBody } from "@/lib/api/schema-types";
 import { useApiMutation } from "@/lib/query/use-api-mutation";
 import { useCursorList } from "@/lib/query/use-cursor-list";
@@ -31,7 +31,25 @@ export function useOrderComments(orderId: string) {
   });
 }
 
-/** Adds a comment to the order or one of its lines. The line decides who reads it; there's no reader to pick. */
+/** Who reads a comment besides staff: the partner holding its line, or null for staff alone. */
+export type CommentReader = OrderComment["partner"];
+
+/**
+ * The partner who would read a comment now, when erp-api refused it because
+ * that isn't who the box said (`readers_changed`, erp-api
+ * `orders/comments.service.ts:132`); undefined for any other failure.
+ */
+export function readersChanged(error: unknown): CommentReader | undefined {
+  if (!isApiProblem(error) || error.status !== 409 || error.code !== "readers_changed") return undefined;
+  const partner = error.partner as { id?: unknown; name?: unknown } | null | undefined;
+  return partner && typeof partner.id === "string" && typeof partner.name === "string" ? { id: partner.id, name: partner.name } : null;
+}
+
+/**
+ * Adds a comment to the order or one of its lines. The line decides who reads
+ * it; `readers` says who the box told staff would, so erp-api refuses it when
+ * that has changed meanwhile.
+ */
 export function usePostComment(orderId: string) {
   const client = useQueryClient();
   return useApiMutation<StaffCommentBody, OrderComment>(
