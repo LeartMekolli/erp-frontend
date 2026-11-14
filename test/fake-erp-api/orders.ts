@@ -32,11 +32,11 @@ export interface FieldError {
   message: string;
 }
 
-/** What a route answers: a body, field errors (400), or a problem with its detail. */
+/** What a route answers: a body, field errors (400), or a problem with its detail and, with a `code`, its extension members. */
 export type Answer<T> =
   | { ok: true; body: T }
   | { ok: false; status: 400; errors: FieldError[] }
-  | { ok: false; status: 403 | 404 | 409 | 503; detail: string; code?: string };
+  | { ok: false; status: 403 | 404 | 409 | 503; detail: string; code?: string; extensions?: Record<string, unknown> };
 
 const ORDER_STATES = ["awaiting_payment", "in_production", "ready", "shipped", "delivered", "cancelled"] as const satisfies readonly OrderState[];
 const PAYMENT_STATES = [

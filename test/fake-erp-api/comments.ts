@@ -3,7 +3,8 @@
  * page depends on (erp-api `src/modules/orders/comments.service.ts`): comments
  * oldest first, where it's posted decides who reads it (a line a partner has
  * accepted names that partner, anywhere else is staff only), a line must be on
- * the order, and the body is strict, so an unknown key is a 400. A partner reads
+ * the order, the body is strict, so an unknown key is a 400, and a post whose
+ * `readers` isn't who would read it now is a 409 `readers_changed`. A partner reads
  * and writes on the line its job is made as, and only what names it.
  */
 
@@ -15,8 +16,9 @@ import { uuid } from "./orders-seed";
 const HOUR = 3_600_000;
 const COMMENT_MAX_LENGTH = 5000;
 const FILE_VERSION = uuid("d0d0d0d0", 1);
-/** `staffCommentSchema`'s keys (erp-api `comments.service.ts:24`). */
-const BODY_KEYS = ["body", "line_id", "attachments"];
+/** `staffCommentSchema`'s keys (erp-api `comments.service.ts:25`). */
+const BODY_KEYS = ["body", "line_id", "attachments", "readers"];
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const invalid = (path: string, message: string): Answer<never> => ({ ok: false, status: 400, errors: [{ path, message }] });
 
@@ -118,11 +120,21 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
       if (text.length < 1 || text.length > COMMENT_MAX_LENGTH) return invalid("body", `must be 1 to ${COMMENT_MAX_LENGTH} characters`);
       const line = found.body.lines.flatMap((orderLine) => [orderLine, ...orderLine.parts]).find((candidate) => candidate.id === body.line_id);
       if (body.line_id && !line) return invalid("line_id", "not a line of this order");
+      if (body.readers !== undefined && body.readers !== "staff" && !UUID.test(body.readers)) return invalid("readers", "must be staff or a partner's id");
       const partner = line ? holder(line) : null;
 
       const input = JSON.stringify({ orderId, body });
       const seen = key ? keys.get(key) : undefined;
       if (seen) return seen.input === input ? { ok: true, body: seen.body } : { ok: false, status: 409, code: "idempotency_key_reused", detail: "Idempotency key reused with a different request" };
+      if (body.readers && body.readers !== (partner?.id ?? "staff")) {
+        return {
+          ok: false,
+          status: 409,
+          code: "readers_changed",
+          detail: partner ? `${partner.name} has accepted this line and would read this comment too` : "Only staff would read this comment",
+          extensions: { partner },
+        };
+      }
 
       const comment: OrderComment = {
         id: crypto.randomUUID(),
