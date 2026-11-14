@@ -1,5 +1,6 @@
-import { PartnerHome } from "@/components/session/landing";
+import { redirect } from "next/navigation";
 
-export default function PartnerHomePage() {
-  return <PartnerHome />;
+export default async function WorkshopHomePage({ params }: { params: Promise<{ partnerId: string }> }) {
+  const { partnerId } = await params;
+  redirect(`/partner-portal/${partnerId}/jobs`);
 }

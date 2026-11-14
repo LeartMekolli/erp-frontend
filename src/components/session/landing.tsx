@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -73,20 +72,3 @@ export function PartnerChooser() {
   );
 }
 
-export function PartnerHome() {
-  const { partnerId } = useParams<{ partnerId: string }>();
-  const { data: me } = useMe();
-  const partnerMe = usePartnerMe();
-  if (!me) return null;
-  const partner = partnerMe.data?.partners.find((p) => p.id === partnerId);
-  return (
-    <Landing workspace={me.workspace.name} title={partner?.display_name ?? "Your workshop"}>
-      <p className="text-sm text-ink-2">You&apos;re signed in as {me.user.name}, {me.user.email}.</p>
-      {partnerMe.data && partnerMe.data.partners.length > 1 && (
-        <Button asChild variant="link" className="self-start">
-          <Link href="/partner-portal">Switch workshop</Link>
-        </Button>
-      )}
-    </Landing>
-  );
-}
