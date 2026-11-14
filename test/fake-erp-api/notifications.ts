@@ -7,7 +7,7 @@
 import type { FeedEntry } from "../../src/lib/api/schema-types";
 
 import type { Answer, Page } from "./orders";
-import { STAFF } from "./seed";
+import { PARTNER, STAFF } from "./seed";
 
 interface StoredEntry {
   userId: string;
@@ -30,8 +30,32 @@ const FILLER: Pick<FeedEntry, "event_key" | "subject" | "title" | "body">[] = [
   { event_key: "partner.capacity_changed", subject: { type: "partner", id: "2f1c5d7e-0a9b-4e3c-8d2f-6a5b4c3d2e10" }, title: "Northcast Foundry updated its capacity", body: "They can take 20 more jobs this week." },
 ];
 
-/** Thirty entries for the main staff account, an hour apart before `now`. */
+/** The two offers waiting for Northcast's owner (`jobs.service.ts:199`): both unread. */
+function partnerEntries(now: number): StoredEntry[] {
+  const offered = (n: number, title: string, body: string, hoursAgo: number): StoredEntry => ({
+    userId: PARTNER.id,
+    entry: {
+      id: uuid(n),
+      event_key: "partner.job.offered",
+      subject: { type: "job_assignment", id: uuid(n + 100) },
+      title,
+      body,
+      created_at: new Date(now - hoursAgo * 3_600_000).toISOString(),
+      read_at: null,
+    },
+  });
+  return [
+    offered(32, "New job offered: Ring", "10 pieces, answer within 5 hours.", 1),
+    offered(31, "New job offered: Pendant", "3 pieces, answer within 90 minutes.", 2),
+  ];
+}
+
 function seedEntries(now: number): StoredEntry[] {
+  return [...partnerEntries(now), ...staffEntries(now)];
+}
+
+/** Thirty entries for the main staff account, an hour apart before `now`. */
+function staffEntries(now: number): StoredEntry[] {
   return Array.from({ length: 30 }, (_, index) => {
     const event = EVENTS[index] ?? FILLER[index % FILLER.length]!;
     const createdAt = new Date(now - (index + 1) * 3_600_000).toISOString();

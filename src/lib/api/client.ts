@@ -3,7 +3,7 @@ import createClient from "openapi-fetch";
 import { clientSession } from "@/lib/session/client-session";
 
 import { browserApiUrl } from "./config";
-import type { PartnerPaths, paths } from "./schema-types";
+import type { NotificationPaths, PartnerPaths, paths } from "./schema-types";
 
 export interface TokenSource {
   getAccessToken(options?: { force?: boolean }): Promise<string>;
@@ -50,3 +50,10 @@ export const api = createApiClient(sessionTokens, browserApiUrl());
  * can't reach one by mistake. ESLint keeps `api` out of the partner area.
  */
 export const partnerApi = createApiClient<PartnerPaths>(sessionTokens, browserApiUrl());
+
+/**
+ * The feed both areas read: the caller's own notifications, nothing of the
+ * workspace's. It can only name `/notifications...` routes, so the bell's
+ * hooks never use `api`.
+ */
+export const notificationsApi = createApiClient<NotificationPaths>(sessionTokens, browserApiUrl());

@@ -10,5 +10,5 @@ export default function OrderSubpage() {
   const { rest } = useParams<{ rest: string[] }>();
   const allowed = useCan("order.read");
   if (!allowed) notFound();
-  return <ComingSoon title={rest.length === 1 && rest[0] === "new" ? "New order" : "Order"} />;
+  return <ComingSoon title={rest.length === 1 && rest[0] === "new" ? "New order" : "Order"} back={{ href: "/orders", label: "Back to Orders" }} />;
 }

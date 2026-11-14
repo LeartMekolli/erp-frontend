@@ -13,6 +13,8 @@ import { fakeState, resetFakeState } from "./state";
  * - `POST /__reset` starts the fake's data over.
  * - `POST /__fail-next-label/<orderId>` makes the courier service refuse
  *   that order's next label with a 503.
+ * - `POST /__suspend-partner/<partnerId>` suspends that workshop: its
+ *   `/partner-portal/me` status says so and its accept and decline answer 403.
  * - `GET /__link?to=<url>` is a page with one link, so a test can follow a
  *   link into AMI from another site.
  * - `PUT /__storage/uploads/<fileId>/<versionId>` stands in for the bucket a
@@ -60,6 +62,13 @@ createServer(async (req, res) => {
 
   if (req.method === "POST" && url.pathname === "/__reset") {
     resetFakeState();
+    res.writeHead(204).end();
+    return;
+  }
+
+  const suspend = /^\/__suspend-partner\/([^/]+)$/.exec(url.pathname);
+  if (req.method === "POST" && suspend) {
+    fakeState().suspendPartner(decodeURIComponent(suspend[1]!));
     res.writeHead(204).end();
     return;
   }

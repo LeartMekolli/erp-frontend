@@ -19,6 +19,7 @@ import { createCommentsStore } from "./comments";
 import { createJobsStore } from "./jobs";
 import { createNotificationsStore } from "./notifications";
 import { createOrdersStore } from "./orders";
+import { createPartnerJobsStore } from "./partner-jobs";
 import { createProductionStore } from "./production";
 
 /** What erp-api's login and refresh answer (`session.service.ts:22-26`). */
@@ -82,6 +83,8 @@ export function createFakeState(now: () => number = Date.now) {
   const comments = createCommentsStore(now, orders);
   const notifications = createNotificationsStore(now);
   const ai = createAiStore(now);
+  const partnerJobs = createPartnerJobsStore(now);
+  const suspended = new Set<string>();
 
   /** The file, if the caller may see it: a partner route only sees that workshop's files. */
   function ownFile(fileId: string, partnerId?: string): FakeFile | null {
@@ -120,6 +123,16 @@ export function createFakeState(now: () => number = Date.now) {
     comments,
     notifications,
     ai,
+    partnerJobs,
+
+    /** Suspends a workshop: `/partner-portal/me` says so, and its accept and decline routes answer 403. */
+    suspendPartner(id: string): void {
+      suspended.add(id);
+    },
+
+    isPartnerSuspended(id: string): boolean {
+      return suspended.has(id);
+    },
 
     login(workspace: string | undefined, email: string, password: string): SessionTokens | Status<401 | 429> {
       if (workspace !== WORKSPACE) return { status: 401 };
@@ -242,7 +255,7 @@ export function createFakeState(now: () => number = Date.now) {
           id,
           display_name: PARTNER_NAMES[id] ?? "Workshop",
           role: "owner" as const,
-          status: "approved" as const,
+          status: suspended.has(id) ? ("suspended" as const) : ("approved" as const),
         })),
       };
     },

@@ -15,6 +15,9 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace: push }), 
 
 beforeEach(() => push.mockReset());
 
+/** Orders open their page; everything else has nowhere to go. */
+const hrefFor = (subject: { type: string; id: string }) => (subject.type === "order" ? `/orders/${subject.id}` : null);
+
 async function openPanel() {
   await userEvent.click(await screen.findByRole("button", { name: /^Notifications/ }));
   return screen.findByRole("dialog", { name: "Notifications" });
@@ -22,26 +25,26 @@ async function openPanel() {
 
 describe("Bell", () => {
   it("shows how many are unread", async () => {
-    renderAs(STAFF, <Bell />);
+    renderAs(STAFF, <Bell hrefFor={hrefFor} />);
     const bell = await screen.findByRole("button", { name: "Notifications, 3 unread" });
     expect(within(bell).getByText("3")).toBeInTheDocument();
   });
 
   it("caps the badge at 9+", async () => {
     server.use(http.get(`${FAKE_API_URL}/notifications/unread-count`, () => HttpResponse.json({ count: 12 })));
-    renderAs(STAFF, <Bell />);
+    renderAs(STAFF, <Bell hrefFor={hrefFor} />);
     const bell = await screen.findByRole("button", { name: "Notifications, 12 unread" });
     expect(within(bell).getByText("9+")).toBeInTheDocument();
   });
 
   it("shows no badge at 0", async () => {
-    renderAs(CLERK, <Bell />);
+    renderAs(CLERK, <Bell hrefFor={hrefFor} />);
     const bell = await screen.findByRole("button", { name: "Notifications" });
     expect(within(bell).queryByText(/\d/)).not.toBeInTheDocument();
   });
 
   it("lists entries newest first and loads more", async () => {
-    renderAs(STAFF, <Bell />);
+    renderAs(STAFF, <Bell hrefFor={hrefFor} />);
     const panel = await openPanel();
     await waitFor(() => expect(within(panel).getAllByRole("listitem")).toHaveLength(20));
     expect(within(panel).getAllByRole("listitem")[0]).toHaveTextContent("Order #1041 is 2 days late");
@@ -51,15 +54,22 @@ describe("Bell", () => {
   });
 
   it("opening an order notification marks it read and goes to the order", async () => {
-    renderAs(STAFF, <Bell />);
+    renderAs(STAFF, <Bell hrefFor={hrefFor} />);
     const panel = await openPanel();
     await userEvent.click(await within(panel).findByRole("button", { name: /Order #1041 is 2 days late/ }));
     await waitFor(() => expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/orders\/[0-9a-f-]+$/)));
     expect(fakeState().notifications.unread(STAFF.id)).toBe(2);
   });
 
+  it("opens where hrefFor says", async () => {
+    renderAs(STAFF, <Bell hrefFor={() => "/partner-portal/x/jobs"} />);
+    const panel = await openPanel();
+    await userEvent.click(await within(panel).findByRole("button", { name: /Order #1041 is 2 days late/ }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/partner-portal/x/jobs"));
+  });
+
   it("a notification with nowhere to go is marked read and the panel stays", async () => {
-    renderAs(STAFF, <Bell />);
+    renderAs(STAFF, <Bell hrefFor={hrefFor} />);
     const panel = await openPanel();
     await userEvent.click(await within(panel).findByRole("button", { name: /AI use is at 80%/ }));
     await waitFor(() => expect(fakeState().notifications.unread(STAFF.id)).toBe(2));
@@ -68,7 +78,7 @@ describe("Bell", () => {
   });
 
   it("marks every notification read", async () => {
-    renderAs(STAFF, <Bell />);
+    renderAs(STAFF, <Bell hrefFor={hrefFor} />);
     await screen.findByRole("button", { name: "Notifications, 3 unread" });
     const panel = await openPanel();
     await within(panel).findAllByRole("listitem");
@@ -81,7 +91,7 @@ describe("Bell", () => {
   });
 
   it("hides Mark all as read when nothing is unread", async () => {
-    renderAs(CLERK, <Bell />);
+    renderAs(CLERK, <Bell hrefFor={hrefFor} />);
     await screen.findByRole("button", { name: "Notifications" });
     const panel = await openPanel();
     await within(panel).findByText("You're all caught up.");
@@ -94,7 +104,7 @@ describe("Bell", () => {
         HttpResponse.json({ type: "about:blank", title: "Error", status: 503, detail: "erp-api is busy. Try again shortly." }, { status: 503 }),
       ),
     );
-    renderAs(STAFF, <Bell />);
+    renderAs(STAFF, <Bell hrefFor={hrefFor} />);
     await screen.findByRole("button", { name: "Notifications, 3 unread" });
     const panel = await openPanel();
     await userEvent.click(await within(panel).findByRole("button", { name: "Mark all as read" }));
@@ -104,7 +114,7 @@ describe("Bell", () => {
   });
 
   it("says when you're all caught up", async () => {
-    renderAs(CLERK, <Bell />);
+    renderAs(CLERK, <Bell hrefFor={hrefFor} />);
     expect(await screen.findByRole("button", { name: "Notifications" })).toBeInTheDocument();
     const panel = await openPanel();
     expect(await within(panel).findByText("You're all caught up.")).toBeInTheDocument();

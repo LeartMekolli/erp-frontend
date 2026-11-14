@@ -15,7 +15,6 @@ import { useFormat } from "@/lib/format/use-format";
 import { useMediaQuery } from "@/lib/use-media-query";
 
 import { useFeed, useMarkAllRead, useMarkRead, useUnreadCount } from "./queries";
-import { subjectHref } from "./subject-href";
 
 const TITLE = "Notifications";
 
@@ -24,7 +23,7 @@ const TITLE = "Notifications";
  * notifications, a popover from 768 px and full screen below. Opening one
  * marks it read and goes to its record, when there is one to go to.
  */
-export function Bell() {
+export function Bell({ hrefFor }: { hrefFor: (subject: FeedEntry["subject"]) => string | null }) {
   const { data: me } = useMe();
   const unread = useUnreadCount();
   const wide = useMediaQuery("(min-width: 768px)");
@@ -32,10 +31,10 @@ export function Bell() {
   const markRead = useMarkRead();
   const router = useRouter();
   const titleId = useId();
+  // The panel's dates need /me (useFormat), so wait for it.
   if (!me) return null;
 
   async function choose(entry: FeedEntry) {
-    if (!me) return;
     if (entry.read_at === null) {
       try {
         await markRead.mutateAsync(entry.id);
@@ -43,7 +42,7 @@ export function Bell() {
         // Still unread, so the count stays; going to the record matters more.
       }
     }
-    const href = subjectHref(entry.subject, me);
+    const href = hrefFor(entry.subject);
     if (!href) return;
     setOpen(false);
     router.push(href);

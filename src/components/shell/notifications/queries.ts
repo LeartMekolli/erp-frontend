@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/lib/api/client";
+import { notificationsApi } from "@/lib/api/client";
 import { idempotencyHeader } from "@/lib/api/idempotency";
 import { problemFrom } from "@/lib/api/problem";
 import type { FeedEntry } from "@/lib/api/schema-types";
@@ -16,7 +16,7 @@ const notificationsKeys = {
 };
 
 async function fetchFeed(query: { limit: number; cursor?: string }) {
-  const { data, error, response } = await api.GET("/notifications", { params: { query } });
+  const { data, error, response } = await notificationsApi.GET("/notifications", { params: { query } });
   if (!data) throw problemFrom(error, response);
   return data;
 }
@@ -29,7 +29,7 @@ export function useUnreadCount(): number {
   const query = useQuery({
     queryKey: notificationsKeys.unread,
     queryFn: async () => {
-      const { data, error, response } = await api.GET("/notifications/unread-count");
+      const { data, error, response } = await notificationsApi.GET("/notifications/unread-count");
       if (!data) throw problemFrom(error, response);
       return data.count;
     },
@@ -51,7 +51,7 @@ export function useMarkRead() {
   const client = useQueryClient();
   return useApiMutation<string, void>(
     async (id, key) => {
-      const { error, response } = await api.POST("/notifications/{id}/read", {
+      const { error, response } = await notificationsApi.POST("/notifications/{id}/read", {
         params: { path: { id }, header: idempotencyHeader(key) },
       });
       if (!response.ok) throw problemFrom(error, response);
@@ -65,7 +65,7 @@ export function useMarkAllRead() {
   const client = useQueryClient();
   return useApiMutation<void, void>(
     async (_, key) => {
-      const { error, response } = await api.POST("/notifications/read-all", {
+      const { error, response } = await notificationsApi.POST("/notifications/read-all", {
         params: { header: idempotencyHeader(key) },
       });
       if (!response.ok) throw problemFrom(error, response);

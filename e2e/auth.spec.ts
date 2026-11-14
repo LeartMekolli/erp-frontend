@@ -1,5 +1,6 @@
 import {
   CUSTOMER,
+  LAYERLINE_ID,
   NORTHCAST_ID,
   PARTNER,
   PARTNER_TWO_SHOPS,
@@ -18,22 +19,23 @@ test("staff sign in and land on Orders", async ({ page }) => {
   await expect(page).toHaveURL("/orders");
 });
 
-test("a partner lands on their own workshop", async ({ page }) => {
+test("a partner lands on their own workshop's jobs", async ({ page }) => {
   await signIn(page, PARTNER.email);
-  await expect(page.getByRole("heading", { name: "Northcast Foundry" })).toBeVisible();
-  await expect(page).toHaveURL(`/partner-portal/${NORTHCAST_ID}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Jobs" })).toBeVisible();
+  await expect(page).toHaveURL(`/partner-portal/${NORTHCAST_ID}/jobs`);
 });
 
 test("a partner with two workshops chooses one", async ({ page }) => {
   await signIn(page, PARTNER_TWO_SHOPS.email);
   await expect(page.getByRole("heading", { name: "Choose a workshop" })).toBeVisible();
   await page.getByRole("link", { name: "Layerline Prints" }).click();
-  await expect(page.getByRole("heading", { name: "Layerline Prints" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Jobs" })).toBeVisible();
+  await expect(page).toHaveURL(`/partner-portal/${LAYERLINE_ID}/jobs`);
 });
 
 test("a partner opening the staff area sees not found", async ({ page }) => {
   await signIn(page, PARTNER.email);
-  await expect(page.getByRole("heading", { name: "Northcast Foundry" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Jobs" })).toBeVisible();
   await page.goto("/");
   await expect(page.getByText("This page could not be found.")).toBeVisible();
 });
