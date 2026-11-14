@@ -39,7 +39,7 @@ export function StaffQualityTab({ group }: { group: Group }) {
   const rules = useLineRules(group);
   return (
     <StaffPhotoLinks>
-      <QualityTab progress={group.steps.map(staffProgress)} rules={rules.data} rulesState={rules} />
+      <QualityTab progress={group.steps.map(staffProgress)} rules={rules.data} rulesState={rules} of="line" />
     </StaffPhotoLinks>
   );
 }
@@ -58,7 +58,7 @@ export function StaffHistoryTab({ group }: { group: Group }) {
         onFilter={setFilter}
         rules={rules}
         cameAt={null}
-        emptyFails="No fails or moves back on this line."
+        of="line"
       />
     </StaffPhotoLinks>
   );

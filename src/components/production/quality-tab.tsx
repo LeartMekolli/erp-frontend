@@ -127,11 +127,14 @@ export function QualityTab({
   progress,
   rules,
   rulesState,
+  of,
 }: {
   progress: StepProgress[];
   /** The steps' rules, which say which steps are checked; undefined until loaded. */
   rules: StepRules[] | undefined;
   rulesState: { isPending: boolean; error: unknown; refetch: () => unknown };
+  /** What these steps belong to, in the words: staff's line, or the partner's job. */
+  of: "line" | "job";
 }) {
   if (rulesState.isPending) {
     return <div role="status" aria-label="Loading the quality checks" className="h-24 animate-pulse rounded-2xl bg-panel-soft motion-reduce:animate-none" />;
@@ -141,7 +144,7 @@ export function QualityTab({
   }
 
   const { cards, noChecks } = qualityCards(progress, rules);
-  if (cards.length === 0) return <p className="py-2 text-sm text-ink-2">No step on this line has quality checks.</p>;
+  if (cards.length === 0) return <p className="py-2 text-sm text-ink-2">{`No step on this ${of} has quality checks.`}</p>;
 
   return (
     <div className="flex flex-col gap-2.5 pt-1">

@@ -66,7 +66,7 @@ function renderHistory(items: MoveEntry[], cameAt: string | null, hasNextPage = 
         onFilter={() => undefined}
         rules={{ data: [], isPending: false, error: null, refetch: () => undefined }}
         cameAt={cameAt}
-        emptyFails="No fails or moves back on this job."
+        of="job"
       />
     </WithMe>,
   );

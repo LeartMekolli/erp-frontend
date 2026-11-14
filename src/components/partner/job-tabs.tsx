@@ -77,7 +77,7 @@ function JobHistory({ job, partnerId }: { job: PartnerJobDetail; partnerId: stri
       onFilter={setFilter}
       rules={{ data: partnerRules(job), ...LOADED }}
       cameAt={moves.handedOverAt}
-      emptyFails="No fails or moves back on this job."
+      of="job"
     />
   );
 }
@@ -175,7 +175,7 @@ export function JobTabs({ job, partnerId }: { job: PartnerJobDetail; partnerId: 
             <JobPieces job={job} partnerId={partnerId} />
           </TabsContent>
           <TabsContent value="quality">
-            <QualityTab progress={partnerProgress(job)} rules={partnerRules(job)} rulesState={LOADED} />
+            <QualityTab progress={partnerProgress(job)} rules={partnerRules(job)} rulesState={LOADED} of="job" />
           </TabsContent>
           <TabsContent value="history">
             <JobHistory job={job} partnerId={partnerId} />

@@ -46,9 +46,9 @@ interface CameMarker {
   created_at: string;
 }
 
-function Placeholder() {
+function Placeholder({ of }: { of: "line" | "job" }) {
   return (
-    <div role="status" aria-label="Loading this line's moves" className="flex flex-col gap-3 pt-3">
+    <div role="status" aria-label={`Loading this ${of}'s moves`} className="flex flex-col gap-3 pt-3">
       {[0, 1, 2].map((row) => (
         <div key={row} className="grid grid-cols-[22px_1fr] gap-3">
           <div className="size-[22px] animate-pulse rounded-full bg-panel-soft motion-reduce:animate-none" />
@@ -97,7 +97,7 @@ export function HistoryTab({
   onFilter,
   rules,
   cameAt,
-  emptyFails,
+  of,
 }: {
   list: MoveList;
   /** How many moves each filter holds, once known. */
@@ -108,19 +108,19 @@ export function HistoryTab({
   rules: Loading<StepRules[]>;
   /** When the job came to the partner; null on staff's line. */
   cameAt: string | null;
-  /** What an empty fails filter says. */
-  emptyFails: string;
+  /** What these are the moves of, in the words: staff's line, or the partner's job. */
+  of: "line" | "job";
 }) {
   const { timeZone } = useFormat();
 
   let body;
   if (list.isPending || rules.isPending) {
-    body = <Placeholder />;
+    body = <Placeholder of={of} />;
   } else if (!list.data || !rules.data) {
     const failed = list.data ? rules : list;
-    body = <LoadFailure error={failed.error} fallback="This line's moves couldn't be loaded." onRetry={() => void failed.refetch()} />;
+    body = <LoadFailure error={failed.error} fallback={`This ${of}'s moves couldn't be loaded.`} onRetry={() => void failed.refetch()} />;
   } else if (list.items.length === 0) {
-    body = <p className="py-2 text-sm text-ink-2">{filter === "all" ? "No moves yet." : emptyFails}</p>;
+    body = <p className="py-2 text-sm text-ink-2">{filter === "all" ? "No moves yet." : `No fails or moves back on this ${of}.`}</p>;
   } else {
     const steps = rules.data;
     body = (
