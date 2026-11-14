@@ -27,7 +27,11 @@ test("a partner accepts an offer", async ({ page }) => {
   await offer(page, "Ring · Silver 925").getByRole("button", { name: "Accept" }).click();
 
   await expect(page.getByText("Ring · Silver 925 is yours.", { exact: true })).toBeVisible();
+  // The offer and its buttons are gone: focus waits on the notice.
+  await expect(page.getByRole("status").filter({ hasText: "Ring · Silver 925 is yours." })).toBeFocused();
   await expect(page.getByRole("heading", { name: "Waiting for your answer · 1" })).toBeVisible();
+  // The notice holds the title too: look for the job's row in In progress.
+  await expect(page.getByRole("tabpanel", { name: "In progress" }).getByRole("link", { name: /^Ring · Silver 925 10 pieces\b/ })).toBeVisible();
   await page.getByRole("link", { name: "Open job" }).click();
 
   await expect(page).toHaveURL(`${JOBS}/${RING_OFFER_ID}`);
@@ -48,6 +52,7 @@ test("a partner declines an offer", async ({ page }) => {
   await expect(page.getByText("You declined Ring · Silver 925.", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Waiting for your answer · 1" })).toBeVisible();
   await expect(offer(page, "Ring · Silver 925")).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: "You declined Ring · Silver 925." })).toBeFocused();
 });
 
 test("a suspended workshop can't answer", async ({ page, request }) => {

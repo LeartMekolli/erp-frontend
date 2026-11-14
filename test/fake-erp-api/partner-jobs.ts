@@ -181,7 +181,8 @@ export function createPartnerJobsStore(now: () => number) {
         const row = mine(partnerId, groupId);
         if (!row) return jobNotFound;
         if (!open(row)) return notOffered("The offer is no longer open");
-        if (answer === "accept") row.job = { ...row.job, status: "accepted", expires_at: null };
+        // erp-api keeps the offer's deadline on the accepted job (`partner-jobs.service.ts:316`).
+        if (answer === "accept") row.job = { ...row.job, status: "accepted" };
         else row.declined = true;
         return {
           ok: true,
@@ -193,7 +194,7 @@ export function createPartnerJobsStore(now: () => number) {
             status: answer === "accept" ? "accepted" : "declined",
             cost: row.job.cost,
             owed_override: null,
-            expires_at: null,
+            expires_at: row.job.expires_at,
             due_on: row.job.due_on,
             responded_at: stamp(),
             created_at: row.job.offered_at,

@@ -12,7 +12,7 @@ import { fakeState, resetFakeState } from "../../../test/fake-erp-api/state";
 import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
-import { PartnerNoticeProvider, usePartnerNotice } from "./notice";
+import { PartnerNoticeLine, PartnerNoticeProvider } from "./notice";
 import { OffersBox } from "./offers-box";
 
 let partnerId = NORTHCAST_ID;
@@ -50,12 +50,6 @@ function WithMe({ children }: { children: ReactNode }) {
   return useMe().data ? children : null;
 }
 
-/** The partner shell's notice line. */
-function Notice() {
-  const { notice } = usePartnerNotice();
-  return <p role="status">{notice}</p>;
-}
-
 function renderBox(user: FakeUser = PARTNER) {
   return renderAs(
     user,
@@ -63,9 +57,16 @@ function renderBox(user: FakeUser = PARTNER) {
       <WithMe>
         <OffersBox />
       </WithMe>
-      <Notice />
+      <PartnerNoticeLine />
     </PartnerNoticeProvider>,
   );
+}
+
+/** The partner shell's notice line, once it says this. */
+async function noticeSaying(text: string): Promise<HTMLElement> {
+  const line = (await screen.findByText(text)).closest<HTMLElement>("[role=status]");
+  if (!line) throw new Error(`no notice line around ${text}`);
+  return line;
 }
 
 /** The card of the offer with this title. */
@@ -107,6 +108,51 @@ describe("OffersBox", () => {
     expect(screen.getByRole("link", { name: "Open job" })).toHaveAttribute("href", `/partner-portal/${NORTHCAST_ID}/jobs/${RING_OFFER_ID}`);
     expect(await screen.findByRole("heading", { name: "Waiting for your answer · 1" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Ring · Silver 925" })).not.toBeInTheDocument();
+  });
+
+  it("moves focus to the notice after accepting", async () => {
+    renderBox();
+    const ring = await offer("Ring · Silver 925");
+    await userEvent.click(within(ring).getByRole("button", { name: "Accept" }));
+
+    const line = await noticeSaying("Ring · Silver 925 is yours.");
+    await waitFor(() => expect(line).toHaveFocus());
+    expect(await screen.findByRole("heading", { name: "Waiting for your answer · 1" })).toBeInTheDocument();
+    expect(line).toHaveFocus();
+  });
+
+  it("moves focus to the notice after declining", async () => {
+    renderBox();
+    const ring = await offer("Ring · Silver 925");
+    await userEvent.click(within(ring).getByRole("button", { name: "Decline" }));
+    await userEvent.click(within(await screen.findByRole("dialog", { name: "Decline this job?" })).getByRole("button", { name: "Decline job" }));
+
+    const line = await noticeSaying("You declined Ring · Silver 925.");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(await screen.findByRole("heading", { name: "Waiting for your answer · 1" })).toBeInTheDocument();
+    // The dialog doesn't hand focus back to Decline: its offer is gone.
+    await waitFor(() => expect(line).toHaveFocus());
+  });
+
+  it("keeps focus on the offer when an answer fails", async () => {
+    server.use(
+      http.post(`${FAKE_API_URL}/partner-portal/partners/:partnerId/jobs/:groupId/accept`, () =>
+        HttpResponse.json(
+          { type: "about:blank", title: "Error", status: 500, detail: "Something went wrong" },
+          { status: 500, headers: { "content-type": "application/problem+json" } },
+        ),
+      ),
+    );
+    renderBox();
+    const ring = await offer("Ring · Silver 925");
+    const accept = within(ring).getByRole("button", { name: "Accept" });
+    await userEvent.click(accept);
+
+    const line = await noticeSaying("Something went wrong");
+    await waitFor(() => expect(accept).toBeEnabled());
+    expect(screen.getByRole("heading", { name: "Waiting for your answer · 2" })).toBeInTheDocument();
+    expect(line).not.toHaveFocus();
+    expect(accept).toHaveFocus();
   });
 
   it("asks before declining", async () => {
@@ -178,6 +224,28 @@ describe("OffersBox", () => {
     expect(screen.getByText("Ring · Silver 925")).toBeInTheDocument();
     expect(screen.queryByText("Time ran out on Ring · Silver 925.")).not.toBeInTheDocument();
     expect(posts).toEqual([]);
+  });
+
+  it("moves focus to the notice only when the run-out offer had it", async () => {
+    freezeAt(NOW, ["Date", "setInterval", "clearInterval"]);
+    renderBox();
+    const ring = await offer("Ring · Silver 925");
+    const pendant = await offer("Pendant · Gold 18k");
+
+    // Focus on another offer stays there.
+    act(() => within(ring).getByRole("button", { name: "Accept" }).focus());
+    act(() => vi.advanceTimersByTime(90 * MINUTE + 15_000));
+    expect(screen.getByText("Time ran out on Pendant · Gold 18k.")).toBeInTheDocument();
+    expect(within(ring).getByRole("button", { name: "Accept" })).toHaveFocus();
+    expect(pendant).not.toBeInTheDocument();
+
+    // Focus inside the run-out offer's decline dialog goes to the notice.
+    await userEvent.click(within(ring).getByRole("button", { name: "Decline" }));
+    await screen.findByRole("dialog", { name: "Decline this job?" });
+    act(() => vi.advanceTimersByTime(5 * 60 * MINUTE + 12 * MINUTE - 90 * MINUTE));
+    const line = await noticeSaying("Time ran out on Ring · Silver 925.");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(line).toHaveFocus());
   });
 
   it("hides the answers while suspended", async () => {

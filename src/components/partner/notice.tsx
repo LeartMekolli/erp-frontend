@@ -1,18 +1,30 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { cn } from "cn";
+import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+
+/** One announcement. The id is new each time, so the same words twice still render, and are read, again. */
+interface Notice {
+  id: number;
+  node: ReactNode;
+  focus: boolean;
+}
 
 interface PartnerNotice {
-  notice: ReactNode;
-  announce: (notice: ReactNode) => void;
+  notice: Notice | null;
+  /** Shows `node` in the notice line; `focus` also moves focus there, for when what had it is gone. */
+  announce: (node: ReactNode, options?: { focus?: boolean }) => void;
 }
 
 const NoticeContext = createContext<PartnerNotice | null>(null);
 
 /** Holds the one notice line of the partner shell, so it survives going from a Job page back to Jobs. */
 export function PartnerNoticeProvider({ children }: { children: ReactNode }) {
-  const [notice, announce] = useState<ReactNode>(null);
-  const value = useMemo(() => ({ notice, announce }), [notice]);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const announce = useCallback((node: ReactNode, { focus = false }: { focus?: boolean } = {}) => {
+    setNotice((last) => ({ id: (last?.id ?? 0) + 1, node, focus }));
+  }, []);
+  const value = useMemo(() => ({ notice, announce }), [notice, announce]);
   return <NoticeContext.Provider value={value}>{children}</NoticeContext.Provider>;
 }
 
@@ -20,4 +32,24 @@ export function usePartnerNotice(): PartnerNotice {
   const value = useContext(NoticeContext);
   if (!value) throw new Error("usePartnerNotice needs a PartnerNoticeProvider");
   return value;
+}
+
+/**
+ * The notice line itself: a live region that is always there, so the first
+ * notice is read too, and that takes no room while empty. It takes focus when
+ * a notice asks for it, like `<main>` does for the skip link, without a ring.
+ */
+export function PartnerNoticeLine({ className }: { className?: string }) {
+  const { notice } = usePartnerNotice();
+  const line = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (notice?.focus) line.current?.focus();
+  }, [notice]);
+
+  return (
+    <p ref={line} role="status" tabIndex={-1} className={cn("text-sm text-ink-2 outline-none", className)}>
+      {notice && <Fragment key={notice.id}>{notice.node}</Fragment>}
+    </p>
+  );
 }

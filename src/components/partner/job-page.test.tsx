@@ -13,7 +13,7 @@ import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
 import { JobPage } from "./job-page";
-import { PartnerNoticeProvider, usePartnerNotice } from "./notice";
+import { PartnerNoticeLine, PartnerNoticeProvider } from "./notice";
 
 const navigation = vi.hoisted(() => ({ push: vi.fn(), partnerId: "", groupId: "" }));
 vi.mock("next/navigation", () => ({
@@ -44,12 +44,6 @@ function WithMe({ children }: { children: ReactNode }) {
   return useMe().data ? children : null;
 }
 
-/** The partner shell's notice line. */
-function Notice() {
-  const { notice } = usePartnerNotice();
-  return <p role="status">{notice}</p>;
-}
-
 function renderPage() {
   return renderAs(
     PARTNER,
@@ -57,7 +51,7 @@ function renderPage() {
       <WithMe>
         <JobPage />
       </WithMe>
-      <Notice />
+      <PartnerNoticeLine />
     </PartnerNoticeProvider>,
   );
 }
@@ -147,6 +141,7 @@ describe("JobPage", () => {
     renderPage();
 
     expect(await screen.findByText("This job couldn't be loaded.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Job" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 });

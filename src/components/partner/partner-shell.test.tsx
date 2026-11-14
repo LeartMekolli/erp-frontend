@@ -61,9 +61,9 @@ describe("PartnerShell", () => {
   it("shows the suspended banner", async () => {
     fakeState().suspendPartner(NORTHCAST_ID);
     renderShell(PARTNER);
-    expect(
-      await screen.findByText("Your workshop is suspended. You can finish the jobs you have, but you can't take new ones."),
-    ).toBeInTheDocument();
+    const banner = await screen.findByText("Your workshop is suspended. You can finish the jobs you have, but you can't take new ones.");
+    // Inside a live region that was there before it, so it's read when it appears.
+    expect(banner.closest("[role=status]")).not.toBeNull();
   });
 
   it("has no search", async () => {

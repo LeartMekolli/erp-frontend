@@ -41,19 +41,26 @@ export function OfferActions({
   const [asking, setAsking] = useState(false);
   // A second click lands before the disabled button renders: only the first one sends.
   const sending = useRef(false);
+  // Sent from the dialog: focus goes to the notice, not back to Decline, which leaves with the offer.
+  const answered = useRef(false);
 
   if (suspended || name === null) return null;
 
   const title = jobTitle(job);
 
+  // An answer takes focus to the notice, because the offer, and so the button, goes. Any other
+  // error keeps the offer, so focus stays on it.
   const send = async (choice: Answer) => {
     if (sending.current) return;
     sending.current = true;
+    answered.current = true;
     try {
       await answer.mutateAsync({ groupId: job.id, answer: choice });
     } catch (error) {
+      const gone = isApiProblem(error) && error.status === 409;
+      answered.current = gone;
       setAsking(false);
-      announce(isApiProblem(error) && error.status === 409 ? "This offer is no longer open." : errorMessage(error));
+      announce(gone ? "This offer is no longer open." : errorMessage(error), { focus: gone });
       return;
     } finally {
       sending.current = false;
@@ -70,19 +77,35 @@ export function OfferActions({
       ) : (
         `You declined ${title}.`
       ),
+      { focus: true },
     );
     onAnswered?.(choice);
   };
 
   return (
     <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
-      <Button variant="outline" disabled={answer.isPending} onClick={() => setAsking(true)}>
+      <Button
+        variant="outline"
+        disabled={answer.isPending}
+        onClick={() => {
+          answered.current = false;
+          setAsking(true);
+        }}
+      >
         Decline
       </Button>
       <Button disabled={answer.isPending} aria-busy={answer.isPending} onClick={() => void send("accept")}>
         Accept
       </Button>
-      <DeclineDialog open={asking} onOpenChange={setAsking} onDecline={() => void send("decline")} pending={answer.isPending} />
+      <DeclineDialog
+        open={asking}
+        onOpenChange={setAsking}
+        onDecline={() => void send("decline")}
+        pending={answer.isPending}
+        onCloseAutoFocus={(event) => {
+          if (answered.current) event.preventDefault();
+        }}
+      />
     </div>
   );
 }

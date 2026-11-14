@@ -110,6 +110,22 @@ describe("JobsPage", () => {
     expect(requests.filter((url) => url.searchParams.get("status") === "finished")).toHaveLength(1);
   });
 
+  it("doesn't say there are no jobs when the offers can't load", async () => {
+    server.use(
+      http.get(JOBS_URL, ({ request }) => {
+        const status = new URL(request.url).searchParams.get("status");
+        if (status === "offered") return HttpResponse.json({ type: "about:blank", title: "Error", status: 500 }, { status: 500 });
+        return status === "accepted" ? emptyPage() : undefined;
+      }),
+    );
+    renderPage();
+    const panel = await screen.findByRole("tabpanel", { name: "In progress" });
+    expect(await within(panel).findByText("No jobs in progress. New offers appear above.")).toBeInTheDocument();
+    expect(screen.getByText("Your offers couldn't be loaded.")).toBeInTheDocument();
+    expect(screen.queryByText("No jobs yet. When staff offer you a job, it appears here.")).not.toBeInTheDocument();
+    expect(requests.some((url) => url.searchParams.get("status") === "finished")).toBe(false);
+  });
+
   it("offers a retry when jobs can't load", async () => {
     let failing = true;
     server.use(
