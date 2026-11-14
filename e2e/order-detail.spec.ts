@@ -141,21 +141,15 @@ test("a fail shows on the History tab", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Fails and moves back 3" })).toBeVisible();
 });
 
-test("a comment posts for staff only unless another reader is picked", async ({ page }) => {
+test("a comment on the order is for staff only", async ({ page }) => {
   await openOrder(page, 1049);
   const comments = page.getByRole("region", { name: "Comments" });
-  await expect(comments.getByText("Only staff will read this")).toBeVisible();
+  await expect(comments.getByText("Only staff will read this.")).toBeVisible();
+  await expect(comments.getByLabel("Who reads it")).toHaveCount(0);
   await comments.getByLabel("Add a comment").fill("Check the finish first");
   await comments.getByRole("button", { name: "Post comment" }).click();
   const posted = comments.getByRole("list", { name: "Comments" }).getByRole("listitem").filter({ hasText: "Check the finish first" });
   await expect(posted.getByText("Staff only")).toBeVisible();
-
-  await comments.getByLabel("Who reads it").selectOption({ label: "The customer" });
-  await expect(comments.getByText("The customer will read this")).toBeVisible();
-  await comments.getByLabel("Add a comment").fill("Ready on Friday");
-  await comments.getByRole("button", { name: "Post comment" }).click();
-  const toCustomer = comments.getByRole("list", { name: "Comments" }).getByRole("listitem").filter({ hasText: "Ready on Friday" });
-  await expect(toCustomer.getByText("To the customer")).toBeVisible();
 });
 
 test("an order is cancelled with a reason", async ({ page }) => {

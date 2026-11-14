@@ -82,6 +82,26 @@ const SEEDS: Seed[] = [
 const STATUSES = ["offered", "accepted", "finished"] as const;
 const isStatus = (value: string): value is PartnerJobStatus => (STATUSES as readonly string[]).includes(value);
 
+type DetailStep = PartnerJobDetail["steps"][number];
+
+/** A listed step as the detail sends it, with no rules and nothing inspected yet. */
+const withRules = (step: PartnerJob["steps"][number]): DetailStep => ({
+  ...step,
+  checklist: [],
+  defects: [],
+  rework_targets: [],
+  pass: { min_photos: 0, comment_required: false },
+  fail: { min_photos: 0, comment_required: false },
+  sampling: null,
+  count: 0,
+  in_rework: 0,
+  passed: 0,
+  failed: 0,
+  not_inspected: 0,
+  defect_counts: [],
+  latest_check: null,
+});
+
 const notOffered = (detail: string): Answer<never> => ({ ok: false, status: 409, detail });
 const jobNotFound: Answer<never> = { ok: false, status: 404, detail: "Job not found" };
 
@@ -168,7 +188,8 @@ export function createPartnerJobsStore(now: () => number) {
     detail(partnerId: string, groupId: string): Answer<PartnerJobDetail> {
       const row = mine(partnerId, groupId);
       if (!row || !visible(row)) return jobNotFound;
-      return { ok: true, body: { ...view(row), work_orders: [], summary: null } };
+      const job = view(row);
+      return { ok: true, body: { ...job, steps: job.steps.map(withRules), work_orders: [], summary: null } };
     },
 
     /**

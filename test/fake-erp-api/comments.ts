@@ -1,9 +1,9 @@
 /**
  * The fake erp-api's order comments and claims. It keeps the rules the order
  * page depends on (erp-api `src/modules/orders/comments.service.ts`): comments
- * oldest first, staff only unless `visibility` says otherwise, a comment for
- * the partner needs a line a partner has accepted and names that partner, and
- * a line must be on the order.
+ * oldest first, where it's posted decides who reads it (a line a partner has
+ * accepted names that partner, anywhere else is staff only), a line must be on
+ * the order, and the body is strict, so an unknown key is a 400.
  */
 
 import type { Claim, OrderComment, OrderLine, OrderPart, StaffCommentBody } from "../../src/lib/api/schema-types";
@@ -14,10 +14,12 @@ import { uuid } from "./orders-seed";
 const HOUR = 3_600_000;
 const COMMENT_MAX_LENGTH = 5000;
 const FILE_VERSION = uuid("d0d0d0d0", 1);
+/** `staffCommentSchema`'s keys (erp-api `comments.service.ts:24`). */
+const BODY_KEYS = ["body", "line_id", "attachments"];
 
 const invalid = (path: string, message: string): Answer<never> => ({ ok: false, status: 400, errors: [{ path, message }] });
 
-/** The partner that has accepted a line: the one a comment for the partner is to (erp-api `holder`). */
+/** The partner that has accepted a line: the one that reads a comment posted on it (erp-api `holder`). */
 function holder(line: OrderLine | OrderPart): OrderComment["partner"] {
   return line.partner?.status === "accepted" ? { id: line.partner.id, name: line.partner.name } : null;
 }
@@ -40,10 +42,9 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
         {
           id: uuid("d1d1d1d1", 1),
           line_id: null,
-          author: { kind: "customer", id: uuid("d2d2d2d2", 1), name: "Rina Holt" },
-          visibility: "customer",
+          author: { kind: "staff", id: uuid("55555555", 1), name: "Ana Ruiz" },
           partner: null,
-          body: "Could the polish stay matte?",
+          body: "Rina asked for the polish to stay matte.",
           attachments: [{ file_version_id: FILE_VERSION, name: "polish-sample.pdf" }],
           created_at: stamp(5),
         },
@@ -51,7 +52,6 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
           id: uuid("d1d1d1d1", 2),
           line_id: order1048.lines[0]!.id,
           author: { kind: "staff", id: uuid("55555555", 1), name: "Ana Ruiz" },
-          visibility: "partner",
           partner: holder(order1048.lines[0]!),
           body: "Matte polish on these, please.",
           attachments: [],
@@ -88,16 +88,13 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
     post(orderId: string, body: StaffCommentBody, author: { id: string; name: string }, key: string | null): Answer<OrderComment> {
       const found = orders.get(orderId);
       if (!found.ok) return found;
+      const extra = Object.keys(body).find((name) => !BODY_KEYS.includes(name));
+      if (extra) return invalid(extra, `Unrecognized key: "${extra}"`);
       const text = body.body.trim();
       if (text.length < 1 || text.length > COMMENT_MAX_LENGTH) return invalid("body", `must be 1 to ${COMMENT_MAX_LENGTH} characters`);
-      const visibility = body.visibility ?? "staff";
-      if (visibility === "partner" && !body.line_id) return invalid("visibility", "A comment for the partner needs a line");
       const line = found.body.lines.flatMap((orderLine) => [orderLine, ...orderLine.parts]).find((candidate) => candidate.id === body.line_id);
       if (body.line_id && !line) return invalid("line_id", "not a line of this order");
-      const partner = visibility === "partner" && line ? holder(line) : null;
-      if (visibility === "partner" && !partner) {
-        return { ok: false, status: 409, code: "line_not_accepted", detail: "No partner has accepted this line yet" };
-      }
+      const partner = line ? holder(line) : null;
 
       const input = JSON.stringify({ orderId, body });
       const seen = key ? keys.get(key) : undefined;
@@ -107,7 +104,6 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
         id: crypto.randomUUID(),
         line_id: body.line_id ?? null,
         author: { kind: "staff", id: author.id, name: author.name },
-        visibility,
         partner,
         body: text,
         attachments: [],

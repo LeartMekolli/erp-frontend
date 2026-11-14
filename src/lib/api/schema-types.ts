@@ -119,10 +119,10 @@ export type PartnerJobStatus = PartnerJob["status"];
 /** One job with its pieces, from `GET /partner-portal/partners/{partnerId}/jobs/{groupId}`. */
 export type PartnerJobDetail = JsonOk<"/partner-portal/partners/{partnerId}/jobs/{groupId}", "get">;
 
-/** One comment as staff read it, from `GET /orders/{id}/comments`. */
+/** One comment as staff read it, from `GET /orders/{id}/comments`, with the partner that reads it too, if any. */
 export type OrderComment = JsonOk<"/orders/{id}/comments", "get">["data"][number];
 
-/** `POST /orders/{id}/comments`: the body, its line, and whether it goes to the partner. */
+/** `POST /orders/{id}/comments`: the body and its line. The line decides who reads it. */
 export type StaffCommentBody = JsonBody<"/orders/{id}/comments", "post">;
 
 /** One claim, from `GET /claims`. */

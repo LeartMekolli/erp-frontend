@@ -135,7 +135,7 @@ function OrderDetail({ id }: { id: string }) {
           <ShippingPanel order={order} onNotice={setNotice} />
           {order.note && <NotePanel note={order.note} />}
           <ClaimsNote orderId={order.id} />
-          <CommentsPanel order={order} />
+          <CommentsPanel order={order} now={query.dataUpdatedAt} />
         </div>
       </div>
 

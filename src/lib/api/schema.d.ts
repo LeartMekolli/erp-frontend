@@ -3056,8 +3056,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * One of the partner's jobs, with each of its pieces and the step it is at.
-         * @description Access: a person acting for the partner, at least `member`; a suspended partner only reads.
+         * One of the partner's jobs, with its steps' QC rules and each of its pieces.
+         * @description Each of the partner's steps says what a pass or fail there needs; a step the workspace does is only named, as a rework target. `to_inspect` says which pieces at a sampling step must be inspected.
+         *
+         *     Access: a person acting for the partner, at least `member`; a suspended partner only reads.
          */
         get: operations["PartnerJobsController_detail"];
         put?: never;
@@ -3082,6 +3084,50 @@ export interface paths {
          *     Access: a person acting for the partner, at least `member`; a suspended partner only reads.
          */
         get: operations["PartnerJobsController_design"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/partner-portal/partners/{partnerId}/jobs/{groupId}/work-orders/{workOrderId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One piece of the partner's job, with every move it has had, oldest first.
+         * @description Only for a job the partner has accepted and still holds, and a piece of it; else a 404. Names and what was written show only on moves the partner's own people made.
+         *
+         *     Access: a person acting for the partner, at least `member`; a suspended partner only reads.
+         */
+        get: operations["PartnerJobsController_workOrder"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/partner-portal/partners/{partnerId}/jobs/{groupId}/steps/{stepKey}/sop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A short-lived download link for one of the partner's steps' instructions.
+         * @description Only for a job the partner has accepted and a step it does on that job; otherwise, or when the step has no instructions, a 404.
+         *
+         *     Access: a person acting for the partner, at least `member`; a suspended partner only reads.
+         */
+        get: operations["PartnerJobsController_sop"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3123,7 +3169,7 @@ export interface paths {
         };
         /**
          * The comments on one of the partner's jobs, oldest first, a page at a time.
-         * @description Only for a job the partner has accepted and still holds; else a 404. What staff wrote to a partner that held the job before is never shown.
+         * @description Only for a job the partner has accepted and still holds; else a 404. What staff wrote while another partner held the job is never shown.
          *
          *     Access: a person acting for the partner, at least `member`; a suspended partner only reads.
          */
@@ -3152,7 +3198,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * A short-lived download link for an attachment of a comment sent to the partner.
+         * A short-lived download link for an attachment of a comment the partner can read.
          * @description Access: a person acting for the partner, at least `member`; a suspended partner only reads.
          */
         get: operations["JobCommentsController_url"];
@@ -3546,14 +3592,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * An order's comments, oldest first, a page at a time, with who wrote each and who else reads it.
+         * An order's comments, oldest first, a page at a time, with who wrote each and the partner that reads it, if any.
          * @description Access: permission `order.read`.
          */
         get: operations["OrderCommentsController_list"];
         put?: never;
         /**
          * Comment on an order or one of its lines, with files attached.
-         * @description `visibility` says who reads it besides staff: nobody by default, `customer`, or `partner`, the partner that has accepted the line, which needs a `line_id`. A `partner` comment stays that partner's when the line changes hands; on a line no partner has accepted yet it is a 409 with `code` `line_not_accepted`. A `line_id` of another order is a 400. Any uploaded file of the workspace can be attached, at most 10; one not found, or not uploaded yet, is a 404 naming it. Comments cannot be edited or deleted.
+         * @description Where it is posted decides who reads it. On the order, or on a line no partner has accepted yet, only staff do. On a line a partner has accepted, that partner reads it too, named in `partner`, and it stays that partner's when the line changes hands. A `line_id` of another order is a 400. Any uploaded file of the workspace can be attached, at most 10; one not found, or not uploaded yet, is a 404 naming it. Comments cannot be edited or deleted.
          *
          *     Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
          *
@@ -3672,54 +3718,6 @@ export interface paths {
          *     Access: a person acting for the customer, at least `buyer`.
          */
         post: operations["PortalOrdersController_cancel"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/portal/customers/{customerId}/orders/{id}/comments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * An order's comments for the customer, oldest first, a page at a time: its own people's and what staff wrote for it.
-         * @description Access: a person acting for the customer, at least `viewer`.
-         */
-        get: operations["PortalOrderCommentsController_list"];
-        put?: never;
-        /**
-         * Comment on an order or one of its lines, with files attached.
-         * @description A `line_id` of another order is a 400. Only files the customer uploaded itself can be attached, at most 10; another file, or one not uploaded yet, is a 404 naming it.
-         *
-         *     Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
-         *
-         *     Access: a person acting for the customer, at least `buyer`.
-         */
-        post: operations["PortalOrderCommentsController_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/portal/customers/{customerId}/orders/{id}/comments/{commentId}/attachments/{fileVersionId}/url": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * A short-lived download link for an attachment of a comment the customer can read.
-         * @description Access: a person acting for the customer, at least `viewer`.
-         */
-        get: operations["PortalOrderCommentsController_url"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7410,6 +7408,12 @@ export interface operations {
                                 type: string;
                                 id: string;
                             };
+                            job: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                partner_id: string;
+                            } | null;
                             title: string;
                             body: string;
                             created_at: string;
@@ -21034,6 +21038,95 @@ export interface operations {
                             name: string;
                             /** Format: uuid */
                             sop_file_version_id: string | null;
+                            checklist: ({
+                                key: string;
+                                label: string;
+                                required: boolean;
+                                /** @enum {string} */
+                                kind: "choice";
+                                options: {
+                                    key: string;
+                                    label: string;
+                                    passing: boolean;
+                                }[];
+                            } | {
+                                key: string;
+                                label: string;
+                                required: boolean;
+                                /** @enum {string} */
+                                kind: "yes_no";
+                                passing_answer: boolean;
+                            } | {
+                                key: string;
+                                label: string;
+                                required: boolean;
+                                /** @enum {string} */
+                                kind: "number";
+                                /** @default null */
+                                unit: string | null;
+                                /** @default null */
+                                min: string | null;
+                                /** @default null */
+                                max: string | null;
+                            } | {
+                                key: string;
+                                label: string;
+                                required: boolean;
+                                /** @enum {string} */
+                                kind: "text";
+                            })[];
+                            defects: {
+                                /** Format: uuid */
+                                id: string;
+                                key: string;
+                                name: string;
+                                /** @enum {string} */
+                                outcome: "rework" | "scrap" | "continue";
+                                rework_to: string | null;
+                            }[];
+                            rework_targets: {
+                                key: string;
+                                name: string;
+                            }[];
+                            pass: {
+                                min_photos: number;
+                                comment_required: boolean;
+                            };
+                            fail: {
+                                min_photos: number;
+                                comment_required: boolean;
+                            };
+                            sampling: {
+                                inspect: number;
+                                of_every: number;
+                            } | null;
+                            count: number;
+                            in_rework: number;
+                            passed: number;
+                            failed: number;
+                            not_inspected: number;
+                            defect_counts: {
+                                key: string;
+                                name: string;
+                                count: number;
+                            }[];
+                            latest_check: {
+                                /** Format: uuid */
+                                move_id: string;
+                                actor: {
+                                    /** @enum {string} */
+                                    kind: "own" | "workspace" | "other_partner";
+                                    name: string | null;
+                                };
+                                /** Format: date-time */
+                                created_at: string;
+                                photos: {
+                                    /** Format: uuid */
+                                    file_id: string;
+                                    /** Format: uuid */
+                                    file_version_id: string;
+                                }[];
+                            } | null;
                         }[];
                         cost: string;
                         pieces: {
@@ -21048,6 +21141,35 @@ export interface operations {
                             /** @enum {string} */
                             status: "active" | "finished" | "scrapped";
                             step_key: string | null;
+                            to_inspect: boolean | null;
+                            in_rework: boolean;
+                            last_move: {
+                                /** @enum {string} */
+                                kind: "pass" | "fail" | "correction";
+                                /** @enum {string|null} */
+                                outcome: "rework" | "scrap" | "continue" | null;
+                                from_step: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    key: string;
+                                    name: string;
+                                } | null;
+                                defect: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    key: string;
+                                    name: string;
+                                } | null;
+                                /** Format: date-time */
+                                created_at: string;
+                                actor: {
+                                    /** @enum {string} */
+                                    kind: "own" | "workspace" | "other_partner";
+                                    name: string | null;
+                                };
+                            } | null;
+                            /** @enum {string|null} */
+                            stage: "yours" | "not_yet" | "done" | null;
                         }[];
                         summary: {
                             /** @enum {string} */
@@ -21106,6 +21228,198 @@ export interface operations {
             header?: never;
             path: {
                 groupId: string;
+                partnerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        url: string;
+                        expires_at: string;
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    PartnerJobsController_workOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: string;
+                workOrderId: string;
+                partnerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        label: string;
+                        /** @enum {string} */
+                        status: "active" | "finished" | "scrapped" | "cancelled";
+                        step: {
+                            key: string;
+                            name: string;
+                        } | null;
+                        to_inspect: boolean | null;
+                        in_rework: boolean;
+                        path: {
+                            key: string;
+                            name: string;
+                        }[];
+                        history: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            move_id: string;
+                            /** @enum {string} */
+                            kind: "pass" | "fail" | "correction";
+                            /** @enum {string|null} */
+                            outcome: "rework" | "scrap" | "continue" | null;
+                            from_step: {
+                                /** Format: uuid */
+                                id: string;
+                                key: string;
+                                name: string;
+                            } | null;
+                            to_step: {
+                                /** Format: uuid */
+                                id: string;
+                                key: string;
+                                name: string;
+                            } | null;
+                            defect: {
+                                /** Format: uuid */
+                                id: string;
+                                key: string;
+                                name: string;
+                            } | null;
+                            override_reason: string | null;
+                            comment: string | null;
+                            answers: {
+                                item: string;
+                                label: string;
+                                value: string;
+                                value_label: string | null;
+                                note: string | null;
+                                passing: boolean;
+                            }[];
+                            photo_file_version_ids: string[];
+                            photos: {
+                                /** Format: uuid */
+                                file_id: string;
+                                /** Format: uuid */
+                                file_version_id: string;
+                            }[];
+                            inspected: boolean;
+                            /** Format: date-time */
+                            created_at: string;
+                            actor: {
+                                /** @enum {string} */
+                                kind: "own" | "workspace" | "other_partner";
+                                name: string | null;
+                            };
+                        }[];
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    PartnerJobsController_sop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: string;
+                stepKey: string;
                 partnerId: string;
             };
             cookie?: never;
@@ -24482,8 +24796,6 @@ export interface operations {
                                 id: string;
                                 name: string;
                             };
-                            /** @enum {string} */
-                            visibility: "customer" | "partner" | "staff";
                             partner: {
                                 /** Format: uuid */
                                 id: string;
@@ -24556,11 +24868,6 @@ export interface operations {
                     body: string;
                     /** Format: uuid */
                     line_id?: string;
-                    /**
-                     * @default staff
-                     * @enum {string}
-                     */
-                    visibility?: "customer" | "partner" | "staff";
                     attachments?: string[];
                 };
             };
@@ -24584,8 +24891,6 @@ export interface operations {
                             id: string;
                             name: string;
                         };
-                        /** @enum {string} */
-                        visibility: "customer" | "partner" | "staff";
                         partner: {
                             /** Format: uuid */
                             id: string;
@@ -25636,248 +25941,6 @@ export interface operations {
             };
             /** @description Conflict with the current state */
             409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    PortalOrderCommentsController_list: {
-        parameters: {
-            query?: {
-                limit?: number;
-                cursor?: string;
-            };
-            header?: never;
-            path: {
-                id: string;
-                customerId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        data: {
-                            /** Format: uuid */
-                            id: string;
-                            /** Format: uuid */
-                            line_id: string | null;
-                            author: {
-                                /** @enum {string} */
-                                kind: "staff" | "customer";
-                                name: string;
-                            };
-                            body: string;
-                            attachments: {
-                                /** Format: uuid */
-                                file_version_id: string;
-                                name: string;
-                            }[];
-                            created_at: string;
-                        }[];
-                        next_cursor: string | null;
-                    };
-                };
-            };
-            /** @description Invalid request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Missing or invalid token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Not allowed */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    PortalOrderCommentsController_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string;
-            };
-            path: {
-                id: string;
-                customerId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    body: string;
-                    /** Format: uuid */
-                    line_id?: string;
-                    attachments?: string[];
-                };
-            };
-        };
-        responses: {
-            /** @description Success */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        /** Format: uuid */
-                        line_id: string | null;
-                        author: {
-                            /** @enum {string} */
-                            kind: "staff" | "customer";
-                            name: string;
-                        };
-                        body: string;
-                        attachments: {
-                            /** Format: uuid */
-                            file_version_id: string;
-                            name: string;
-                        }[];
-                        created_at: string;
-                    };
-                };
-            };
-            /** @description Invalid request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Missing or invalid token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Not allowed */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Conflict with the current state */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    PortalOrderCommentsController_url: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                commentId: string;
-                fileVersionId: string;
-                customerId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        url: string;
-                        expires_at: string;
-                    };
-                };
-            };
-            /** @description Invalid request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Missing or invalid token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Not allowed */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Not found */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };
