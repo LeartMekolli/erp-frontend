@@ -16,7 +16,7 @@ import { failedOnLine } from "@/lib/production/quality";
 import type { UploadTarget } from "@/lib/upload/upload";
 
 import { jobHref } from "./offer-actions";
-import { partnerSections, usePartnerSectionPieces } from "./partner-pieces";
+import { PartnerPiecePanel, partnerSections, usePartnerSectionPieces } from "./partner-pieces";
 
 const TABS = ["pieces", "quality", "history", "comments"] as const;
 type Tab = (typeof TABS)[number];
@@ -41,7 +41,7 @@ function JobPieces({ job, partnerId }: { job: PartnerJobDetail; partnerId: strin
       rulesError={false}
       path={job.steps}
       next={() => "unknown"}
-      selectable={false}
+      selectable
       mayUpload
       uploadTarget={photos}
       blockedReason={null}
@@ -71,16 +71,18 @@ function JobHistory({ job, partnerId }: { job: PartnerJobDetail; partnerId: stri
 
 /**
  * A job the partner holds: where its pieces are, then its Pieces, Quality, History and Comments. The tab is
- * in the address (`?tab=history`); Pieces has no parameter.
+ * in the address (`?tab=history`); Pieces has no parameter. So is the open piece (`?piece=<id>`), as on
+ * staff's order page.
  */
 export function JobTabs({ job, partnerId }: { job: PartnerJobDetail; partnerId: string }) {
   const router = useRouter();
-  const asked = useSearchParams().get("tab");
+  const search = useSearchParams();
+  const asked = search.get("tab");
   const tab: Tab = isTab(asked) ? asked : "pieces";
   const failed = failedOnLine(job.steps);
+  const page = jobHref(partnerId, job.id);
 
   const choose = (value: string) => {
-    const page = jobHref(partnerId, job.id);
     router.replace(value === "pieces" ? page : `${page}?tab=${value}`, { scroll: false });
   };
 
@@ -114,6 +116,7 @@ export function JobTabs({ job, partnerId }: { job: PartnerJobDetail; partnerId: 
           <TabsContent value="comments" />
         </Tabs>
       </section>
+      <PartnerPiecePanel id={search.get("piece")} onClose={() => router.replace(page, { scroll: false })} />
     </PhotoLinksProvider>
   );
 }

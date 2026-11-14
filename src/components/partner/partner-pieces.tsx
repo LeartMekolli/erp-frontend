@@ -1,12 +1,14 @@
 "use client";
 
+import { useParams } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { PiecePanel } from "@/components/production/piece-panel";
 import type { PieceSection, SectionPieces } from "@/components/production/pieces-tab";
 import { StepSelectionProvider } from "@/components/production/use-step-selection";
 import type { PartnerJobDetail } from "@/lib/api/schema-types";
-import { partnerPiece } from "@/lib/partner-jobs/shape";
-import { usePartnerJob } from "@/lib/partner-jobs/queries";
+import { partnerPiece, partnerStory } from "@/lib/partner-jobs/shape";
+import { usePartnerJob, usePartnerPiece } from "@/lib/partner-jobs/queries";
 import type { Piece } from "@/lib/production/shape";
 
 import { useWorkshop } from "./use-workshop";
@@ -72,4 +74,16 @@ function usePartnerPiecesAt(groupId: string, stepKey: string | null): Piece[] | 
 /** The pieces a partner picks on a job, kept honest against the job's latest pieces. */
 export function PartnerSelectionProvider({ children }: { children: ReactNode }) {
   return <StepSelectionProvider usePiecesAt={usePartnerPiecesAt}>{children}</StepSelectionProvider>;
+}
+
+function usePartnerStory(id: string) {
+  const { partnerId } = useWorkshop();
+  const { groupId } = useParams<{ groupId: string }>();
+  const piece = usePartnerPiece(partnerId, groupId, id);
+  return { data: piece.data ? partnerStory(piece.data) : undefined, isPending: piece.isPending, error: piece.error, refetch: piece.refetch };
+}
+
+/** A piece's story on the job page. Its step's instructions are in the job's header, so the panel has none. */
+export function PartnerPiecePanel({ id, onClose }: { id: string | null; onClose: () => void }) {
+  return <PiecePanel id={id} onClose={onClose} useStory={usePartnerStory} sopLink={null} />;
 }
