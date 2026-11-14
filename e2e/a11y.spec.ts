@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
-import { PARTNER_TWO_SHOPS, RESET_TOKEN, STAFF, STAFF_INVITE_TOKEN } from "../test/fake-erp-api/seed";
+import { LONG_NAME_JOB_ID, LONG_PRODUCT_NAME } from "../test/fake-erp-api/partner-jobs";
+import { NORTHCAST_ID, PARTNER, PARTNER_TWO_SHOPS, RESET_TOKEN, STAFF, STAFF_INVITE_TOKEN } from "../test/fake-erp-api/seed";
 
 import { expect, expectNoAxeViolations, expectNoSideScroll, settled, signIn, test } from "./helpers";
 
@@ -154,6 +155,44 @@ test("workshop chooser: accessible and fits the screen", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Choose a workshop" })).toBeVisible();
   await expectNoAxeViolations(page);
   await expectNoSideScroll(page);
+});
+
+/** The fake's 60-character job with its three options (`partner-jobs.ts`). */
+const LONG_JOB_TITLE = `${LONG_PRODUCT_NAME} · Silver 925 · Brushed satin with a hand-polished edge · Natural`;
+
+/** Signs in as Northcast's owner and waits for both offers and the jobs in progress, the 60-character one among them. */
+async function openPartnerJobs(page: Page) {
+  await signIn(page, PARTNER.email);
+  await expect(page.getByRole("heading", { level: 1, name: "Jobs" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Waiting for your answer · 2" })).toBeVisible();
+  await expect(page.getByText(LONG_JOB_TITLE, { exact: true })).toBeVisible();
+  await expect(page.getByText("Ring band · Brass", { exact: true })).toBeVisible();
+}
+
+// Every size, 1024 px included: there the sidebar is a rail and each job is one line, so
+// Ring band's scrapped count and the long job's amount must still fit.
+test("partner jobs: accessible and fits the screen", async ({ page }) => {
+  await openPartnerJobs(page);
+  await expectAccessibleAndFits(page);
+
+  // A bottom sheet on phones, a dialog from 640 px.
+  await page
+    .getByRole("region", { name: /^Waiting for your answer/ })
+    .getByRole("listitem")
+    .filter({ hasText: "Ring · Silver 925" })
+    .getByRole("button", { name: "Decline" })
+    .click();
+  await expect(page.getByRole("dialog", { name: "Decline this job?" })).toBeVisible();
+  await expectAccessibleAndFits(page);
+});
+
+test("partner job: accessible and fits the screen", async ({ page }) => {
+  await openPartnerJobs(page);
+  await page.goto(`/partner-portal/${NORTHCAST_ID}/jobs/${LONG_NAME_JOB_ID}`);
+  // The title wraps rather than widening the page.
+  await expect(page.getByRole("heading", { level: 1, name: LONG_JOB_TITLE })).toBeVisible();
+  await expect(page.getByText("Pieces, quality, history and comments for this job are coming soon.")).toBeVisible();
+  await expectAccessibleAndFits(page);
 });
 
 test("signing in works with the keyboard alone", async ({ page }) => {

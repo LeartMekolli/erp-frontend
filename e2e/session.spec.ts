@@ -52,14 +52,15 @@ test("twelve hours after sign-in sign out, however active", async ({ page }) => 
 
 test("a link followed from another site opens signed in", async ({ page }) => {
   await signIn(page, PARTNER.email);
-  await expect(page.getByRole("heading", { name: "Northcast Foundry" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Jobs" })).toBeVisible();
 
   // 127.0.0.1 is another site than localhost, so the SameSite=Strict cookie isn't sent on this navigation.
+  // The email links to the workshop, which opens on its Jobs.
   const target = `${APP_URL}/demo/partner-portal/${NORTHCAST_ID}`;
   await page.goto(`http://127.0.0.1:4010/__link?to=${encodeURIComponent(target)}`);
   await page.getByRole("link", { name: "Open AMI" }).click();
-  await expect(page).toHaveURL(`${APP_URL}/partner-portal/${NORTHCAST_ID}`);
-  await expect(page.getByRole("heading", { name: "Northcast Foundry" })).toBeVisible();
+  await expect(page).toHaveURL(`${APP_URL}/partner-portal/${NORTHCAST_ID}/jobs`);
+  await expect(page.getByRole("heading", { level: 1, name: "Jobs" })).toBeVisible();
 });
 
 test("someone signed in who opens the sign-in page goes home", async ({ page }) => {
