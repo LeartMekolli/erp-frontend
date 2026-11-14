@@ -8,7 +8,7 @@
  * and writes on the line its job is made as, and only what names it.
  */
 
-import type { Claim, OrderComment, OrderLine, OrderPart, PartnerJobComment, StaffCommentBody } from "../../src/lib/api/schema-types";
+import type { Claim, OrderComment, OrderLine, OrderPart, PartnerJobComment, ReadersChangedProblem, StaffCommentBody } from "../../src/lib/api/schema-types";
 
 import type { Answer, OrdersStore, Page } from "./orders";
 import { uuid } from "./orders-seed";
@@ -132,7 +132,7 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
           status: 409,
           code: "readers_changed",
           detail: partner ? `${partner.name} has accepted this line and would read this comment too` : "Only staff would read this comment",
-          extensions: { partner },
+          extensions: { partner } satisfies Pick<ReadersChangedProblem, "partner">,
         };
       }
 

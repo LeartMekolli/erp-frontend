@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { idempotencyHeader } from "@/lib/api/idempotency";
 import { isApiProblem, problemFrom } from "@/lib/api/problem";
-import type { Claim, OrderComment, StaffCommentBody } from "@/lib/api/schema-types";
+import type { Claim, OrderComment, ReadersChangedProblem, StaffCommentBody } from "@/lib/api/schema-types";
 import { useApiMutation } from "@/lib/query/use-api-mutation";
 import { useCursorList } from "@/lib/query/use-cursor-list";
 
@@ -41,8 +41,7 @@ export type CommentReader = OrderComment["partner"];
  */
 export function readersChanged(error: unknown): CommentReader | undefined {
   if (!isApiProblem(error) || error.status !== 409 || error.code !== "readers_changed") return undefined;
-  const partner = error.partner as { id?: unknown; name?: unknown } | null | undefined;
-  return partner && typeof partner.id === "string" && typeof partner.name === "string" ? { id: partner.id, name: partner.name } : null;
+  return (error as ReadersChangedProblem).partner;
 }
 
 /**

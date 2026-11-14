@@ -23275,7 +23275,49 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/problem+json": components["schemas"]["Problem"];
+                    "application/problem+json": {
+                        type: string;
+                        title: string;
+                        /** @enum {number} */
+                        status: 409;
+                        detail: string;
+                        /** @enum {string} */
+                        code: "price_changed";
+                        lines: {
+                            position: number;
+                            /** Format: uuid */
+                            previous_quote_id: string;
+                            quote: {
+                                /** Format: uuid */
+                                id: string;
+                                product: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                };
+                                quantity: number;
+                                currency: string;
+                                lines: {
+                                    /** @enum {string} */
+                                    label: "material" | "making" | "finishing" | "quantity_discount" | "your_discount" | "plan_discount" | "delivery_speed";
+                                    amount: string;
+                                }[];
+                                unit_price: string;
+                                total: string;
+                                expires_at: string;
+                                expired: boolean;
+                            } | null;
+                            reasons: {
+                                /** @enum {string} */
+                                code: "unknown_group" | "unknown_value" | "value_not_offered" | "required_missing" | "rule_excludes" | "rule_requires" | "size_out_of_range" | "unknown_size" | "not_sizeable" | "file_required" | "file_not_measured" | "measure_missing" | "no_material" | "conflicting_materials" | "price_missing" | "no_steps" | "price_too_large" | "step_conflict" | "step_price_missing" | "density_missing" | "unit_mismatch" | "workflow_missing" | "workflow_step_missing" | "partner_unavailable" | "quantity_too_large";
+                                message: string;
+                                /** Format: uuid */
+                                rule_id?: string;
+                                step?: string;
+                                part?: number;
+                            }[];
+                        }[];
+                    } | components["schemas"]["Problem"];
                 };
             };
             /** @description An outside service failed; try again */
@@ -24949,7 +24991,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/problem+json": components["schemas"]["Problem"];
+                    "application/problem+json": {
+                        type: string;
+                        title: string;
+                        /** @enum {number} */
+                        status: 409;
+                        detail: string;
+                        /** @enum {string} */
+                        code: "readers_changed";
+                        partner: {
+                            /** Format: uuid */
+                            id: string;
+                            name: string;
+                        } | null;
+                    } | components["schemas"]["Problem"];
                 };
             };
         };
@@ -25512,7 +25567,49 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/problem+json": components["schemas"]["Problem"];
+                    "application/problem+json": {
+                        type: string;
+                        title: string;
+                        /** @enum {number} */
+                        status: 409;
+                        detail: string;
+                        /** @enum {string} */
+                        code: "price_changed";
+                        lines: {
+                            position: number;
+                            /** Format: uuid */
+                            previous_quote_id: string;
+                            quote: {
+                                /** Format: uuid */
+                                id: string;
+                                product: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                };
+                                quantity: number;
+                                currency: string;
+                                lines: {
+                                    /** @enum {string} */
+                                    label: "material" | "making" | "finishing" | "quantity_discount" | "your_discount" | "plan_discount" | "delivery_speed";
+                                    amount: string;
+                                }[];
+                                unit_price: string;
+                                total: string;
+                                expires_at: string;
+                                expired: boolean;
+                            } | null;
+                            reasons: {
+                                /** @enum {string} */
+                                code: "unknown_group" | "unknown_value" | "value_not_offered" | "required_missing" | "rule_excludes" | "rule_requires" | "size_out_of_range" | "unknown_size" | "not_sizeable" | "file_required" | "file_not_measured" | "measure_missing" | "no_material" | "conflicting_materials" | "price_missing" | "no_steps" | "price_too_large" | "step_conflict" | "step_price_missing" | "density_missing" | "unit_mismatch" | "workflow_missing" | "workflow_step_missing" | "partner_unavailable" | "quantity_too_large";
+                                message: string;
+                                /** Format: uuid */
+                                rule_id?: string;
+                                step?: string;
+                                part?: number;
+                            }[];
+                        }[];
+                    } | components["schemas"]["Problem"];
                 };
             };
             /** @description An outside service failed; try again */

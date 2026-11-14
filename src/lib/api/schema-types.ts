@@ -39,6 +39,13 @@ type JsonBody<P extends keyof paths, M extends "post"> = paths[P][M] extends {
   ? Body
   : never;
 
+/** A refusal with its `code`, as the route documents it for that status, with its extension members. */
+type CodedProblem<P extends keyof paths, M extends "post", S extends number, C extends string> = paths[P][M] extends {
+  responses: Record<S, { content: { "application/problem+json": infer Body } }>;
+}
+  ? Extract<Body, { code: C }>
+  : never;
+
 /** One order as staff see it, from `GET /orders`. */
 export type Order = JsonOk<"/orders", "get">["data"][number];
 
@@ -131,8 +138,11 @@ export type PartnerJobComment = JsonOk<"/partner-portal/partners/{partnerId}/job
 /** One comment as staff read it, from `GET /orders/{id}/comments`, with the partner that reads it too, if any. */
 export type OrderComment = JsonOk<"/orders/{id}/comments", "get">["data"][number];
 
-/** `POST /orders/{id}/comments`: the body and its line. The line decides who reads it. */
+/** `POST /orders/{id}/comments`: the body, its line, and who the box said would read it. The line decides who does. */
 export type StaffCommentBody = JsonBody<"/orders/{id}/comments", "post">;
+
+/** That post's 409 when someone else would read the comment now: `partner`, or null for staff alone. */
+export type ReadersChangedProblem = CodedProblem<"/orders/{id}/comments", "post", 409, "readers_changed">;
 
 /** One claim, from `GET /claims`. */
 export type Claim = JsonOk<"/claims", "get">["data"][number];
