@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { LoadFailure } from "@/components/order-detail/load-failure";
+import { LoadFailure } from "@/components/data/load-failure";
 import { Button } from "@/components/ui/button";
 import { isApiProblem } from "@/lib/api/problem";
 import type { PartnerJob } from "@/lib/api/schema-types";

@@ -64,6 +64,12 @@ export interface StepProgress {
   latestCheck: { moveId: string | null; actor: Actor; createdAt: string; photos: Photo[] } | null;
 }
 
+/**
+ * Where a pass sends pieces: the next step, null at the last step (a pass finishes them), or "unknown"
+ * for a partner, who sees only its own steps and can't tell what the workspace does next.
+ */
+export type NextStep = { name: string } | null | "unknown";
+
 /** What last happened to a piece. */
 export type LastMove = Omit<NonNullable<WorkOrderListItem["last_move"]>, "actor" | "partner"> & { actor: Actor };
 

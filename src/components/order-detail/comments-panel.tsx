@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Field } from "@/components/auth/field";
+import { LoadFailure } from "@/components/data/load-failure";
 import { CommentBox } from "@/components/production/comment-box";
 import { CommentThread, type ThreadComment } from "@/components/production/comment-thread";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -11,7 +12,6 @@ import { useCan } from "@/lib/auth/permissions";
 import { commentAttachmentUrl, useOrderComments, usePostComment } from "@/lib/orders/comments";
 import { partnerStatus } from "@/lib/orders/line-partner";
 
-import { LoadFailure } from "./load-failure";
 import { Panel } from "./payment-panel";
 
 const KIND: Record<OrderComment["author"]["kind"], string> = { staff: "Staff", customer: "Customer", partner: "Partner" };

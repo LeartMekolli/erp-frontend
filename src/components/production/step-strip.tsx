@@ -2,9 +2,15 @@
 
 import { cn } from "cn";
 
-import type { Group } from "@/lib/api/schema-types";
+/** One part of the strip: a step, or a group such as finished or scrapped. */
+export interface Stage {
+  key: string;
+  name: string;
+  count: number;
+  inRework: number;
+}
 
-function Stage({ name, count, inRework = 0 }: { name: string; count: number; inRework?: number }) {
+function StageItem({ name, count, inRework }: Omit<Stage, "key">) {
   return (
     <li className="min-w-20 flex-1">
       <div aria-hidden className={cn("h-2 rounded-full", inRework > 0 ? "bg-collect" : count > 0 ? "bg-violet" : "bg-line")} />
@@ -16,15 +22,13 @@ function Stage({ name, count, inRework = 0 }: { name: string; count: number; inR
   );
 }
 
-/** Where a line's pieces are: every step of its path, then finished and scrapped. */
-export function StepStrip({ group }: { group: Group }) {
+/** Where the pieces are, stage by stage, in the order given. */
+export function StepStrip({ stages }: { stages: Stage[] }) {
   return (
     <ol aria-label="Progress through the steps" className="flex flex-wrap gap-x-1 gap-y-3 pt-2">
-      {group.steps.map((step) => (
-        <Stage key={step.key} name={step.name} count={step.count} inRework={step.in_rework} />
+      {stages.map((stage) => (
+        <StageItem key={stage.key} name={stage.name} count={stage.count} inRework={stage.inRework} />
       ))}
-      <Stage name="Finished" count={group.pieces.finished} />
-      <Stage name="Scrapped" count={group.pieces.scrapped} />
     </ol>
   );
 }

@@ -6,6 +6,8 @@ import { useState, type ReactNode } from "react";
 
 import { cn } from "cn";
 
+import { LoadFailure } from "@/components/data/load-failure";
+import { submitErrorText } from "@/components/production/submit-error";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { isApiProblem } from "@/lib/api/problem";
 import type { Transition, WorkOrderDetail } from "@/lib/api/schema-types";
@@ -14,9 +16,7 @@ import { openFile } from "@/lib/files/download";
 import { useFormat } from "@/lib/format/use-format";
 import { usePiece } from "@/lib/production/queries";
 
-import { LoadFailure } from "./load-failure";
 import { answerText, MovePhoto, moveIcon } from "./move-look";
-import { submitErrorText } from "./submit-error";
 
 const LABEL = "text-caption text-ink-2";
 

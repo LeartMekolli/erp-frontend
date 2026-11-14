@@ -4,6 +4,8 @@ import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { LineTabs } from "@/components/order-detail/line-tabs";
+import { StaffSelectionProvider as StepSelectionProvider } from "@/components/order-detail/staff-pieces";
 import { useMe } from "@/components/session/session-gate";
 import type { OrderState } from "@/lib/api/schema-types";
 import { invalidateProduction } from "@/lib/production/queries";
@@ -14,9 +16,7 @@ import { fakeState } from "../../../test/fake-erp-api/state";
 import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
-import { LineTabs } from "./line-tabs";
 import { MoveBar } from "./move-bar";
-import { StepSelectionProvider } from "./use-step-selection";
 
 const GROUP = groupIdOf(1048, 0);
 
@@ -50,7 +50,7 @@ describe("MoveBar", () => {
   const handlers = { onPass: vi.fn(), onFail: vi.fn(), onCorrect: vi.fn() };
 
   it("says what's selected and where it goes next", () => {
-    render(<MoveBar count={3} stepName="Polishing" nextName="Plating" disabledReason={null} {...handlers} />);
+    render(<MoveBar count={3} stepName="Polishing" next={{ name: "Plating" }} disabledReason={null} {...handlers} />);
     expect(screen.getByText("3 pieces at Polishing")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Pass to Plating" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Fail…" })).toBeEnabled();
@@ -58,13 +58,13 @@ describe("MoveBar", () => {
   });
 
   it("finishes at the last step, and counts one piece in the singular", () => {
-    render(<MoveBar count={1} stepName="Packing" nextName={null} disabledReason={null} {...handlers} />);
+    render(<MoveBar count={1} stepName="Packing" next={null} disabledReason={null} {...handlers} />);
     expect(screen.getByText("1 piece at Packing")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Finish" })).toBeInTheDocument();
   });
 
   it("disables every move and says why", () => {
-    render(<MoveBar count={1} stepName="Print" nextName="Finish" disabledReason="The order is waiting for payment" {...handlers} />);
+    render(<MoveBar count={1} stepName="Print" next={{ name: "Finish" }} disabledReason="The order is waiting for payment" {...handlers} />);
     expect(screen.getByText("The order is waiting for payment")).toBeInTheDocument();
     for (const name of ["Pass to Finish", "Fail…", "Correct…"]) expect(screen.getByRole("button", { name })).toBeDisabled();
   });

@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { ListEnd } from "@/components/data/list-end";
-import { LoadFailure } from "@/components/order-detail/load-failure";
+import { LoadFailure } from "@/components/data/load-failure";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePartnerJobs } from "@/lib/partner-jobs/queries";
 

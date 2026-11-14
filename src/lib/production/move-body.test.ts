@@ -1,26 +1,26 @@
 import { describe, expect, it } from "vitest";
 
-import type { WorkflowStep } from "@/lib/api/schema-types";
-
 import { createProductionStore } from "../../../test/fake-erp-api/production";
 import { groupIdOf } from "../../../test/fake-erp-api/orders-seed";
 
 import { emptyMoveValues, fieldPath, moveBody, moveSchema, type MoveValues } from "./move-body";
+import type { StepRules } from "./shape";
+import { staffRules } from "./staff";
 
-function steps(): WorkflowStep[] {
+function steps(): StepRules[] {
   const store = createProductionStore(() => 0);
   const group = store.group(groupIdOf(1048, 0));
   if (!group.ok) throw new Error("expected a group");
   const version = store.version(group.body.workflow.id, group.body.workflow.version);
   if (!version.ok) throw new Error("expected a version");
-  return version.body.steps;
+  return version.body.steps.map((step) => staffRules(step, group.body.steps));
 }
 
 const stepAt = (key: string) => steps().find((step) => step.key === key)!;
 const finish = () => stepAt("finish");
 const finalQc = () => stepAt("final_qc");
 
-const values = (step: WorkflowStep, changes: Partial<MoveValues> = {}): MoveValues => ({ ...emptyMoveValues(step), ...changes });
+const values = (step: StepRules, changes: Partial<MoveValues> = {}): MoveValues => ({ ...emptyMoveValues(step), ...changes });
 
 function problems(schema: ReturnType<typeof moveSchema>, input: MoveValues) {
   const result = schema.safeParse(input);
@@ -56,7 +56,7 @@ describe("moveBody", () => {
 
   it("follows a defect's default with nothing extra", () => {
     const step = finalQc();
-    const defectId = step.defects[0]!.defect_id;
+    const defectId = step.defects[0]!.id;
     expect(moveBody("fail", step, ["a"], values(step, { defectId, comment: " Pitted " }))).toEqual({
       kind: "fail",
       work_order_ids: ["a"],
@@ -68,7 +68,7 @@ describe("moveBody", () => {
 
   it("sends a changed outcome with its reason, and no rework target", () => {
     const step = finalQc();
-    const defectId = step.defects[0]!.defect_id;
+    const defectId = step.defects[0]!.id;
     const body = moveBody("fail", step, ["a"], values(step, { defectId, changing: true, outcome: "scrap", overrideReason: "Too deep" }));
     expect(body).toMatchObject({ outcome: "scrap", override_reason: "Too deep" });
     expect(body).not.toHaveProperty("rework_to");
@@ -77,7 +77,7 @@ describe("moveBody", () => {
   it("sends no reason when the change ends up the same as the default", () => {
     const step = finalQc();
     const defect = step.defects[0]!;
-    const body = moveBody("fail", step, ["a"], values(step, { defectId: defect.defect_id, changing: true, outcome: "rework", reworkTo: defect.rework_to!, overrideReason: "Same" }));
+    const body = moveBody("fail", step, ["a"], values(step, { defectId: defect.id, changing: true, outcome: "rework", reworkTo: defect.reworkTo!, overrideReason: "Same" }));
     expect(body).not.toHaveProperty("override_reason");
     expect(body).not.toHaveProperty("outcome");
   });
@@ -105,9 +105,9 @@ describe("moveSchema", () => {
   it("wants a reason only when the outcome really changes", () => {
     const step = finalQc();
     const defect = step.defects[0]!;
-    const base = { defectId: defect.defect_id, comment: "Pitted", changing: true };
+    const base = { defectId: defect.id, comment: "Pitted", changing: true };
     expect(problems(moveSchema("fail", step, 0), values(step, { ...base, outcome: "scrap" }))).toEqual(["overrideReason"]);
-    expect(problems(moveSchema("fail", step, 0), values(step, { ...base, outcome: "rework", reworkTo: defect.rework_to! }))).toEqual([]);
+    expect(problems(moveSchema("fail", step, 0), values(step, { ...base, outcome: "rework", reworkTo: defect.reworkTo! }))).toEqual([]);
     expect(problems(moveSchema("fail", step, 0), values(step, { ...base, outcome: "rework", reworkTo: "", overrideReason: "x" }))).toEqual(["reworkTo"]);
   });
 

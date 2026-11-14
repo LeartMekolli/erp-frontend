@@ -15,7 +15,7 @@ import { renderAs } from "../../../test/render";
 
 import { HistoryTab } from "./history-tab";
 import { LineTabs } from "./line-tabs";
-import { StepSelectionProvider } from "./use-step-selection";
+import { StaffSelectionProvider as StepSelectionProvider } from "./staff-pieces";
 
 const GROUP = groupIdOf(1048, 0);
 const MOVES = `${FAKE_API_URL}/workflow/groups/:id/moves`;

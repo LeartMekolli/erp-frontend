@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 
-import { submitErrorText } from "@/components/order-detail/submit-error";
 import { Button } from "@/components/ui/button";
-import { openLink } from "@/lib/files/download";
+import { openLink } from "@/lib/files/open-link";
 import { useFormat } from "@/lib/format/use-format";
+
+import { submitErrorText } from "./submit-error";
 
 /** One comment as either area shows it: each area words its author, line and readers. */
 export interface ThreadComment {

@@ -4,13 +4,12 @@ import { CircleCheck, CircleDashed, CircleDotDashed, Clock, TriangleAlert, type 
 
 import { cn } from "cn";
 
+import { LoadFailure } from "@/components/data/load-failure";
 import type { Group } from "@/lib/api/schema-types";
 import { useCan } from "@/lib/auth/permissions";
 import { useFormat } from "@/lib/format/use-format";
 import { usePhotoUrl, useWorkflowVersion } from "@/lib/production/queries";
 import { qualityCards, type QualityCard, type QualityState } from "@/lib/production/quality";
-
-import { LoadFailure } from "./load-failure";
 
 const list = new Intl.ListFormat("en", { style: "long", type: "conjunction" });
 

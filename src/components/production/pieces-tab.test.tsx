@@ -4,6 +4,9 @@ import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { LinePanel } from "@/components/order-detail/line-panel";
+import { LineTabs } from "@/components/order-detail/line-tabs";
+import { StaffSelectionProvider as StepSelectionProvider } from "@/components/order-detail/staff-pieces";
 import { useMe } from "@/components/session/session-gate";
 import type { Order } from "@/lib/api/schema-types";
 
@@ -12,10 +15,6 @@ import { CLERK, FAKE_API_URL, STAFF } from "../../../test/fake-erp-api/seed";
 import { fakeState } from "../../../test/fake-erp-api/state";
 import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
-
-import { LinePanel } from "./line-panel";
-import { LineTabs } from "./line-tabs";
-import { StepSelectionProvider } from "./use-step-selection";
 
 const GROUP = groupIdOf(1048, 0);
 

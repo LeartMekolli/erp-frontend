@@ -5,21 +5,28 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { UNKNOWN } from "@/components/auth/copy";
+import { LineTabs } from "@/components/order-detail/line-tabs";
+import { StaffSelectionProvider } from "@/components/order-detail/staff-pieces";
 import { useMe } from "@/components/session/session-gate";
-import type { Group, MoveBody, WorkflowStep, WorkOrderListItem } from "@/lib/api/schema-types";
+import type { Group, MoveBody } from "@/lib/api/schema-types";
+import { useCan } from "@/lib/auth/permissions";
+import { useMovePieces } from "@/lib/production/queries";
+import { nextStepName } from "@/lib/production/selection";
+import type { NextStep, Piece, StepRules } from "@/lib/production/shape";
+import { staffPiece, staffRules } from "@/lib/production/staff";
+import type { UploadTarget } from "@/lib/upload/upload";
 
 import { groupIdOf } from "../../../test/fake-erp-api/orders-seed";
-import { FAKE_API_URL, STAFF, WORKFLOW_READER, type FakeUser } from "../../../test/fake-erp-api/seed";
+import { FAKE_API_URL, NORTHCAST_ID, PARTNER, STAFF, WORKFLOW_READER, type FakeUser } from "../../../test/fake-erp-api/seed";
 import { fakeState } from "../../../test/fake-erp-api/state";
 import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
-import { LineTabs } from "./line-tabs";
 import { MoveDialog } from "./move-dialog";
-import { StepSelectionProvider } from "./use-step-selection";
 
 const GROUP = groupIdOf(1048, 0);
 const MOVES = `${FAKE_API_URL}/workflow/moves`;
+const STAFF_PHOTOS: UploadTarget = { area: "staff", kind: "image" };
 
 function ok<T>(answer: { ok: true; body: T } | { ok: false }): T {
   if (!answer.ok) throw new Error("expected a body");
@@ -27,17 +34,25 @@ function ok<T>(answer: { ok: true; body: T } | { ok: false }): T {
 }
 
 const group = (): Group => ok(fakeState().production.group(GROUP));
-const stepAt = (key: string): WorkflowStep => {
-  const { workflow } = group();
-  return ok(fakeState().production.version(workflow.id, workflow.version)).steps.find((step) => step.key === key)!;
+const stepAt = (key: string): StepRules => {
+  const { workflow, steps } = group();
+  const step = ok(fakeState().production.version(workflow.id, workflow.version)).steps.find((candidate) => candidate.key === key)!;
+  return staffRules(step, steps);
 };
-const piecesAt = (key: string): WorkOrderListItem[] =>
-  ok(fakeState().production.pieces(new URLSearchParams({ group_id: GROUP, step_key: key, status: "active" }))).data;
+const piecesAt = (key: string): Piece[] =>
+  ok(fakeState().production.pieces(new URLSearchParams({ group_id: GROUP, step_key: key, status: "active" }))).data.map(staffPiece);
+const nextAfter = (key: string): NextStep => {
+  const name = nextStepName(group().steps, key);
+  return name ? { name } : null;
+};
 
 let sent: { body: MoveBody; key: string | null }[] = [];
+let requested: string[] = [];
 beforeEach(() => {
   sent = [];
+  requested = [];
   server.events.on("request:start", async ({ request }) => {
+    requested.push(`${request.method} ${new URL(request.url).pathname}`);
     if (request.method === "POST" && request.url === MOVES) {
       sent.push({ body: (await request.clone().json()) as MoveBody, key: request.headers.get("idempotency-key") });
     }
@@ -49,32 +64,51 @@ afterEach(() => {
 });
 
 function WithMe({ children }: { children: ReactNode }) {
-  return useMe().data ? <StepSelectionProvider>{children}</StepSelectionProvider> : null;
+  return useMe().data ? <StaffSelectionProvider>{children}</StaffSelectionProvider> : null;
 }
 
-function renderDialog(options: {
+interface DialogOptions {
   kind: "pass" | "fail" | "correction";
-  step: WorkflowStep;
-  pieces?: WorkOrderListItem[];
-  partnerName?: string | null;
+  step: StepRules;
+  pieces?: Piece[];
+  next?: NextStep;
+  countsFor?: string | null;
+  uploadTarget?: UploadTarget;
   user?: FakeUser;
-}) {
+}
+
+/** The dialog as staff's Pieces tab opens it: moves go through staff's mutation, uploads follow `file.write`. */
+function StaffDialog({ options, pieces, onMoved, onOpenChange }: { options: DialogOptions; pieces: Piece[]; onMoved: () => void; onOpenChange: () => void }) {
+  const move = useMovePieces();
+  const mayUpload = useCan("file.write");
+  return (
+    <MoveDialog
+      kind={options.kind}
+      rules={options.step}
+      path={group().steps}
+      next={options.next === undefined ? nextAfter(options.step.key) : options.next}
+      pieces={pieces}
+      mayUpload={options.uploadTarget?.area === "partner" || mayUpload}
+      uploadTarget={options.uploadTarget ?? STAFF_PHOTOS}
+      countsFor={options.countsFor ?? null}
+      onMove={async (body) => {
+        await move.mutateAsync(body);
+      }}
+      open
+      onOpenChange={onOpenChange}
+      onMoved={onMoved}
+    />
+  );
+}
+
+function renderDialog(options: DialogOptions) {
   const onMoved = vi.fn();
   const onOpenChange = vi.fn();
   const pieces = options.pieces ?? piecesAt(options.step.key).slice(0, 2);
   renderAs(
     options.user ?? STAFF,
     <WithMe>
-      <MoveDialog
-        kind={options.kind}
-        step={options.step}
-        path={group().steps}
-        pieces={pieces}
-        partnerName={options.partnerName ?? null}
-        open
-        onOpenChange={onOpenChange}
-        onMoved={onMoved}
-      />
+      <StaffDialog options={options} pieces={pieces} onMoved={onMoved} onOpenChange={onOpenChange} />
     </WithMe>,
   );
   return { onMoved, onOpenChange, pieces };
@@ -82,7 +116,7 @@ function renderDialog(options: {
 
 const click = (name: string) => userEvent.click(screen.getByRole("button", { name }));
 const dialog = (name: string) => screen.findByRole("dialog", { name });
-const withoutPhotos = (step: WorkflowStep): WorkflowStep => ({ ...step, pass: { ...step.pass, min_photos: 0 } });
+const withoutPhotos = (step: StepRules): StepRules => ({ ...step, pass: { ...step.pass, minPhotos: 0 } });
 const answerYes = () => userEvent.click(within(screen.getByRole("group", { name: "Surface smooth" })).getByRole("radio", { name: "Yes" }));
 
 describe("MoveDialog: pass", () => {
@@ -165,7 +199,7 @@ describe("MoveDialog: pass", () => {
   it("offers Pass without inspecting only when every piece may skip", async () => {
     server.use(http.post(MOVES, () => HttpResponse.json({ data: [] })));
     const step = stepAt("finish");
-    const skippable = piecesAt("finish").slice(0, 2).map((piece) => ({ ...piece, to_inspect: false }));
+    const skippable = piecesAt("finish").slice(0, 2).map((piece) => ({ ...piece, toInspect: false }));
     const { onMoved } = renderDialog({ kind: "pass", step, pieces: skippable });
     await dialog("Pass 2 pieces at Finish");
     await click("Pass without inspecting");
@@ -177,15 +211,35 @@ describe("MoveDialog: pass", () => {
   it("hides Pass without inspecting when a piece must be inspected", async () => {
     const step = stepAt("finish");
     const [first, second] = piecesAt("finish");
-    renderDialog({ kind: "pass", step, pieces: [{ ...first!, to_inspect: false }, { ...second!, to_inspect: true }] });
+    renderDialog({ kind: "pass", step, pieces: [{ ...first!, toInspect: false }, { ...second!, toInspect: true }] });
     await dialog("Pass 2 pieces at Finish");
     expect(screen.queryByRole("button", { name: "Pass without inspecting" })).not.toBeInTheDocument();
   });
 
   it("says whose work a partner step counts as", async () => {
-    renderDialog({ kind: "pass", step: stepAt("finish"), partnerName: "Northcast Foundry" });
+    renderDialog({ kind: "pass", step: stepAt("finish"), countsFor: "Northcast Foundry" });
     await dialog("Pass 2 pieces at Finish");
     expect(screen.getByText("This counts for Northcast Foundry")).toBeInTheDocument();
+  });
+
+  it("says where a pass goes when it isn't known", async () => {
+    // The fake still wants Finish's photo; this test is about the words.
+    server.use(http.post(MOVES, () => HttpResponse.json({ data: [] })));
+    const pieces = piecesAt("finish").slice(0, 3);
+    const { onMoved } = renderDialog({ kind: "pass", step: withoutPhotos(stepAt("finish")), pieces, next: "unknown" });
+    await dialog("Pass 3 pieces at Finish");
+    await answerYes();
+    await click("Pass");
+    await waitFor(() => expect(onMoved).toHaveBeenCalledWith("3 pieces passed at Finish."));
+  });
+
+  it("uploads photos where it's told", async () => {
+    renderDialog({ kind: "pass", step: stepAt("finish"), user: PARTNER, uploadTarget: { area: "partner", partnerId: NORTHCAST_ID } });
+    await dialog("Pass 2 pieces at Finish");
+    await userEvent.upload(screen.getByLabelText("Photos"), new File(["x"], "photo.jpg", { type: "image/jpeg" }));
+    await screen.findByRole("button", { name: "Remove photo.jpg" }, { timeout: 4_000 });
+    expect(requested).toContain(`POST /partner-portal/partners/${NORTHCAST_ID}/files`);
+    expect(requested).not.toContain("POST /files");
   });
 
   it("reuses the key when the same move is sent again after a failure", async () => {
@@ -237,7 +291,7 @@ describe("MoveDialog: fail", () => {
     await click("Fail");
     await waitFor(() => expect(onMoved).toHaveBeenCalledWith("2 pieces failed at Final QC."));
     await waitFor(() => expect(sent).toHaveLength(1));
-    expect(sent[0]!.body).toMatchObject({ kind: "fail", at_step: "final_qc", defect_id: step.defects[0]!.defect_id, comment: "Pitted" });
+    expect(sent[0]!.body).toMatchObject({ kind: "fail", at_step: "final_qc", defect_id: step.defects[0]!.id, comment: "Pitted" });
     expect(sent[0]!.body).not.toHaveProperty("outcome");
   });
 

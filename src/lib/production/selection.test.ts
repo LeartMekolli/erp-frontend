@@ -1,32 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import type { Group, WorkOrderListItem } from "@/lib/api/schema-types";
-
 import { nextStepName, pruneSelection } from "./selection";
+import type { Piece } from "./shape";
 
-const NO_CHECKS = { passed: 0, failed: 0, not_inspected: 0, defects: [], latest_check: null };
-
-const steps: Group["steps"] = [
-  { key: "print", name: "Print", count: 1, in_rework: 0, ...NO_CHECKS },
-  { key: "packing", name: "Packing", count: 0, in_rework: 0, ...NO_CHECKS },
+const steps = [
+  { key: "print", name: "Print" },
+  { key: "packing", name: "Packing" },
 ];
 
-function piece(id: string, fields: Partial<WorkOrderListItem> = {}): WorkOrderListItem {
-  return {
-    id,
-    group_id: "g",
-    number: 1,
-    label: "1/2",
-    status: "active",
-    step: { id: "s", key: "print", name: "Print" },
-    replaces_id: null,
-    created_at: "2026-11-04T10:00:00.000Z",
-    to_inspect: null,
-    may_work: true,
-    in_rework: false,
-    last_move: null,
-    ...fields,
-  };
+function piece(id: string, fields: Partial<Piece> = {}): Piece {
+  return { id, label: "1/2", status: "active", stepKey: "print", toInspect: null, inRework: false, mayWork: true, lastMove: null, ...fields };
 }
 
 describe("nextStepName", () => {
@@ -54,7 +37,7 @@ describe("pruneSelection", () => {
   });
 
   it("drops a piece at another step, or one that can't be worked now", () => {
-    const pieces = [piece("a", { step: { id: "t", key: "packing", name: "Packing" } }), piece("b", { may_work: false })];
+    const pieces = [piece("a", { stepKey: "packing" }), piece("b", { mayWork: false })];
     expect(pruneSelection(new Set(["a", "b"]), pieces, "print")).toEqual({ ids: new Set(), dropped: 2 });
   });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { DIALOG_SHEET } from "@/components/order-detail/dialog-classes";
+import { DIALOG_SHEET } from "@/components/production/dialog-classes";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 

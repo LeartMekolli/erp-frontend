@@ -1,16 +1,17 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { Field } from "@/components/auth/field";
 import { FormMessage } from "@/components/auth/form-message";
-import { submitErrorText } from "@/components/order-detail/submit-error";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { applyFieldErrors, isApiProblem } from "@/lib/api/problem";
+
+import { submitErrorText } from "./submit-error";
 
 // erp-api's limit (`orders/order-response.ts:348`).
 const schema = z.object({
@@ -18,14 +19,15 @@ const schema = z.object({
 });
 type Values = z.infer<typeof schema>;
 
-const READERS_ID = "comment-readers";
-
 /**
  * Writes a comment. Comments can't be edited or deleted, so the box always
  * says who will read it. `onPost` throws erp-api's refusal, which lands on the
  * field or above the form. `children` sits under the text, for staff's "About".
  */
 export function CommentBox({ readers, onPost, children }: { readers: string; onPost: (body: string) => Promise<void>; children?: ReactNode }) {
+  const id = useId();
+  const bodyId = `${id}-body`;
+  const readersId = `${id}-readers`;
   const [posting, setPosting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const {
@@ -54,18 +56,18 @@ export function CommentBox({ readers, onPost, children }: { readers: string; onP
     <form onSubmit={(event) => void handleSubmit(onSubmit)(event)} noValidate className="flex flex-col gap-3 border-t border-line pt-3">
       {message && <FormMessage tone="error">{message}</FormMessage>}
       <fieldset disabled={posting} className="flex flex-col gap-3">
-        <Field id="comment-body" label="Add a comment" error={errors.body?.message}>
+        <Field id={bodyId} label="Add a comment" error={errors.body?.message}>
           {(props) => (
             <Textarea
               {...props}
-              aria-describedby={[props["aria-describedby"], READERS_ID].filter(Boolean).join(" ")}
+              aria-describedby={[props["aria-describedby"], readersId].filter(Boolean).join(" ")}
               {...register("body")}
               maxLength={5000}
             />
           )}
         </Field>
         {children}
-        <p id={READERS_ID} className="text-caption font-medium text-ink">
+        <p id={readersId} aria-live="polite" className="text-caption font-medium text-ink">
           {readers}
         </p>
         <Button type="submit" className="self-end">

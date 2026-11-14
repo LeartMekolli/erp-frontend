@@ -23,7 +23,7 @@ import { CancelledBanner, OrderHeader } from "./order-header";
 import { PaymentPanel } from "./payment-panel";
 import { PiecePanel } from "./piece-panel";
 import { NotePanel, ShippingPanel } from "./shipping-panel";
-import { StepSelectionProvider } from "./use-step-selection";
+import { StaffSelectionProvider } from "./staff-pieces";
 
 /** `/orders/:id`: one order, and everything staff can do with it. */
 export function OrderDetailPage() {
@@ -97,7 +97,7 @@ function OrderDetail({ id }: { id: string }) {
 
   const order = query.data;
   return (
-    <StepSelectionProvider>
+    <StaffSelectionProvider>
       <OrderHeader
         order={order}
         onShip={() => {
@@ -143,6 +143,6 @@ function OrderDetail({ id }: { id: string }) {
       <RecordPaymentDialog order={order} open={paying} onOpenChange={setPaying} onRecorded={setNotice} />
       {cancelling && <CancelDialog order={order} open onOpenChange={setCancelling} onCancelled={setNotice} />}
       <PiecePanel id={pieceId} onClose={() => router.replace(`/orders/${id}`, { scroll: false })} />
-    </StepSelectionProvider>
+    </StaffSelectionProvider>
   );
 }

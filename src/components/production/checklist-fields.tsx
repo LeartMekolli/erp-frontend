@@ -6,10 +6,8 @@ import type { FieldErrors, UseFormRegister } from "react-hook-form";
 import { Field } from "@/components/auth/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { WorkflowStep } from "@/lib/api/schema-types";
 import type { MoveValues } from "@/lib/production/move-body";
-
-type Item = WorkflowStep["checklist"][number];
+import type { ChecklistItem as Item } from "@/lib/production/shape";
 
 function Choices({ item, error, children }: { item: Item; error?: string; children: ReactNode }) {
   return (
@@ -41,7 +39,7 @@ export function ChecklistFields({
   register,
   errors,
 }: {
-  checklist: WorkflowStep["checklist"];
+  checklist: Item[];
   register: UseFormRegister<MoveValues>;
   errors: FieldErrors<MoveValues>;
 }) {

@@ -15,7 +15,7 @@ import { renderAs } from "../../../test/render";
 
 import { LineTabs } from "./line-tabs";
 import { QualityTab } from "./quality-tab";
-import { StepSelectionProvider } from "./use-step-selection";
+import { StaffSelectionProvider as StepSelectionProvider } from "./staff-pieces";
 
 const GROUP = groupIdOf(1048, 0);
 const VERSIONS = `${FAKE_API_URL}/workflow/workflows/:id/versions/:number`;

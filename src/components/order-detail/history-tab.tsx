@@ -5,13 +5,13 @@ import { useState } from "react";
 import { cn } from "cn";
 
 import { ListEnd } from "@/components/data/list-end";
+import { LoadFailure } from "@/components/data/load-failure";
 import type { Group } from "@/lib/api/schema-types";
 import { useFormat } from "@/lib/format/use-format";
 import { groupByDay } from "@/lib/production/history";
 import { useLineMoves, useWorkflowVersion, type MovesFilter } from "@/lib/production/queries";
 
 import { HistoryEntry } from "./history-entry";
-import { LoadFailure } from "./load-failure";
 
 const FILTERS: { value: MovesFilter; label: string }[] = [
   { value: "all", label: "All" },

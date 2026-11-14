@@ -1,6 +1,13 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import type { NextStep } from "@/lib/production/shape";
+
+/** The pass button's words: where the pieces go, Finish at the last step, or Pass when the next step isn't known. */
+export function passLabel(next: NextStep): string {
+  if (next === "unknown") return "Pass";
+  return next ? `Pass to ${next.name}` : "Finish";
+}
 
 /**
  * What to do with the picked pieces: a panel stuck to the bottom of the list,
@@ -9,7 +16,7 @@ import { Button } from "@/components/ui/button";
 export function MoveBar({
   count,
   stepName,
-  nextName,
+  next,
   disabledReason,
   onPass,
   onFail,
@@ -17,8 +24,7 @@ export function MoveBar({
 }: {
   count: number;
   stepName: string;
-  /** Null at the last step, where a pass finishes the piece. */
-  nextName: string | null;
+  next: NextStep;
   /** Why these pieces can't be moved at all right now. */
   disabledReason: string | null;
   onPass: () => void;
@@ -44,7 +50,7 @@ export function MoveBar({
         Fail…
       </Button>
       <Button type="button" disabled={disabled} onClick={onPass}>
-        {nextName ? `Pass to ${nextName}` : "Finish"}
+        {passLabel(next)}
       </Button>
     </div>
   );

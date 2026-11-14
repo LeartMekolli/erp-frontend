@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef } from "react";
 
 import { ListEnd } from "@/components/data/list-end";
-import { LoadFailure } from "@/components/order-detail/load-failure";
+import { LoadFailure } from "@/components/data/load-failure";
 import type { PartnerJob } from "@/lib/api/schema-types";
 import { useFormat } from "@/lib/format/use-format";
 import { jobTitle, piecesText, timeLeft } from "@/lib/partner-jobs/labels";
