@@ -152,9 +152,15 @@ export function JobTabs({ job, partnerId }: { job: PartnerJobDetail; partnerId: 
       <section aria-label="Work on this job" className="flex flex-col rounded-[20px] bg-card px-4 py-4 sm:px-6">
         <StepStrip stages={partnerStages(job)} />
         <Tabs value={tab} onValueChange={choose} activationMode="manual" className="min-w-0 pt-2">
-          <TabsList variant="line" aria-label="Pieces, quality, history and comments">
+          {/* Four tabs and the failed count don't fit 320 px: the row scrolls sideways, as the Orders tabs do. */}
+          <TabsList variant="line" aria-label="Pieces, quality, history and comments" className="h-auto! w-full justify-start overflow-x-auto [scrollbar-width:none]">
             {TABS.map((value) => (
-              <TabsTrigger key={value} value={value}>
+              <TabsTrigger
+                key={value}
+                value={value}
+                // The underline sits inside the tab, so the scrolling row doesn't clip it.
+                className="h-11 flex-none px-3 text-ink-2 group-data-horizontal/tabs:after:bottom-0 data-active:font-semibold data-active:text-ink"
+              >
                 {TAB_LABEL[value]}
                 {value === "quality" && failed > 0 && (
                   <>

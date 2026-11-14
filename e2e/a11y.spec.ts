@@ -1,6 +1,6 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
-import { LONG_NAME_JOB_ID, LONG_PRODUCT_NAME } from "../test/fake-erp-api/partner-jobs";
+import { LONG_NAME_JOB_ID, LONG_PRODUCT_NAME, RING_BAND_JOB_ID } from "../test/fake-erp-api/partner-jobs";
 import { NORTHCAST_ID, PARTNER, PARTNER_TWO_SHOPS, RESET_TOKEN, STAFF, STAFF_INVITE_TOKEN } from "../test/fake-erp-api/seed";
 
 import { expect, expectNoAxeViolations, expectNoSideScroll, settled, signIn, test } from "./helpers";
@@ -191,8 +191,44 @@ test("partner job: accessible and fits the screen", async ({ page }) => {
   await page.goto(`/partner-portal/${NORTHCAST_ID}/jobs/${LONG_NAME_JOB_ID}`);
   // The title wraps rather than widening the page.
   await expect(page.getByRole("heading", { level: 1, name: LONG_JOB_TITLE })).toBeVisible();
-  await expect(page.getByText("Pieces, quality, history and comments for this job are coming soon.")).toBeVisible();
+  await expect(page.getByText("No pieces yet.")).toBeVisible();
   await expectAccessibleAndFits(page);
+});
+
+/** Opens a tab of the job and checks it, from the top: a tab's click can scroll it under the sticky top bar. */
+async function checkTab(page: Page, name: string | RegExp, shows: Locator) {
+  await page.getByRole("tab", { name }).click();
+  await expect(shows).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expectAccessibleAndFits(page);
+}
+
+test("partner job tabs: accessible and fits the screen", async ({ page }) => {
+  await openPartnerJobs(page);
+  await page.goto(`/partner-portal/${NORTHCAST_ID}/jobs/${RING_BAND_JOB_ID}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Ring band · Brass" })).toBeVisible();
+
+  // Pieces with one picked, then the move dialog: a bottom sheet on phones.
+  await page.getByRole("checkbox", { name: "Select 4/12" }).click();
+  const pass = page.getByRole("region", { name: "Selected pieces" }).getByRole("button", { name: "Pass", exact: true });
+  await expect(pass).toBeEnabled();
+  await expectAccessibleAndFits(page);
+  await pass.click();
+  await expect(page.getByRole("dialog", { name: "Pass 1 piece at Finish" })).toBeVisible();
+  await expectAccessibleAndFits(page);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  // A piece's story, from the right or up from the bottom.
+  await page.getByRole("link", { name: "History of 3/12" }).click();
+  await expect(page.getByRole("dialog", { name: "Piece 3/12" })).toBeVisible();
+  await expectAccessibleAndFits(page);
+  await page.getByRole("dialog", { name: "Piece 3/12" }).getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await checkTab(page, /^Quality/, page.getByRole("article", { name: "Finish" }));
+  await checkTab(page, "History", page.getByText("Came to you"));
+  await checkTab(page, "Comments", page.getByText("Matte polish on these, please."));
 });
 
 test("signing in works with the keyboard alone", async ({ page }) => {
