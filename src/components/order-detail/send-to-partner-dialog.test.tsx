@@ -14,7 +14,7 @@ import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
 import { LinePanel } from "./line-panel";
-import { StepSelectionProvider } from "./use-step-selection";
+import { StaffSelectionProvider as StepSelectionProvider } from "./staff-pieces";
 
 const order = (number: number): Order => fakeState().orders.all().find((o) => o.number === number)!;
 

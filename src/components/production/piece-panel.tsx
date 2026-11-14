@@ -6,24 +6,27 @@ import { useState, type ReactNode } from "react";
 
 import { cn } from "cn";
 
+import { LoadFailure } from "@/components/data/load-failure";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { isApiProblem } from "@/lib/api/problem";
-import type { Transition, WorkOrderDetail } from "@/lib/api/schema-types";
-import { useCan } from "@/lib/auth/permissions";
-import { openFile } from "@/lib/files/download";
+import { openLink } from "@/lib/files/open-link";
 import { useFormat } from "@/lib/format/use-format";
-import { usePiece } from "@/lib/production/queries";
+import { actorText } from "@/lib/production/history";
+import type { PieceStory, StoryMove } from "@/lib/production/shape";
 
-import { LoadFailure } from "./load-failure";
 import { answerText, MovePhoto, moveIcon } from "./move-look";
+import { usePhotoLinks } from "./photo-links";
 import { submitErrorText } from "./submit-error";
 
 const LABEL = "text-caption text-ink-2";
 
-/** erp-api records a cancelled piece as a correction to no step (`work-orders.service.ts:165`). */
-const isCancel = (move: Transition) => move.kind === "correction" && !move.to_step;
+/** A piece's story as a query gives it. A hook: it must stay the same function for the life of the panel. */
+export type UseStory = (id: string) => { data: PieceStory | undefined; isPending: boolean; error: unknown; refetch: () => unknown };
 
-function moveTitle(move: Transition): string {
+/** erp-api records a cancelled piece as a correction to no step (`work-orders.service.ts:165`). */
+const isCancel = (move: StoryMove) => move.kind === "correction" && !move.to_step;
+
+function moveTitle(move: StoryMove): string {
   const at = move.from_step?.name ?? "Reopened";
   if (isCancel(move)) return "Cancelled";
   if (move.kind === "correction") return `Corrected to ${move.to_step?.name}`;
@@ -31,21 +34,20 @@ function moveTitle(move: Transition): string {
   return move.inspected ? `${at} passed` : `${at} passed, not inspected`;
 }
 
-function nextText(move: Transition): string {
+function nextText(move: StoryMove): string {
   if (isCancel(move)) return "Cancelled";
   if (move.outcome === "scrap") return "Scrapped";
   if (move.outcome === "rework") return `Back to ${move.to_step?.name ?? "an earlier step"}`;
   return move.to_step ? `On to ${move.to_step.name}` : "Finished";
 }
 
-/** Where the piece is now. A piece whose last move was a rework is being redone. */
-function nowText(piece: WorkOrderDetail): string {
+/** Where the piece is now. */
+function nowText(piece: PieceStory): string {
   if (piece.status === "finished") return "Finished";
   if (piece.status === "scrapped") return "Scrapped";
   if (piece.status === "cancelled") return "Cancelled";
-  const last = piece.history.at(-1);
   const name = piece.step?.name ?? "";
-  return last?.kind === "fail" && last.outcome === "rework" ? `Being redone at ${name}` : `At ${name}`;
+  return piece.inRework ? `Being redone at ${name}` : `At ${name}`;
 }
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -57,9 +59,9 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function Move({ move, stepName }: { move: Transition; stepName: string }) {
+function Move({ move, stepName }: { move: StoryMove; stepName: string }) {
   const { dateTime } = useFormat();
-  const mayRead = useCan("file.read");
+  const { mayView } = usePhotoLinks();
   const [open, setOpen] = useState(move.kind === "fail");
   const { Icon, tone } = moveIcon(move);
   const count = move.photos.length;
@@ -93,16 +95,16 @@ function Move({ move, stepName }: { move: Transition; stepName: string }) {
             {move.override_reason && <Row label="Changed because">{move.override_reason}</Row>}
             {move.comment && <p className="break-words">{move.comment}</p>}
             {count > 0 &&
-              (mayRead ? (
+              (mayView ? (
                 <div className="flex flex-wrap gap-2">
                   {move.photos.map((photo, index) => (
-                    <MovePhoto key={photo.file_version_id} photo={photo} alt={`Photo ${index + 1} at ${stepName}`} />
+                    <MovePhoto key={photo.fileVersionId} photo={photo} alt={`Photo ${index + 1} at ${stepName}`} />
                   ))}
                 </div>
               ) : (
                 <p className={LABEL}>{`${count} ${count === 1 ? "photo" : "photos"}`}</p>
               ))}
-            <p className={LABEL}>{move.partner ? `${move.actor.name}, for ${move.partner.name}` : move.actor.name}</p>
+            <p className={LABEL}>{actorText(move)}</p>
           </div>
         )}
       </div>
@@ -111,10 +113,8 @@ function Move({ move, stepName }: { move: Transition; stepName: string }) {
 }
 
 /** The current step's instructions, opened in a new tab. */
-function Instructions({ sop, stepName }: { sop: NonNullable<WorkOrderDetail["sop"]>; stepName: string }) {
-  const mayRead = useCan("file.read");
+function Instructions({ link, stepName }: { link: () => Promise<string>; stepName: string }) {
   const [failure, setFailure] = useState<string | null>(null);
-  if (!mayRead) return null;
   return (
     <div className="flex flex-col gap-1">
       <button
@@ -122,7 +122,7 @@ function Instructions({ sop, stepName }: { sop: NonNullable<WorkOrderDetail["sop
         className="inline-flex min-h-11 items-center gap-2 self-start text-sm font-medium underline underline-offset-2 hover:text-ink"
         onClick={() => {
           setFailure(null);
-          openFile(sop.file_id, sop.file_version_id).catch((error: unknown) => setFailure(submitErrorText(error)));
+          openLink(link).catch((error: unknown) => setFailure(submitErrorText(error)));
         }}
       >
         <FileText aria-hidden className="size-4 shrink-0" />
@@ -133,8 +133,8 @@ function Instructions({ sop, stepName }: { sop: NonNullable<WorkOrderDetail["sop
   );
 }
 
-function PieceHistory({ id }: { id: string }) {
-  const piece = usePiece(id);
+function PieceHistory({ id, useStory, sopLink }: { id: string; useStory: UseStory; sopLink: ((story: PieceStory) => Promise<string>) | null }) {
+  const piece = useStory(id);
 
   if (piece.isPending) {
     return (
@@ -172,9 +172,9 @@ function PieceHistory({ id }: { id: string }) {
         <SheetTitle className="text-base font-semibold tabular-nums">{`Piece ${data.label}`}</SheetTitle>
         <SheetDescription className="text-sm font-medium text-ink">{nowText(data)}</SheetDescription>
       </div>
-      {data.sop && data.step && <Instructions sop={data.sop} stepName={data.step.name} />}
-      {data.replaces_id && (
-        <Link href={`?piece=${data.replaces_id}`} scroll={false} prefetch={false} className="text-sm underline underline-offset-2">
+      {sopLink && data.sop && data.step && <Instructions link={() => sopLink(data)} stepName={data.step.name} />}
+      {data.replacesId && (
+        <Link href={`?piece=${data.replacesId}`} scroll={false} prefetch={false} className="text-sm underline underline-offset-2">
           See the piece this replaces
         </Link>
       )}
@@ -191,8 +191,21 @@ function PieceHistory({ id }: { id: string }) {
   );
 }
 
-/** One piece's story, sliding over the order page from the right, or up from the bottom on phones. */
-export function PiecePanel({ id, onClose }: { id: string | null; onClose: () => void }) {
+/**
+ * One piece's story, sliding over the page from the right, or up from the bottom on phones. `sopLink` opens
+ * the current step's instructions, or is null where this person may not.
+ */
+export function PiecePanel({
+  id,
+  onClose,
+  useStory,
+  sopLink,
+}: {
+  id: string | null;
+  onClose: () => void;
+  useStory: UseStory;
+  sopLink: ((story: PieceStory) => Promise<string>) | null;
+}) {
   return (
     <Sheet
       open={id !== null}
@@ -201,7 +214,7 @@ export function PiecePanel({ id, onClose }: { id: string | null; onClose: () => 
       }}
     >
       <SheetContent className="gap-3 overflow-y-auto p-5 data-[side=right]:sm:max-w-md max-sm:data-[side=right]:top-auto max-sm:data-[side=right]:bottom-0 max-sm:data-[side=right]:h-[85dvh] max-sm:data-[side=right]:w-full max-sm:data-[side=right]:rounded-t-2xl max-sm:data-[side=right]:border-l-0">
-        {id && <PieceHistory key={id} id={id} />}
+        {id && <PieceHistory key={id} id={id} useStory={useStory} sopLink={sopLink} />}
       </SheetContent>
     </Sheet>
   );

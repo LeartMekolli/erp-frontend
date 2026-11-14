@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { submitErrorText } from "@/components/production/submit-error";
 import { Button } from "@/components/ui/button";
 import type { Order, OrderLine, OrderPart, OrderState } from "@/lib/api/schema-types";
 import { useCan } from "@/lib/auth/permissions";
@@ -10,7 +11,6 @@ import { useWithdrawOffer } from "@/lib/partners/queries";
 
 import { MovePartnerDialog } from "./move-partner-dialog";
 import { SendToPartnerDialog } from "./send-to-partner-dialog";
-import { submitErrorText } from "./submit-error";
 
 const CLOSED: OrderState[] = ["shipped", "delivered", "cancelled"];
 

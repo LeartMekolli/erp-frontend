@@ -12,6 +12,9 @@ import type {
   LineAction,
   MoveBody,
   MoveHistory,
+  PartnerJobDetail,
+  PartnerMoveHistory,
+  PartnerWorkOrder,
   paths,
   Transition,
   WorkflowStep,
@@ -213,7 +216,10 @@ function seedPieces(now: number): StoredPiece[] {
  * fails made at the step, never corrections; defects most frequent first, then by name; the latest
  * inspected pass or fail.
  */
-function checksAt(stepKey: string, members: StoredPiece[]): Pick<Group["steps"][number], "passed" | "failed" | "not_inspected" | "defects" | "latest_check"> {
+function checksAt(
+  stepKey: string,
+  members: StoredPiece[],
+): Pick<Group["steps"][number], "passed" | "failed" | "not_inspected" | "defects"> & { latest: Transition | null } {
   const moves = members.flatMap((piece) => piece.history).filter((move) => move.from_step?.key === stepKey && move.kind !== "correction");
   const passes = moves.filter((move) => move.kind === "pass");
   const counts = new Map<string, { key: string; name: string; count: number }>();
@@ -222,14 +228,30 @@ function checksAt(stepKey: string, members: StoredPiece[]): Pick<Group["steps"][
     const seen = counts.get(move.defect.key) ?? { key: move.defect.key, name: move.defect.name, count: 0 };
     counts.set(move.defect.key, { ...seen, count: seen.count + 1 });
   }
-  const latest = moves.filter((move) => move.inspected).reduce<Transition | null>((last, move) => (!last || move.created_at >= last.created_at ? move : last), null);
   return {
     passed: passes.length,
     failed: moves.length - passes.length,
     not_inspected: passes.filter((move) => !move.inspected).length,
     defects: [...counts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
-    latest_check: latest ? { actor: latest.actor, partner: latest.partner, created_at: latest.created_at, photos: latest.photos } : null,
+    latest: moves.filter((move) => move.inspected).reduce<Transition | null>((last, move) => (!last || move.created_at >= last.created_at ? move : last), null),
   };
+}
+
+/** The steps a partner holding a job does (`done_by: "partner"`); the rest are the workspace's. */
+const PARTNER_STEPS = STEPS.filter((s) => s.done_by === "partner");
+
+/** Where an active piece stands for the partner (erp-api `partner-stage.ts`): at its step, before one, or past them all. */
+function stageOf(piece: StoredPiece): PartnerJobDetail["work_orders"][number]["stage"] {
+  if (piece.status !== "active" || piece.stepKey === null) return null;
+  const at = STEPS.findIndex((s) => s.key === piece.stepKey);
+  if (STEPS[at]?.done_by === "partner") return "yours";
+  return STEPS.slice(at + 1).some((s) => s.done_by === "partner") ? "not_yet" : "done";
+}
+
+/** Who made a move, by a partner's person or else the workspace's. */
+interface Mover {
+  actor: { id: string; name: string };
+  partner: { id: string; name: string };
 }
 
 /** An answer as erp-api records it, named from the step's checklist (its key once the item is gone). */
@@ -300,7 +322,44 @@ export function createProductionStore(now: () => number) {
   const pieces = new Map(seedPieces(now()).map((piece) => [piece.id, piece]));
   const keys = new Map<string, { input: string; body: MoveResponse }>();
   const skilled = new Set<string>();
+  /** The partner whose person made each move, by move id; staff's moves aren't here. */
+  const movers = new Map<string, string>();
   const createdAt = () => new Date(now()).toISOString();
+
+  /**
+   * Who made a move as a partner reads it (erp-api `partner-view.ts` `actorOf`): its own people by name,
+   * another partner's and the workspace's by kind alone.
+   */
+  const actorFor = (moveId: string, name: string, partnerId: string): PartnerWorkOrder["history"][number]["actor"] => {
+    const by = movers.get(moveId);
+    if (by === undefined) return { kind: "workspace", name: null };
+    return by === partnerId ? { kind: "own", name } : { kind: "other_partner", name: null };
+  };
+
+  /** A piece's move as a partner reads it: what was written only on its own people's moves. */
+  const partnerTransition = (move: Transition, partnerId: string): PartnerWorkOrder["history"][number] => {
+    const actor = actorFor(move.move_id, move.actor.name, partnerId);
+    const own = actor.kind === "own";
+    return {
+      id: move.id,
+      move_id: move.move_id,
+      kind: move.kind,
+      outcome: move.outcome,
+      from_step: move.from_step,
+      to_step: move.to_step,
+      defect: move.defect,
+      override_reason: own ? move.override_reason : null,
+      comment: own ? move.comment : null,
+      answers: move.answers.map((answer) => ({ ...answer, note: own ? answer.note : null })),
+      photo_file_version_ids: move.photo_file_version_ids,
+      photos: move.photos,
+      inspected: move.inspected,
+      created_at: move.created_at,
+      actor,
+    };
+  };
+
+  const members = (groupId: string) => [...pieces.values()].filter((piece) => piece.groupId === groupId);
 
   const base = (piece: StoredPiece) => ({
     id: piece.id,
@@ -354,7 +413,8 @@ export function createProductionStore(now: () => number) {
     return problems;
   }
 
-  function run(body: MoveBody): Answer<MoveResponse> {
+  /** A move by staff, or with `by` by a partner's person, credited to that partner. */
+  function run(body: MoveBody, by?: Mover): Answer<MoveResponse> {
     const moved: StoredPiece[] = [];
     for (const id of body.work_order_ids) {
       const piece = pieces.get(id);
@@ -363,8 +423,11 @@ export function createProductionStore(now: () => number) {
     }
     const respond = (): Answer<MoveResponse> => ({ ok: true, body: { data: moved.map(base) } });
     const atStep = STEPS.find((s) => s.key === body.at_step);
+    const moveId = crypto.randomUUID();
+    if (by) movers.set(moveId, by.partner.id);
     const common = {
-      move_id: crypto.randomUUID(),
+      ...(by ? { actor: by.actor, partner: by.partner } : {}),
+      move_id: moveId,
       answers: (body.answers ?? []).map((a) => answerOf(atStep, a)),
       comment: body.comment ?? null,
       photo_file_version_ids: body.photo_file_version_ids ?? [],
@@ -437,7 +500,7 @@ export function createProductionStore(now: () => number) {
     return respond();
   }
 
-  return {
+  const store = {
     group(id: string): Answer<Group> {
       const members = [...pieces.values()].filter((piece) => piece.groupId === id);
       if (members.length === 0) return { ok: false, status: 404, detail: "Group not found" };
@@ -454,7 +517,15 @@ export function createProductionStore(now: () => number) {
           pieces: { active: count("active"), finished: count("finished"), scrapped: count("scrapped") },
           steps: STEPS.map((s) => {
             const here = members.filter((piece) => piece.status === "active" && piece.stepKey === s.key);
-            return { key: s.key, name: s.name, count: here.length, in_rework: here.filter((piece) => piece.inRework).length, ...checksAt(s.key, members) };
+            const { latest, ...checks } = checksAt(s.key, members);
+            return {
+              key: s.key,
+              name: s.name,
+              count: here.length,
+              in_rework: here.filter((piece) => piece.inRework).length,
+              ...checks,
+              latest_check: latest ? { actor: latest.actor, partner: latest.partner, created_at: latest.created_at, photos: latest.photos } : null,
+            };
           }),
         },
       };
@@ -544,7 +615,153 @@ export function createProductionStore(now: () => number) {
       if (answer.ok && key) keys.set(key, { input, body: answer.body });
       return answer;
     },
+
+    /**
+     * A partner's view of a job's pieces (erp-api `partner-jobs.service.ts` `detail`): its own steps with their
+     * rules and what was checked there since `since` (the hand-over), and every piece but cancelled ones with
+     * its stage. Null `since` is an offer: nothing counted, no last moves. Null for a group with no pieces.
+     */
+    partnerView(groupId: string, partnerId: string, since: string | null): Pick<PartnerJobDetail, "steps" | "work_orders"> | null {
+      const all = members(groupId);
+      if (all.length === 0) return null;
+      const counted = since === null ? [] : all.map((piece) => ({ ...piece, history: piece.history.filter((move) => move.created_at >= since) }));
+      return {
+        steps: PARTNER_STEPS.map((s) => {
+          const here = all.filter((piece) => piece.status === "active" && piece.stepKey === s.key);
+          const { latest, defects, ...checks } = checksAt(s.key, counted);
+          return {
+            key: s.key,
+            name: s.name,
+            sop_file_version_id: s.sop_file_version_id,
+            checklist: s.checklist,
+            defects: s.defects.map((d) => ({ id: d.defect_id, key: d.key, name: d.name, outcome: d.outcome, rework_to: d.rework_to })),
+            rework_targets: s.rework_targets.map((key) => ({ key, name: ref(key)?.name ?? key })),
+            pass: s.pass,
+            fail: s.fail,
+            sampling: s.sampling,
+            count: here.length,
+            in_rework: here.filter((piece) => piece.inRework).length,
+            ...checks,
+            defect_counts: defects,
+            latest_check: latest
+              ? { move_id: latest.move_id, actor: actorFor(latest.move_id, latest.actor.name, partnerId), created_at: latest.created_at, photos: latest.photos }
+              : null,
+          };
+        }),
+        work_orders: all
+          .sort((a, b) => a.number - b.number)
+          .flatMap((piece) => {
+            if (piece.status === "cancelled") return [];
+            const last = since === null ? undefined : piece.history.at(-1);
+            return [
+              {
+                id: piece.id,
+                label: `${piece.number}/${piece.quantity}`,
+                status: piece.status,
+                step_key: piece.stepKey,
+                to_inspect: null,
+                in_rework: piece.status === "active" && piece.inRework,
+                stage: stageOf(piece),
+                last_move: last
+                  ? {
+                      kind: last.kind,
+                      outcome: last.outcome,
+                      from_step: last.from_step,
+                      defect: last.defect,
+                      created_at: last.created_at,
+                      actor: actorFor(last.move_id, last.actor.name, partnerId),
+                    }
+                  : null,
+              },
+            ];
+          }),
+      };
+    },
+
+    /** `GET .../jobs/{groupId}/work-orders/{workOrderId}`: one piece of the job and every move it has had. */
+    partnerPiece(groupId: string, id: string, partnerId: string): Answer<PartnerWorkOrder> {
+      const piece = pieces.get(id);
+      if (!piece || piece.groupId !== groupId) return { ok: false, status: 404, detail: "Work order not found" };
+      const step = ref(piece.stepKey);
+      return {
+        ok: true,
+        body: {
+          id: piece.id,
+          label: `${piece.number}/${piece.quantity}`,
+          status: piece.status,
+          step: step ? { key: step.key, name: step.name } : null,
+          to_inspect: null,
+          in_rework: piece.status === "active" && piece.inRework,
+          path: STEPS.map(({ key, name }) => ({ key, name })),
+          history: piece.history.map((move) => partnerTransition(move, partnerId)),
+        },
+      };
+    },
+
+    /** `GET .../jobs/{groupId}/moves` (erp-api `job-moves.service.ts`): staff's list, read as the partner reads it. */
+    partnerMoves(groupId: string, params: URLSearchParams, partnerId: string, handedOverAt: string): Answer<PartnerMoveHistory> {
+      const answer = store.moves(groupId, params);
+      if (!answer.ok) return answer;
+      return {
+        ok: true,
+        body: {
+          data: answer.body.data.map((action) => {
+            const actor = actorFor(action.id, action.actor.name, partnerId);
+            const own = actor.kind === "own";
+            return {
+              id: action.id,
+              kind: action.kind,
+              outcome: action.outcome,
+              from_step: action.from_step,
+              to_step: action.to_step,
+              defect: action.defect,
+              override_reason: own ? action.override_reason : null,
+              comment: own ? action.comment : null,
+              answers: action.answers.map((one) => ({ ...one, note: own ? one.note : null })),
+              photos: action.photos,
+              inspected: action.inspected,
+              created_at: action.created_at,
+              pieces: action.pieces,
+              actor,
+            };
+          }),
+          next_cursor: answer.body.next_cursor,
+          counts: answer.body.counts,
+          handed_over_at: handedOverAt,
+        },
+      };
+    },
+
+    /** A photo of a move on a piece of the group; any other is not found (erp-api `job-moves.service.ts` `photoUrl`). */
+    partnerPhoto(groupId: string, moveId: string, fileVersionId: string): Answer<{ url: string; expires_at: string }> {
+      const found = members(groupId).some((piece) =>
+        piece.history.some((move) => move.move_id === moveId && move.photos.some((photo) => photo.file_version_id === fileVersionId)),
+      );
+      if (!found) return { ok: false, status: 404, detail: "Photo not found" };
+      return { ok: true, body: { url: `https://storage.example.test/${fileVersionId}`, expires_at: new Date(now() + 5 * 60_000).toISOString() } };
+    },
+
+    /**
+     * `POST /partner-portal/partners/{partnerId}/moves` (erp-api `moves.service.ts:211`, `:268-282`): a piece not on
+     * a job the partner holds is not found, and a move at a workspace step is a 409. The move counts for the partner.
+     */
+    partnerMove(body: MoveBody, key: string | null, by: Mover, holds: (groupId: string) => boolean): Answer<MoveResponse> {
+      const input = JSON.stringify({ partner: by.partner.id, body });
+      const seen = key ? keys.get(key) : undefined;
+      if (seen) {
+        return seen.input === input ? { ok: true, body: seen.body } : { ok: false, status: 409, code: "idempotency_key_reused", detail: "Idempotency key reused with a different request" };
+      }
+      const moving = body.work_order_ids.map((id) => pieces.get(id));
+      if (moving.some((piece) => !piece || !holds(piece.groupId))) return { ok: false, status: 404, detail: "Work order not found" };
+      const partnerStep = (stepKey: string | null | undefined) => STEPS.find((s) => s.key === stepKey)?.done_by === "partner";
+      const touched = body.kind === "correction" ? moving.flatMap((piece) => [piece!.stepKey, body.to_step]) : [body.at_step];
+      if (touched.some((stepKey) => !partnerStep(stepKey))) return { ok: false, status: 409, detail: "Some pieces would move at the workspace's own steps" };
+      const answer = run(body, by);
+      if (answer.ok && key) keys.set(key, { input, body: answer.body });
+      return answer;
+    },
   };
+  return store;
 }
 
 export type ProductionStore = ReturnType<typeof createProductionStore>;

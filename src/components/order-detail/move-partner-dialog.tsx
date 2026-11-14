@@ -7,16 +7,16 @@ import { z } from "zod";
 
 import { Field } from "@/components/auth/field";
 import { FormMessage } from "@/components/auth/form-message";
+import { LoadFailure } from "@/components/data/load-failure";
+import { DIALOG_SHEET } from "@/components/production/dialog-classes";
+import { submitErrorText } from "@/components/production/submit-error";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useEligiblePartners, useReassignJob } from "@/lib/partners/queries";
 
-import { DIALOG_SHEET } from "./dialog-classes";
-import { LoadFailure } from "./load-failure";
 import { PartnerChoices } from "./partner-choices";
-import { submitErrorText } from "./submit-error";
 
 // erp-api's rules (`partners/jobs.service.ts:26`, `:36-45`).
 const MONEY = /^\d{1,16}(\.\d{1,2})?$/;

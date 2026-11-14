@@ -7,7 +7,8 @@
 import type { FeedEntry } from "../../src/lib/api/schema-types";
 
 import type { Answer, Page } from "./orders";
-import { PARTNER, STAFF } from "./seed";
+import { PENDANT_OFFER_ID, RING_OFFER_ID } from "./partner-jobs";
+import { NORTHCAST_ID, PARTNER, STAFF } from "./seed";
 
 interface StoredEntry {
   userId: string;
@@ -30,9 +31,9 @@ const FILLER: Pick<FeedEntry, "event_key" | "subject" | "title" | "body">[] = [
   { event_key: "partner.capacity_changed", subject: { type: "partner", id: "2f1c5d7e-0a9b-4e3c-8d2f-6a5b4c3d2e10" }, title: "Northcast Foundry updated its capacity", body: "They can take 20 more jobs this week." },
 ];
 
-/** The two offers waiting for Northcast's owner (`jobs.service.ts:199`): both unread. */
+/** The two offers waiting for Northcast's owner (`jobs.service.ts:199`): both unread, each naming its job. */
 function partnerEntries(now: number): StoredEntry[] {
-  const offered = (n: number, title: string, body: string, hoursAgo: number): StoredEntry => ({
+  const offered = (n: number, groupId: string, title: string, body: string, hoursAgo: number): StoredEntry => ({
     userId: PARTNER.id,
     entry: {
       id: uuid(n),
@@ -40,13 +41,14 @@ function partnerEntries(now: number): StoredEntry[] {
       subject: { type: "job_assignment", id: uuid(n + 100) },
       title,
       body,
+      job: { id: groupId, partner_id: NORTHCAST_ID },
       created_at: new Date(now - hoursAgo * 3_600_000).toISOString(),
       read_at: null,
     },
   });
   return [
-    offered(32, "New job offered: Ring", "10 pieces, answer within 5 hours.", 1),
-    offered(31, "New job offered: Pendant", "3 pieces, answer within 90 minutes.", 2),
+    offered(32, RING_OFFER_ID, "New job offered: Ring", "10 pieces, answer within 5 hours.", 1),
+    offered(31, PENDANT_OFFER_ID, "New job offered: Pendant", "3 pieces, answer within 90 minutes.", 2),
   ];
 }
 
@@ -61,7 +63,7 @@ function staffEntries(now: number): StoredEntry[] {
     const createdAt = new Date(now - (index + 1) * 3_600_000).toISOString();
     return {
       userId: STAFF.id,
-      entry: { id: uuid(30 - index), ...structuredClone(event), created_at: createdAt, read_at: index < EVENTS.length ? null : createdAt },
+      entry: { id: uuid(30 - index), ...structuredClone(event), job: null, created_at: createdAt, read_at: index < EVENTS.length ? null : createdAt },
     };
   });
 }

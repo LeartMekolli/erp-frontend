@@ -11,24 +11,31 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { applyFieldErrors, isApiProblem } from "@/lib/api/problem";
-import type { Group, MoveBody, WorkflowStep, WorkOrderListItem } from "@/lib/api/schema-types";
-import { useCan } from "@/lib/auth/permissions";
+import type { MoveBody } from "@/lib/api/schema-types";
 import { emptyMoveValues, fieldPath, moveBody, moveSchema, type MoveKind, type MoveValues } from "@/lib/production/move-body";
-import { useMovePieces } from "@/lib/production/queries";
-import { nextStepName } from "@/lib/production/selection";
+import type { NextStep, Piece, StepRules } from "@/lib/production/shape";
+import type { UploadTarget } from "@/lib/upload/upload";
 
 import { ChecklistFields } from "./checklist-fields";
 import { DIALOG_SHEET } from "./dialog-classes";
 import { PhotoField, usePhotos } from "./evidence-fields";
+import { passLabel } from "./move-bar";
 import { submitErrorText } from "./submit-error";
 
 interface MoveDialogProps {
   kind: MoveKind;
-  step: WorkflowStep;
-  path: Group["steps"];
-  pieces: WorkOrderListItem[];
+  rules: StepRules;
+  /** The steps a correction can put pieces at. */
+  path: { key: string; name: string }[];
+  next: NextStep;
+  pieces: Piece[];
+  /** Whether this person may add photos. */
+  mayUpload: boolean;
+  uploadTarget: UploadTarget;
   /** Set when the move counts for the partner holding the line. */
-  partnerName: string | null;
+  countsFor: string | null;
+  /** Sends the move; throws erp-api's refusal. */
+  onMove: (body: MoveBody) => Promise<void>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onMoved: (message: string) => void;
@@ -53,16 +60,27 @@ export function MoveDialog({ open, onOpenChange, ...form }: MoveDialogProps) {
   );
 }
 
-function OutcomeText({ defect, path }: { defect: WorkflowStep["defects"][number]; path: Group["steps"] }) {
+function OutcomeText({ defect, step, path }: { defect: StepRules["defects"][number]; step: StepRules; path: MoveDialogProps["path"] }) {
   if (defect.outcome === "scrap") return "The pieces are scrapped";
   if (defect.outcome === "continue") return "The pieces carry on to the next step";
-  return `Goes back to ${path.find((step) => step.key === defect.rework_to)?.name ?? defect.rework_to} to be redone`;
+  const named = [...step.reworkTargets, ...path].find((target) => target.key === defect.reworkTo);
+  return `Goes back to ${named?.name ?? defect.reworkTo} to be redone`;
 }
 
-function MoveForm({ kind, step, path, pieces, partnerName, onDone }: Omit<MoveDialogProps, "open" | "onOpenChange"> & { onDone: (message: string) => void }) {
-  const mayUpload = useCan("file.write");
-  const photos = usePhotos();
-  const move = useMovePieces();
+function MoveForm({
+  kind,
+  rules: step,
+  path,
+  next,
+  pieces,
+  mayUpload,
+  uploadTarget,
+  countsFor,
+  onMove,
+  onDone,
+}: Omit<MoveDialogProps, "open" | "onOpenChange" | "onMoved"> & { onDone: (message: string) => void }) {
+  const photos = usePhotos(uploadTarget);
+  const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const {
     register,
@@ -78,17 +96,15 @@ function MoveForm({ kind, step, path, pieces, partnerName, onDone }: Omit<MoveDi
 
   const noun = nounFor(pieces.length);
   const ids = pieces.map((piece) => piece.id);
-  const next = nextStepName(path, step.key);
-  const passLabel = next ? `Pass to ${next}` : "Finish";
   const evidence = kind === "pass" ? step.pass : kind === "fail" ? step.fail : null;
-  const defect = step.defects.find((d) => d.defect_id === defectId);
-  const canSkip = kind === "pass" && pieces.every((piece) => piece.to_inspect === false);
-  const photosBlocked = evidence !== null && evidence.min_photos > 0 && !mayUpload;
+  const defect = step.defects.find((d) => d.id === defectId);
+  const canSkip = kind === "pass" && pieces.every((piece) => piece.toInspect === false);
+  const photosBlocked = evidence !== null && evidence.minPhotos > 0 && !mayUpload;
   const noDefects = kind === "fail" && step.defects.length === 0;
 
-  const title = { pass: `${next ? "Pass" : "Finish"} ${noun} at ${step.name}`, fail: `Fail ${noun} at ${step.name}`, correction: `Correct ${noun} at ${step.name}` }[kind];
+  const title = { pass: `${next === null ? "Finish" : "Pass"} ${noun} at ${step.name}`, fail: `Fail ${noun} at ${step.name}`, correction: `Correct ${noun} at ${step.name}` }[kind];
   const done = {
-    pass: next ? `${noun} passed to ${next}.` : `${noun} finished.`,
+    pass: next === "unknown" ? `${noun} passed at ${step.name}.` : next ? `${noun} passed to ${next.name}.` : `${noun} finished.`,
     fail: `${noun} failed at ${step.name}.`,
     correction: `${noun} corrected.`,
   }[kind];
@@ -104,14 +120,17 @@ function MoveForm({ kind, step, path, pieces, partnerName, onDone }: Omit<MoveDi
 
   async function send(body: MoveBody) {
     setMessage(null);
+    setSending(true);
     try {
-      await move.mutateAsync(body);
+      await onMove(body);
     } catch (error) {
       if (isApiProblem(error) && error.status === 400) {
         const named = { ...error, errors: error.errors?.map((e) => ({ ...e, path: fieldPath(e.path, step) })) };
         setMessage(applyFieldErrors(named, setError, fields));
       } else setMessage(submitErrorText(error));
       return;
+    } finally {
+      setSending(false);
     }
     onDone(done);
   }
@@ -123,13 +142,13 @@ function MoveForm({ kind, step, path, pieces, partnerName, onDone }: Omit<MoveDi
       <div className="flex flex-col gap-1.5">
         <DialogTitle className="text-base font-semibold">{title}</DialogTitle>
         <DialogDescription className="text-sm break-words text-ink-2 tabular-nums">{pieces.map((piece) => piece.label).join(", ")}</DialogDescription>
-        {partnerName && <p className="text-caption font-medium text-ink">{`This counts for ${partnerName}`}</p>}
+        {countsFor && <p className="text-caption font-medium text-ink">{`This counts for ${countsFor}`}</p>}
       </div>
       <form onSubmit={(event) => void handleSubmit(onSubmit)(event)} noValidate className="flex flex-col gap-5">
         {message && <FormMessage tone="error">{message}</FormMessage>}
         {photosBlocked && <FormMessage tone="error">This step needs photos, and you don&apos;t have permission to add them.</FormMessage>}
         {noDefects && <FormMessage tone="error">This step has no defects set up, so pieces can&apos;t be failed here.</FormMessage>}
-        <fieldset disabled={move.isPending} className="flex flex-col gap-4">
+        <fieldset disabled={sending} className="flex flex-col gap-4">
           {kind === "pass" && <ChecklistFields checklist={step.checklist} register={register} errors={errors} />}
 
           {kind === "fail" && !noDefects && (
@@ -139,7 +158,7 @@ function MoveForm({ kind, step, path, pieces, partnerName, onDone }: Omit<MoveDi
                   <NativeSelect {...props} {...register("defectId", { onChange: () => setValue("changing", false) })}>
                     <option value="">Choose a defect</option>
                     {step.defects.map((d) => (
-                      <option key={d.defect_id} value={d.defect_id}>
+                      <option key={d.id} value={d.id}>
                         {d.name}
                       </option>
                     ))}
@@ -149,14 +168,14 @@ function MoveForm({ kind, step, path, pieces, partnerName, onDone }: Omit<MoveDi
               {defect && !changing && (
                 <div className="flex flex-wrap items-center justify-between gap-x-3">
                   <p className="text-sm text-ink">
-                    <OutcomeText defect={defect} path={path} />
+                    <OutcomeText defect={defect} step={step} path={path} />
                   </p>
                   <Button
                     type="button"
                     variant="link"
                     onClick={() => {
                       setValue("outcome", defect.outcome);
-                      setValue("reworkTo", defect.rework_to ?? "");
+                      setValue("reworkTo", defect.reworkTo ?? "");
                       setValue("changing", true);
                     }}
                   >
@@ -169,7 +188,7 @@ function MoveForm({ kind, step, path, pieces, partnerName, onDone }: Omit<MoveDi
                   <Field id="move-outcome" label="What should happen">
                     {(props) => (
                       <NativeSelect {...props} {...register("outcome")}>
-                        {step.rework_targets.length > 0 && <option value="rework">Send them back to be redone</option>}
+                        {step.reworkTargets.length > 0 && <option value="rework">Send them back to be redone</option>}
                         <option value="scrap">Scrap the pieces</option>
                         <option value="continue">Let them carry on</option>
                       </NativeSelect>
@@ -179,9 +198,9 @@ function MoveForm({ kind, step, path, pieces, partnerName, onDone }: Omit<MoveDi
                     <Field id="move-rework-to" label="Send them back to" error={errors.reworkTo?.message}>
                       {(props) => (
                         <NativeSelect {...props} {...register("reworkTo")}>
-                          {step.rework_targets.map((key) => (
-                            <option key={key} value={key}>
-                              {path.find((s) => s.key === key)?.name ?? key}
+                          {step.reworkTargets.map((target) => (
+                            <option key={target.key} value={target.key}>
+                              {target.name}
                             </option>
                           ))}
                         </NativeSelect>
@@ -213,11 +232,11 @@ function MoveForm({ kind, step, path, pieces, partnerName, onDone }: Omit<MoveDi
             </Field>
           )}
 
-          {evidence !== null && evidence.min_photos > 0 && mayUpload && (
-            <PhotoField photos={photos} min={evidence.min_photos} error={errors.photoVersionIds?.message} onAdded={() => clearErrors("photoVersionIds")} />
+          {evidence !== null && evidence.minPhotos > 0 && mayUpload && (
+            <PhotoField photos={photos} min={evidence.minPhotos} error={errors.photoVersionIds?.message} onAdded={() => clearErrors("photoVersionIds")} />
           )}
 
-          {(kind === "correction" || evidence?.comment_required) && (
+          {(kind === "correction" || evidence?.commentRequired) && (
             <Field id="move-comment" label="Comment" error={errors.comment?.message}>
               {(props) => <Textarea {...props} {...register("comment")} />}
             </Field>
@@ -230,7 +249,7 @@ function MoveForm({ kind, step, path, pieces, partnerName, onDone }: Omit<MoveDi
               </Button>
             )}
             <Button type="submit" disabled={photos.busy || photosBlocked || noDefects}>
-              {kind === "pass" ? passLabel : kind === "fail" ? "Fail" : "Correct"}
+              {kind === "pass" ? passLabel(next) : kind === "fail" ? "Fail" : "Correct"}
             </Button>
           </div>
         </fieldset>

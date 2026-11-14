@@ -6,16 +6,16 @@ import Link from "next/link";
 import { cn } from "cn";
 
 import { Checkbox } from "@/components/ui/checkbox";
-import type { WorkOrderListItem } from "@/lib/api/schema-types";
+import type { LastMove, Piece } from "@/lib/production/shape";
 
-const STATUS: Record<WorkOrderListItem["status"], { word: string; dot: string }> = {
+const STATUS: Record<Piece["status"], { word: string; dot: string }> = {
   active: { word: "Active", dot: "bg-violet" },
   finished: { word: "Finished", dot: "bg-ship" },
   scrapped: { word: "Scrapped", dot: "bg-collect" },
   cancelled: { word: "Cancelled", dot: "bg-ink-2" },
 };
 
-function lastMoveText(move: NonNullable<WorkOrderListItem["last_move"]>): string {
+function lastMoveText(move: LastMove): string {
   const step = move.from_step?.name ?? "a step";
   if (move.kind === "pass") return `Passed ${step}`;
   if (move.kind === "correction") return `Corrected from ${step}`;
@@ -29,7 +29,7 @@ export function PieceRow({
   selected,
   onToggle,
 }: {
-  piece: WorkOrderListItem;
+  piece: Piece;
   /** Whether this list offers picking at all. */
   selectable: boolean;
   selected: boolean;
@@ -41,7 +41,7 @@ export function PieceRow({
       {selectable && (
         <Checkbox
           checked={selected}
-          disabled={!piece.may_work}
+          disabled={!piece.mayWork}
           onCheckedChange={onToggle}
           aria-label={`Select ${piece.label}`}
           className="after:-inset-3.5"
@@ -60,14 +60,14 @@ export function PieceRow({
         <span aria-hidden className={cn("size-1.5 rounded-full", status.dot)} />
         {status.word}
       </span>
-      {piece.in_rework && (
+      {piece.inRework && (
         <span className="inline-flex items-center gap-1.5 font-medium">
           <RotateCcw aria-hidden className="size-3.5 shrink-0 text-collect" />
           Being redone
         </span>
       )}
-      {piece.last_move && <span className="hidden min-w-0 truncate text-caption text-ink-2 sm:inline">{lastMoveText(piece.last_move)}</span>}
-      {selectable && !piece.may_work && <span className="ml-auto text-caption text-ink-2">Needs a skill you don&apos;t have</span>}
+      {piece.lastMove && <span className="hidden min-w-0 truncate text-caption text-ink-2 sm:inline">{lastMoveText(piece.lastMove)}</span>}
+      {selectable && !piece.mayWork &&<span className="ml-auto text-caption text-ink-2">Needs a skill you don&apos;t have</span>}
     </li>
   );
 }

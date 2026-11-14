@@ -1,12 +1,13 @@
 /**
  * The fake erp-api's order comments and claims. It keeps the rules the order
  * page depends on (erp-api `src/modules/orders/comments.service.ts`): comments
- * oldest first, staff only unless `visibility` says otherwise, a comment for
- * the partner needs a line a partner has accepted and names that partner, and
- * a line must be on the order.
+ * oldest first, where it's posted decides who reads it (a line a partner has
+ * accepted names that partner, anywhere else is staff only), a line must be on
+ * the order, and the body is strict, so an unknown key is a 400. A partner reads
+ * and writes on the line its job is made as, and only what names it.
  */
 
-import type { Claim, OrderComment, OrderLine, OrderPart, StaffCommentBody } from "../../src/lib/api/schema-types";
+import type { Claim, OrderComment, OrderLine, OrderPart, PartnerJobComment, StaffCommentBody } from "../../src/lib/api/schema-types";
 
 import type { Answer, OrdersStore, Page } from "./orders";
 import { uuid } from "./orders-seed";
@@ -14,12 +15,26 @@ import { uuid } from "./orders-seed";
 const HOUR = 3_600_000;
 const COMMENT_MAX_LENGTH = 5000;
 const FILE_VERSION = uuid("d0d0d0d0", 1);
+/** `staffCommentSchema`'s keys (erp-api `comments.service.ts:24`). */
+const BODY_KEYS = ["body", "line_id", "attachments"];
 
 const invalid = (path: string, message: string): Answer<never> => ({ ok: false, status: 400, errors: [{ path, message }] });
 
-/** The partner that has accepted a line: the one a comment for the partner is to (erp-api `holder`). */
+/** The partner that has accepted a line: the one that reads a comment posted on it (erp-api `holder`). */
 function holder(line: OrderLine | OrderPart): OrderComment["partner"] {
   return line.partner?.status === "accepted" ? { id: line.partner.id, name: line.partner.name } : null;
+}
+
+/** A comment as a partner reads it (erp-api `partnerView`): staff's are the workspace's, unnamed. */
+function partnerView(comment: OrderComment): PartnerJobComment {
+  const own = comment.author.kind === "partner";
+  return {
+    id: comment.id,
+    body: comment.body,
+    author: { kind: own ? "partner" : "workspace", name: own ? comment.author.name : null },
+    attachments: comment.attachments,
+    created_at: comment.created_at,
+  };
 }
 
 function paged<T>(all: T[], params: URLSearchParams): Answer<Page<T>> {
@@ -40,10 +55,9 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
         {
           id: uuid("d1d1d1d1", 1),
           line_id: null,
-          author: { kind: "customer", id: uuid("d2d2d2d2", 1), name: "Rina Holt" },
-          visibility: "customer",
+          author: { kind: "staff", id: uuid("55555555", 1), name: "Ana Ruiz" },
           partner: null,
-          body: "Could the polish stay matte?",
+          body: "Rina asked for the polish to stay matte.",
           attachments: [{ file_version_id: FILE_VERSION, name: "polish-sample.pdf" }],
           created_at: stamp(5),
         },
@@ -51,7 +65,6 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
           id: uuid("d1d1d1d1", 2),
           line_id: order1048.lines[0]!.id,
           author: { kind: "staff", id: uuid("55555555", 1), name: "Ana Ruiz" },
-          visibility: "partner",
           partner: holder(order1048.lines[0]!),
           body: "Matte polish on these, please.",
           attachments: [],
@@ -79,6 +92,17 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
 
   const unknownOrder = (id: string) => !orders.get(id).ok;
 
+  /** The order and line a job is made as, and the comments a partner reads there (erp-api `partnerScope`). */
+  function jobLine(groupId: string) {
+    for (const order of orders.all()) {
+      const line = order.lines.find((candidate) => candidate.group_id === groupId);
+      if (line) return { orderId: order.id, lineId: line.id };
+    }
+    return null;
+  }
+  const partnerReads = (orderId: string, lineId: string, partnerId: string) =>
+    (comments.get(orderId) ?? []).filter((comment) => comment.line_id === lineId && comment.partner?.id === partnerId);
+
   return {
     list(orderId: string, params: URLSearchParams): Answer<Page<OrderComment>> {
       if (unknownOrder(orderId)) return { ok: false, status: 404, detail: "Order not found" };
@@ -88,16 +112,13 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
     post(orderId: string, body: StaffCommentBody, author: { id: string; name: string }, key: string | null): Answer<OrderComment> {
       const found = orders.get(orderId);
       if (!found.ok) return found;
+      const extra = Object.keys(body).find((name) => !BODY_KEYS.includes(name));
+      if (extra) return invalid(extra, `Unrecognized key: "${extra}"`);
       const text = body.body.trim();
       if (text.length < 1 || text.length > COMMENT_MAX_LENGTH) return invalid("body", `must be 1 to ${COMMENT_MAX_LENGTH} characters`);
-      const visibility = body.visibility ?? "staff";
-      if (visibility === "partner" && !body.line_id) return invalid("visibility", "A comment for the partner needs a line");
       const line = found.body.lines.flatMap((orderLine) => [orderLine, ...orderLine.parts]).find((candidate) => candidate.id === body.line_id);
       if (body.line_id && !line) return invalid("line_id", "not a line of this order");
-      const partner = visibility === "partner" && line ? holder(line) : null;
-      if (visibility === "partner" && !partner) {
-        return { ok: false, status: 409, code: "line_not_accepted", detail: "No partner has accepted this line yet" };
-      }
+      const partner = line ? holder(line) : null;
 
       const input = JSON.stringify({ orderId, body });
       const seen = key ? keys.get(key) : undefined;
@@ -107,7 +128,6 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
         id: crypto.randomUUID(),
         line_id: body.line_id ?? null,
         author: { kind: "staff", id: author.id, name: author.name },
-        visibility,
         partner,
         body: text,
         attachments: [],
@@ -120,6 +140,54 @@ export function createCommentsStore(now: () => number, orders: OrdersStore) {
 
     attachmentUrl(orderId: string, commentId: string, fileVersionId: string): Answer<{ url: string; expires_at: string }> {
       const known = comments.get(orderId)?.find((comment) => comment.id === commentId)?.attachments.some((file) => file.file_version_id === fileVersionId);
+      if (!known) return { ok: false, status: 404, detail: "Attachment not found" };
+      return { ok: true, body: { url: `https://storage.example.test/${fileVersionId}`, expires_at: new Date(now() + 5 * 60_000).toISOString() } };
+    },
+
+    /** `GET .../jobs/{groupId}/comments`, for a job the partner holds: oldest first, only what names it. */
+    partnerList(groupId: string, partnerId: string, params: URLSearchParams): Answer<Page<PartnerJobComment>> {
+      const scope = jobLine(groupId);
+      if (!scope) return { ok: false, status: 404, detail: "Job not found" };
+      return paged(partnerReads(scope.orderId, scope.lineId, partnerId).map(partnerView), params);
+    },
+
+    /** `POST .../jobs/{groupId}/comments`: text only, strict, on the job's line, read by staff. */
+    partnerPost(
+      groupId: string,
+      partner: { id: string; name: string },
+      author: { id: string; name: string },
+      body: Record<string, unknown>,
+      key: string | null,
+    ): Answer<PartnerJobComment> {
+      const scope = jobLine(groupId);
+      if (!scope) return { ok: false, status: 404, detail: "Job not found" };
+      const extra = Object.keys(body).find((name) => name !== "body");
+      if (extra) return invalid(extra, `Unrecognized key: "${extra}"`);
+      const text = typeof body.body === "string" ? body.body.trim() : "";
+      if (text.length < 1 || text.length > COMMENT_MAX_LENGTH) return invalid("body", `must be 1 to ${COMMENT_MAX_LENGTH} characters`);
+
+      const input = JSON.stringify({ groupId, partner: partner.id, body });
+      const seen = key ? keys.get(key) : undefined;
+      if (seen) return seen.input === input ? { ok: true, body: partnerView(seen.body) } : { ok: false, status: 409, code: "idempotency_key_reused", detail: "Idempotency key reused with a different request" };
+
+      const comment: OrderComment = {
+        id: crypto.randomUUID(),
+        line_id: scope.lineId,
+        author: { kind: "partner", id: author.id, name: author.name },
+        partner,
+        body: text,
+        attachments: [],
+        created_at: stamp(),
+      };
+      comments.set(scope.orderId, [...(comments.get(scope.orderId) ?? []), comment]);
+      if (key) keys.set(key, { input, body: comment });
+      return { ok: true, body: partnerView(comment) };
+    },
+
+    /** An attachment of a comment the partner reads; any other is not found. */
+    partnerAttachmentUrl(groupId: string, partnerId: string, commentId: string, fileVersionId: string): Answer<{ url: string; expires_at: string }> {
+      const scope = jobLine(groupId);
+      const known = scope && partnerReads(scope.orderId, scope.lineId, partnerId).find((comment) => comment.id === commentId)?.attachments.some((file) => file.file_version_id === fileVersionId);
       if (!known) return { ok: false, status: 404, detail: "Attachment not found" };
       return { ok: true, body: { url: `https://storage.example.test/${fileVersionId}`, expires_at: new Date(now() + 5 * 60_000).toISOString() } };
     },

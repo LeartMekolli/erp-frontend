@@ -13,9 +13,9 @@ import { fakeState } from "../../../test/fake-erp-api/state";
 import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
-import { HistoryTab } from "./history-tab";
 import { LineTabs } from "./line-tabs";
-import { StepSelectionProvider } from "./use-step-selection";
+import { StaffSelectionProvider as StepSelectionProvider } from "./staff-pieces";
+import { StaffHistoryTab as HistoryTab } from "./staff-tabs";
 
 const GROUP = groupIdOf(1048, 0);
 const MOVES = `${FAKE_API_URL}/workflow/groups/:id/moves`;

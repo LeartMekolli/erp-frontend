@@ -5,73 +5,90 @@ import { useState } from "react";
 
 import { cn } from "cn";
 
+import { LoadFailure } from "@/components/data/load-failure";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { Group, OrderState } from "@/lib/api/schema-types";
-import { useCan } from "@/lib/auth/permissions";
+import type { MoveBody } from "@/lib/api/schema-types";
 import type { MoveKind } from "@/lib/production/move-body";
-import { useStepPieces, useWorkflowVersion, type PieceListStatus } from "@/lib/production/queries";
-import { nextStepName } from "@/lib/production/selection";
+import type { NextStep, Piece, StepRules } from "@/lib/production/shape";
+import type { UploadTarget } from "@/lib/upload/upload";
 
-import { LoadFailure } from "./load-failure";
 import { MoveBar } from "./move-bar";
 import { MoveDialog } from "./move-dialog";
 import { PieceRow } from "./piece-row";
 import { useStepSelection } from "./use-step-selection";
 
-interface Section {
+/**
+ * One group of pieces: those at a step, or those off the path (finished, scrapped), or for a
+ * partner those not with it yet or whose part is done.
+ */
+export interface PieceSection {
   id: string;
   name: string;
   count: number;
   inRework: number;
+  /** The step whose pieces can be picked here; null where nothing can be moved. */
   stepKey: string | null;
-  status: PieceListStatus;
+  status: "active" | "finished" | "scrapped" | "not_yet" | "done";
 }
 
-/** Once an order has left the building, or been called off, its pieces stay where they are. */
-const NOT_MOVABLE: OrderState[] = ["shipped", "delivered", "cancelled"];
-
-/** erp-api's refusal for an order whose production hasn't started (`orders/payment-hold.ts:7`). */
-const WAITING_FOR_PAYMENT = "The order is waiting for payment";
-
-/** The steps holding pieces, in path order, then finished and scrapped. */
-function sectionsOf(group: Group): Section[] {
-  const steps = group.steps
-    .filter((step) => step.count > 0)
-    .map((step): Section => ({ id: step.key, name: step.name, count: step.count, inRework: step.in_rework, stepKey: step.key, status: "active" }));
-  const off = (["finished", "scrapped"] as const)
-    .filter((status) => group.pieces[status] > 0)
-    .map((status): Section => ({
-      id: `status:${status}`,
-      name: status === "finished" ? "Finished" : "Scrapped",
-      count: group.pieces[status],
-      inRework: 0,
-      stepKey: null,
-      status,
-    }));
-  return [...steps, ...off];
+/** A section's pieces, as each area loads them. */
+export interface SectionPieces {
+  items: Piece[];
+  isPending: boolean;
+  isError: boolean;
+  error: unknown;
+  refetch: () => unknown;
+  hasNextPage: boolean;
+  fetchNextPage: () => unknown;
+  isFetchingNextPage: boolean;
 }
 
-function PieceSection({
+/** Loads a section's pieces once it's open. A hook: it must stay the same function for the life of the tab. */
+export type UseSectionPieces = (groupId: string, section: PieceSection, open: boolean) => SectionPieces;
+
+interface PiecesTabProps {
+  groupId: string;
+  sections: PieceSection[];
+  useSectionPieces: UseSectionPieces;
+  /** A step's QC rules, or undefined while they load. */
+  rules: (stepKey: string) => StepRules | undefined;
+  rulesError: boolean;
+  /** The steps a correction can put pieces at. */
+  path: { key: string; name: string }[];
+  next: (stepKey: string) => NextStep;
+  /** Whether this person may pick pieces here at all. */
+  selectable: boolean;
+  mayUpload: boolean;
+  uploadTarget: UploadTarget;
+  /** Why nothing can be moved right now, such as an order waiting for payment. */
+  blockedReason: string | null;
+  /** The partner a move at one of its steps counts for. */
+  countsFor: string | null;
+  onMove: (body: MoveBody) => Promise<void>;
+}
+
+function SectionView({
   groupId,
   section,
   open,
   selectable,
+  useSectionPieces,
   onToggle,
 }: {
   groupId: string;
-  section: Section;
+  section: PieceSection;
   open: boolean;
-  /** Whether this order and person may pick pieces at all. */
   selectable: boolean;
+  useSectionPieces: UseSectionPieces;
   onToggle: () => void;
 }) {
-  const pieces = useStepPieces(groupId, section.stepKey, section.status, open);
+  const pieces = useSectionPieces(groupId, section, open);
   const selection = useStepSelection();
   const { stepKey } = section;
   const picking = selectable && stepKey !== null;
   const pickedHere = selection.groupId === groupId && selection.stepKey === stepKey;
-  const workable = pieces.items.filter((piece) => piece.may_work);
+  const workable = pieces.items.filter((piece) => piece.mayWork);
   const pickedCount = pickedHere ? workable.filter((piece) => selection.ids.has(piece.id)).length : 0;
   const allPicked = workable.length > 0 && pickedCount === workable.length;
 
@@ -82,7 +99,7 @@ function PieceSection({
           <Checkbox
             checked={allPicked ? true : pickedCount > 0 ? "indeterminate" : false}
             disabled={workable.length === 0}
-            onCheckedChange={() => (allPicked ? selection.clear() : selection.selectAll(stepKey, pieces.items))}
+            onCheckedChange={() => (allPicked ? selection.clear() : selection.selectAll(groupId, stepKey, pieces.items))}
             aria-label={`Select all at ${section.name}`}
             className="ml-1 after:-inset-3.5"
           />
@@ -117,7 +134,7 @@ function PieceSection({
                   piece={piece}
                   selectable={picking}
                   selected={pickedHere && selection.ids.has(piece.id)}
-                  onToggle={() => selection.toggle(piece)}
+                  onToggle={() => selection.toggle(groupId, piece)}
                 />
               ))}
             </ul>
@@ -135,49 +152,59 @@ function PieceSection({
 
 /** The bar for the picked pieces, and the dialog its buttons open. */
 function MoveFlow({
-  group,
   stepKey,
-  orderState,
-  partnerName,
+  stepName,
+  props,
   onMoved,
 }: {
-  group: Group;
   stepKey: string;
-  orderState: OrderState;
-  partnerName: string | null;
+  stepName: string;
+  props: PiecesTabProps;
   onMoved: (message: string) => void;
 }) {
+  const { useSectionPieces } = props;
   const selection = useStepSelection();
-  const version = useWorkflowVersion(group.workflow.id, group.workflow.version);
-  const loaded = useStepPieces(group.id, stepKey, "active", true);
+  const section: PieceSection = props.sections.find((candidate) => candidate.stepKey === stepKey) ?? {
+    id: stepKey,
+    name: stepName,
+    count: 0,
+    inRework: 0,
+    stepKey,
+    status: "active",
+  };
+  const loaded = useSectionPieces(props.groupId, section, true);
   const [kind, setKind] = useState<MoveKind | null>(null);
-  const step = version.data?.steps.find((candidate) => candidate.key === stepKey);
+  const rules = props.rules(stepKey);
+  const next = props.next(stepKey);
   const pieces = loaded.items.filter((piece) => selection.ids.has(piece.id));
 
-  let disabledReason: string | null = null;
-  if (orderState === "awaiting_payment") disabledReason = WAITING_FOR_PAYMENT;
-  else if (version.isError) disabledReason = "This step's checks couldn't be loaded.";
-  else if (!step) disabledReason = "Loading this step's checks…";
+  let disabledReason = props.blockedReason;
+  if (disabledReason === null && props.rulesError) disabledReason = "This step's checks couldn't be loaded.";
+  else if (disabledReason === null && !rules) disabledReason = "Loading this step's checks…";
 
   return (
     <>
       <MoveBar
         count={selection.ids.size}
-        stepName={group.steps.find((candidate) => candidate.key === stepKey)?.name ?? stepKey}
-        nextName={nextStepName(group.steps, stepKey)}
+        stepName={stepName}
+        next={next}
         disabledReason={disabledReason}
         onPass={() => setKind("pass")}
         onFail={() => setKind("fail")}
         onCorrect={() => setKind("correction")}
       />
-      {step && kind && (
+      {rules && kind && (
         <MoveDialog
           open
           kind={kind}
-          step={step}
-          path={group.steps}
+          rules={rules}
+          path={props.path}
+          next={next}
           pieces={pieces}
-          partnerName={step.done_by === "partner" ? partnerName : null}
+          mayUpload={props.mayUpload}
+          uploadTarget={props.uploadTarget}
+          countsFor={rules.partnerStep ? props.countsFor : null}
+          onMove={props.onMove}
           onOpenChange={(open) => {
             if (!open) setKind(null);
           }}
@@ -188,21 +215,19 @@ function MoveFlow({
   );
 }
 
-/** A line's pieces grouped by where they are; each group loads when it's opened. */
-export function PiecesTab({ group, orderState, partnerName }: { group: Group; orderState: OrderState; partnerName: string | null }) {
+/** Pieces grouped by where they are; each group loads when it's opened. */
+export function PiecesTab(props: PiecesTabProps) {
+  const { groupId, sections, selectable, useSectionPieces } = props;
   // Only what someone has opened or closed; the first group with pieces starts open.
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
   // What the last move did, announced politely.
   const [notice, setNotice] = useState<string | null>(null);
-  const mayMove = useCan("workflow.move");
   const selection = useStepSelection();
-  const sections = sectionsOf(group);
   const firstId = sections[0]?.id;
-  const selectable = mayMove && !NOT_MOVABLE.includes(orderState);
 
   if (sections.length === 0) return <p className="py-2 text-sm text-ink-2">No pieces yet.</p>;
 
-  const mine = selection.groupId === group.id;
+  const mine = selection.groupId === groupId;
   const dropped = mine ? selection.dropped : 0;
   const picked = mine && selection.stepKey !== null && selection.ids.size > 0 ? selection.stepKey : null;
 
@@ -211,12 +236,13 @@ export function PiecesTab({ group, orderState, partnerName }: { group: Group; or
       {sections.map((section) => {
         const open = toggled[section.id] ?? section.id === firstId;
         return (
-          <PieceSection
+          <SectionView
             key={section.id}
-            groupId={group.id}
+            groupId={groupId}
             section={section}
             open={open}
             selectable={selectable}
+            useSectionPieces={useSectionPieces}
             onToggle={() => setToggled((current) => ({ ...current, [section.id]: !open }))}
           />
         );
@@ -226,10 +252,9 @@ export function PiecesTab({ group, orderState, partnerName }: { group: Group; or
       </p>
       {selectable && picked !== null && (
         <MoveFlow
-          group={group}
           stepKey={picked}
-          orderState={orderState}
-          partnerName={partnerName}
+          stepName={props.path.find((step) => step.key === picked)?.name ?? picked}
+          props={props}
           onMoved={(message) => {
             selection.clear();
             setNotice(message);

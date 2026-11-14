@@ -1,6 +1,4 @@
-import type { Group, WorkflowStep } from "@/lib/api/schema-types";
-
-type Step = Group["steps"][number];
+import type { StepProgress, StepRules } from "./shape";
 
 /**
  * What a step's card leads with: failures first, then pieces waiting, then whether any came at all. A step
@@ -24,14 +22,14 @@ export interface QualityCard {
   /** The part of `passed` left out of the step's sample. */
   notInspected: number;
   /** Most frequent first, as erp-api sends them. */
-  defects: Step["defects"];
-  latestCheck: Step["latest_check"];
-  sampling: WorkflowStep["sampling"];
+  defects: StepProgress["defectCounts"];
+  latestCheck: StepProgress["latestCheck"];
+  sampling: StepRules["sampling"];
   state: QualityState;
 }
 
 /** `before` is how many active pieces are at the steps ahead of this one in the path. */
-function stateOf(step: Step, before: number): QualityState {
+function stateOf(step: StepProgress, before: number): QualityState {
   if (step.failed > 0) return { kind: "failed", count: step.failed };
   if (step.count > 0) return { kind: "waiting", count: step.count };
   if (step.passed === 0) return { kind: "not_reached" };
@@ -39,23 +37,23 @@ function stateOf(step: Step, before: number): QualityState {
 }
 
 /** One card per step of the path with a checklist or defects, and the names of the steps with neither. */
-export function qualityCards(steps: Group["steps"], config: WorkflowStep[]): { cards: QualityCard[]; noChecks: string[] } {
+export function qualityCards(steps: StepProgress[], rules: StepRules[]): { cards: QualityCard[]; noChecks: string[] } {
   const cards: QualityCard[] = [];
   const noChecks: string[] = [];
   let before = 0;
   for (const step of steps) {
-    const setup = config.find((candidate) => candidate.key === step.key);
+    const setup = rules.find((candidate) => candidate.key === step.key);
     if (setup && (setup.checklist.length > 0 || setup.defects.length > 0)) {
       cards.push({
         key: step.key,
         name: step.name,
         waiting: step.count,
-        inRework: step.in_rework,
+        inRework: step.inRework,
         passed: step.passed,
         failed: step.failed,
-        notInspected: step.not_inspected,
-        defects: step.defects,
-        latestCheck: step.latest_check,
+        notInspected: step.notInspected,
+        defects: step.defectCounts,
+        latestCheck: step.latestCheck,
         sampling: setup.sampling,
         state: stateOf(step, before),
       });
@@ -68,6 +66,6 @@ export function qualityCards(steps: Group["steps"], config: WorkflowStep[]): { c
 }
 
 /** How many checks failed across a line's steps, for its Quality tab. */
-export function failedOnLine(steps: Group["steps"]): number {
+export function failedOnLine(steps: { failed: number }[]): number {
   return steps.reduce((sum, step) => sum + step.failed, 0);
 }

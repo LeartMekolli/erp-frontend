@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import type { ActionPiece, LineAction, WorkflowStep } from "@/lib/api/schema-types";
+import type { ActionPiece, LineAction } from "@/lib/api/schema-types";
 
 import { createProductionStore } from "../../../test/fake-erp-api/production";
 
 import { actionTitle, actorText, groupByDay, isCancel, isMixed, isNotable, nextText, overrideText, pieceName, pieceResult } from "./history";
+import type { Actor, MoveEntry, StepRules } from "./shape";
+import { staffEntry, staffRules } from "./staff";
 
 const NOW = Date.parse("2026-11-12T15:00:00Z");
 const WORKFLOW_ID = "b2b2b2b2-0000-4000-8000-000000000001";
@@ -21,8 +23,9 @@ function piece(fields: Partial<ActionPiece> = {}): ActionPiece {
   return { id: "c0c0c0c0-0000-4000-8000-000000000001", label: "4/10", replacement: false, from_step: FINISH, to_step: FINAL_QC, status: "active", ...fields };
 }
 
-function action(fields: Partial<LineAction> = {}): LineAction {
-  return {
+/** A staff action as erp-api sends it, through staff's translation. */
+function action(fields: Partial<LineAction> = {}): MoveEntry {
+  return staffEntry({
     id: "d0d0d0d0-0000-4000-8000-000000000001",
     kind: "pass",
     outcome: null,
@@ -39,14 +42,14 @@ function action(fields: Partial<LineAction> = {}): LineAction {
     created_at: "2026-11-12T14:00:00Z",
     pieces: [piece()],
     ...fields,
-  };
+  });
 }
 
 /** The fake workflow's steps: Finish records Scratch, which is redone at Finish by default. */
-function steps(): WorkflowStep[] {
+function steps(): StepRules[] {
   const answer = createProductionStore(() => NOW).version(WORKFLOW_ID, 1);
   if (!answer.ok) throw new Error("expected the fake's workflow");
-  return answer.body.steps;
+  return answer.body.steps.map((step) => staffRules(step, answer.body.steps));
 }
 
 describe("history", () => {
@@ -122,6 +125,15 @@ describe("history", () => {
     expect(actorText(action({ actor: { id: "55555555-0000-4000-8000-000000000002", name: "Lena Park" }, partner: { id: "2f1c5d7e-0a9b-4e3c-8d2f-6a5b4c3d2e10", name: "Northcast Foundry" } }))).toBe(
       "Lena Park, for Northcast Foundry",
     );
+  });
+
+  it("words every kind of actor", () => {
+    const by = (actor: Actor) => actorText({ actor });
+    expect(by({ kind: "staff", name: "Lena Park", forPartner: "Northcast Foundry" })).toBe("Lena Park, for Northcast Foundry");
+    expect(by({ kind: "staff", name: "Ana Ruiz", forPartner: null })).toBe("Ana Ruiz");
+    expect(by({ kind: "own", name: "Nora", forPartner: null })).toBe("Nora");
+    expect(by({ kind: "workspace", name: null, forPartner: null })).toBe("Workspace");
+    expect(by({ kind: "other_partner", name: null, forPartner: null })).toBe("Another workshop");
   });
 
   it("groups by day, newest first", () => {

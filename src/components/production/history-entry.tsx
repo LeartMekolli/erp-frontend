@@ -6,12 +6,14 @@ import { useId, useState, type ReactNode } from "react";
 
 import { cn } from "cn";
 
-import type { LineAction, WorkflowStep } from "@/lib/api/schema-types";
-import { useCan } from "@/lib/auth/permissions";
 import { useFormat } from "@/lib/format/use-format";
 import { actionTitle, actorText, isMixed, isNotable, nextText, overrideText, pieceName, pieceResult } from "@/lib/production/history";
+import type { MoveEntry, StepRules } from "@/lib/production/shape";
 
 import { answerText, MovePhoto, moveIcon } from "./move-look";
+import { usePhotoLinks } from "./photo-links";
+
+type LineAction = MoveEntry;
 
 /** Facts on the entry's line, one after another with a dot between. */
 function Facts({ children }: { children: ReactNode[] }) {
@@ -24,9 +26,9 @@ function Facts({ children }: { children: ReactNode[] }) {
   ));
 }
 
-/** The first photo, with how many more there are; their number alone without `file.read`. */
+/** The first photo, with how many more there are; their number alone for someone who may not see photos. */
 function Photos({ action }: { action: LineAction }) {
-  const mayView = useCan("file.read");
+  const { mayView } = usePhotoLinks();
   const count = action.photos.length;
   const first = action.photos[0];
   if (!first) return null;
@@ -42,7 +44,7 @@ function Photos({ action }: { action: LineAction }) {
 }
 
 /** What came with a fail or a correction: photo, comment, answers, why it was overridden and who made it. */
-function Details({ action, steps }: { action: LineAction; steps: WorkflowStep[] }) {
+function Details({ action, steps }: { action: LineAction; steps: StepRules[] }) {
   const override = overrideText(action, steps);
   return (
     <div role="group" aria-label="What came with it" className="mt-2 flex min-w-0 gap-3.5 rounded-[14px] border border-line px-3.5 py-3">
@@ -69,8 +71,8 @@ function Details({ action, steps }: { action: LineAction; steps: WorkflowStep[] 
   );
 }
 
-/** One action on a line: a quiet line for a routine move, a boxed one for a fail or a correction. */
-export function HistoryEntry({ action, steps }: { action: LineAction; steps: WorkflowStep[] }) {
+/** One action: a quiet line for a routine move, a boxed one for a fail or a correction. */
+export function HistoryEntry({ action, steps }: { action: LineAction; steps: StepRules[] }) {
   const { time } = useFormat();
   const [open, setOpen] = useState(false);
   const listId = useId();

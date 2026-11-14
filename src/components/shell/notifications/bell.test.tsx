@@ -16,7 +16,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace: push }), 
 beforeEach(() => push.mockReset());
 
 /** Orders open their page; everything else has nowhere to go. */
-const hrefFor = (subject: { type: string; id: string }) => (subject.type === "order" ? `/orders/${subject.id}` : null);
+const hrefFor = ({ subject }: { subject: { type: string; id: string } }) => (subject.type === "order" ? `/orders/${subject.id}` : null);
 
 async function openPanel() {
   await userEvent.click(await screen.findByRole("button", { name: /^Notifications/ }));

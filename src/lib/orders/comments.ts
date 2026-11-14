@@ -31,7 +31,7 @@ export function useOrderComments(orderId: string) {
   });
 }
 
-/** Adds a comment to the order or one of its lines. */
+/** Adds a comment to the order or one of its lines. The line decides who reads it; there's no reader to pick. */
 export function usePostComment(orderId: string) {
   const client = useQueryClient();
   return useApiMutation<StaffCommentBody, OrderComment>(

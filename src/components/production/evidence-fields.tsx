@@ -8,8 +8,6 @@ import { Input } from "@/components/ui/input";
 import { PHOTO_CONTENT_TYPES, type UploadTarget } from "@/lib/upload/upload";
 import { useUpload } from "@/lib/upload/use-upload";
 
-const TARGET: UploadTarget = { area: "staff", kind: "image" };
-
 /** erp-api's limit (`moves.service.ts:25`). */
 const MAX_PHOTOS = 20;
 
@@ -21,9 +19,10 @@ interface Photo {
 /**
  * The photos of one move, uploaded one at a time. A move can attach a photo as
  * soon as its bytes are in, without waiting for measuring (`moves.service.ts:28`).
+ * Staff upload workspace images; a partner uploads its own files.
  */
-export function usePhotos() {
-  const current = useUpload(TARGET);
+export function usePhotos(target: UploadTarget) {
+  const current = useUpload(target);
   const [earlier, setEarlier] = useState<Photo[]>([]);
   const [name, setName] = useState("");
   const attachable = (current.phase === "measuring" || current.phase === "done") && current.versionId !== undefined;

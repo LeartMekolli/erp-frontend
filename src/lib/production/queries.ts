@@ -15,7 +15,6 @@ import type {
   WorkOrderListItem,
   WorkflowVersion,
 } from "@/lib/api/schema-types";
-import { downloadUrl } from "@/lib/files/download";
 import { invalidateOrders } from "@/lib/orders/queries";
 import { useApiMutation } from "@/lib/query/use-api-mutation";
 import { useCursorList } from "@/lib/query/use-cursor-list";
@@ -28,7 +27,6 @@ export type MovesFilter = "all" | "fails";
 
 const PIECES_PAGE = 200;
 const MOVES_PAGE = 25;
-const PHOTO_LINK_RENEW_MS = 4 * 60_000;
 
 export const productionKeys = {
   all: ["production"] as const,
@@ -37,7 +35,6 @@ export const productionKeys = {
   moves: (groupId: string, filter: MovesFilter) => ["production", "moves", groupId, filter] as const,
   version: (workflowId: string, version: number) => ["production", "version", workflowId, version] as const,
   piece: (id: string) => ["production", "piece", id] as const,
-  photo: (versionId: string) => ["production", "photo", versionId] as const,
 };
 
 /** A line's path, with how many pieces are at each step. */
@@ -115,16 +112,6 @@ export function usePiece(id: string) {
       if (!data) throw problemFrom(error, response);
       return data;
     },
-  });
-}
-
-/** A link to a QC photo, renewed while it's on screen before erp-api's five minutes run out (`files.service.ts:29`). */
-export function usePhotoUrl(fileId: string, versionId: string) {
-  return useQuery({
-    queryKey: productionKeys.photo(versionId),
-    queryFn: () => downloadUrl(fileId, versionId),
-    staleTime: PHOTO_LINK_RENEW_MS,
-    refetchInterval: PHOTO_LINK_RENEW_MS,
   });
 }
 

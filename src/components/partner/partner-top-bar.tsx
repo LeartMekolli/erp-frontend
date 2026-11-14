@@ -22,7 +22,7 @@ export function PartnerTopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
         <span className="sr-only">Open menu</span>
       </button>
       <div className="flex-1" />
-      <Bell hrefFor={(subject) => partnerSubjectHref(subject, partnerId)} />
+      <Bell hrefFor={(entry) => partnerSubjectHref(entry, partnerId)} />
       <UserMenu />
     </header>
   );

@@ -1,9 +1,11 @@
 import { z } from "zod";
 
-import type { MoveBody, WorkflowStep } from "@/lib/api/schema-types";
+import type { MoveBody } from "@/lib/api/schema-types";
+
+import type { StepRules } from "./shape";
 
 export type MoveKind = MoveBody["kind"];
-type Defect = WorkflowStep["defects"][number];
+type Defect = StepRules["defects"][number];
 type Outcome = Defect["outcome"];
 
 /** What the move dialog collects; only what the kind of move uses is sent. */
@@ -22,7 +24,7 @@ export interface MoveValues {
   inspected: boolean;
 }
 
-export function emptyMoveValues(step: WorkflowStep): MoveValues {
+export function emptyMoveValues(step: StepRules): MoveValues {
   return {
     answers: Object.fromEntries(step.checklist.map((item) => [item.key, ""])),
     comment: "",
@@ -44,13 +46,13 @@ function defectOverride(values: MoveValues, defect: Defect): { outcome?: Outcome
   if (!values.changing) return null;
   const outcome = values.outcome || defect.outcome;
   const outcomeChanged = outcome !== defect.outcome;
-  const targetChanged = outcome === "rework" && values.reworkTo !== defect.rework_to;
+  const targetChanged = outcome === "rework" && values.reworkTo !== defect.reworkTo;
   if (!outcomeChanged && !targetChanged) return null;
   return { ...(outcomeChanged ? { outcome } : {}), ...(outcome === "rework" ? { rework_to: values.reworkTo } : {}) };
 }
 
-/** The `POST /workflow/moves` body for what the dialog holds. */
-export function moveBody(kind: MoveKind, step: WorkflowStep, ids: string[], values: MoveValues): MoveBody {
+/** The move body for what the dialog holds; staff and partners send the same one. */
+export function moveBody(kind: MoveKind, step: StepRules, ids: string[], values: MoveValues): MoveBody {
   const comment = values.comment.trim();
   const withComment = comment ? { comment } : {};
   const withPhotos = values.photoVersionIds.length > 0 ? { photo_file_version_ids: values.photoVersionIds } : {};
@@ -66,7 +68,7 @@ export function moveBody(kind: MoveKind, step: WorkflowStep, ids: string[], valu
     return { kind, work_order_ids: ids, at_step: step.key, ...(answers.length > 0 ? { answers } : {}), ...withComment, ...withPhotos };
   }
 
-  const defect = step.defects.find((d) => d.defect_id === values.defectId);
+  const defect = step.defects.find((d) => d.id === values.defectId);
   const override = defect ? defectOverride(values, defect) : null;
   return {
     kind,
@@ -80,7 +82,7 @@ export function moveBody(kind: MoveKind, step: WorkflowStep, ids: string[], valu
 }
 
 /** What the step asks for before anything is sent; `photoCount` is what has uploaded so far. */
-export function moveSchema(kind: MoveKind, step: WorkflowStep, photoCount: number) {
+export function moveSchema(kind: MoveKind, step: StepRules, photoCount: number) {
   return z.custom<MoveValues>().superRefine((values, context) => {
     const refuse = (path: string[], message: string) => context.addIssue({ code: "custom", path, message });
 
@@ -95,7 +97,7 @@ export function moveSchema(kind: MoveKind, step: WorkflowStep, photoCount: numbe
         if (item.required && blank(values.answers[item.key])) refuse(["answers", item.key], "Answer this.");
       }
     } else {
-      const defect = step.defects.find((d) => d.defect_id === values.defectId);
+      const defect = step.defects.find((d) => d.id === values.defectId);
       if (!defect) refuse(["defectId"], "Choose a defect.");
       else if (values.changing) {
         if (values.outcome === "rework" && blank(values.reworkTo)) refuse(["reworkTo"], "Choose where they go back to.");
@@ -104,8 +106,8 @@ export function moveSchema(kind: MoveKind, step: WorkflowStep, photoCount: numbe
     }
 
     const evidence = kind === "pass" ? step.pass : step.fail;
-    if (photoCount < evidence.min_photos) refuse(["photoVersionIds"], `Add at least ${evidence.min_photos} ${evidence.min_photos === 1 ? "photo" : "photos"}.`);
-    if (evidence.comment_required && blank(values.comment)) refuse(["comment"], "Add a comment.");
+    if (photoCount < evidence.minPhotos) refuse(["photoVersionIds"], `Add at least ${evidence.minPhotos} ${evidence.minPhotos === 1 ? "photo" : "photos"}.`);
+    if (evidence.commentRequired && blank(values.comment)) refuse(["comment"], "Add a comment.");
   });
 }
 
@@ -118,7 +120,7 @@ const SERVER_FIELDS: Record<string, string> = {
 };
 
 /** The form field for a path in erp-api's errors; the QC gate names a checklist answer by its key (`qc-gate.ts:94`). */
-export function fieldPath(path: string, step: WorkflowStep): string {
+export function fieldPath(path: string, step: StepRules): string {
   if (step.checklist.some((item) => item.key === path)) return `answers.${path}`;
   return SERVER_FIELDS[path] ?? path;
 }

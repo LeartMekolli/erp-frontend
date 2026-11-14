@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useMe } from "@/components/session/session-gate";
 
-import { FACADE_OFFER_ID, RING_OFFER_ID } from "../../../test/fake-erp-api/partner-jobs";
+import type { PartnerJobDetail } from "@/lib/api/schema-types";
+
+import { FACADE_OFFER_ID, LONG_NAME_JOB_ID, RING_BAND_JOB_ID, RING_OFFER_ID } from "../../../test/fake-erp-api/partner-jobs";
 import { FAKE_API_URL, NORTHCAST_ID, PARTNER } from "../../../test/fake-erp-api/seed";
 import { fakeState, resetFakeState } from "../../../test/fake-erp-api/state";
 import { server } from "../../../test/msw";
@@ -15,11 +17,12 @@ import { renderAs } from "../../../test/render";
 import { JobPage } from "./job-page";
 import { PartnerNoticeLine, PartnerNoticeProvider } from "./notice";
 
-const navigation = vi.hoisted(() => ({ push: vi.fn(), partnerId: "", groupId: "" }));
+const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), partnerId: "", groupId: "", search: "" }));
 vi.mock("next/navigation", () => ({
   usePathname: () => `/partner-portal/${navigation.partnerId}/jobs/${navigation.groupId}`,
   useParams: () => ({ partnerId: navigation.partnerId, groupId: navigation.groupId }),
-  useRouter: () => ({ push: navigation.push, replace: vi.fn(), prefetch: vi.fn() }),
+  useRouter: () => ({ push: navigation.push, replace: navigation.replace, prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(navigation.search),
 }));
 
 const NOW = Date.parse("2026-11-12T10:00:00Z");
@@ -34,11 +37,17 @@ function freezeAt(now: number, toFake: ("Date" | "setInterval" | "clearInterval"
 
 beforeEach(() => {
   navigation.push.mockReset();
+  navigation.replace.mockReset();
   navigation.partnerId = NORTHCAST_ID;
   navigation.groupId = RING_OFFER_ID;
+  navigation.search = "";
   freezeAt(NOW);
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  server.events.removeAllListeners();
+});
 
 function WithMe({ children }: { children: ReactNode }) {
   return useMe().data ? children : null;
@@ -57,7 +66,34 @@ function renderPage() {
 }
 
 const JOBS_PATH = `/partner-portal/${NORTHCAST_ID}/jobs`;
-const COMING_SOON = "Pieces, quality, history and comments for this job are coming soon.";
+const DETAIL = `${FAKE_API_URL}/partner-portal/partners/:partnerId/jobs/:groupId`;
+
+/** The GET requests the page makes, by path. */
+function watchRequests(): string[] {
+  const asked: string[] = [];
+  server.events.on("request:start", ({ request }) => {
+    if (request.method === "GET") asked.push(new URL(request.url).pathname);
+  });
+  return asked;
+}
+
+/** A new tab that the link opens into, as `openLink` asks the browser for one. */
+function stubNewTab() {
+  const tab = { opener: {}, location: { href: "" }, close: vi.fn() };
+  vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
+  return tab;
+}
+
+/** Ring band as the fake has it, with this AI brief. */
+function serveBrief(summary: PartnerJobDetail["summary"]) {
+  server.use(
+    http.get(DETAIL, () => {
+      const answer = fakeState().partnerJobs.detail(NORTHCAST_ID, RING_BAND_JOB_ID);
+      if (!answer.ok) throw new Error("expected Ring band");
+      return HttpResponse.json({ ...answer.body, summary });
+    }),
+  );
+}
 
 describe("JobPage", () => {
   it("shows an offer with its answers", async () => {
@@ -68,7 +104,9 @@ describe("JobPage", () => {
     expect(screen.getByText("5 h 12 min left to answer")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Accept" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Decline" })).toBeEnabled();
-    expect(screen.queryByText(COMING_SOON)).not.toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Your steps" })).getByText("Casting")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Design file" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
   });
 
   it("fills in once accepted", async () => {
@@ -76,7 +114,7 @@ describe("JobPage", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Accept" }));
 
     expect(await screen.findByText("0 of 10 done")).toBeInTheDocument();
-    expect(screen.getByText(COMING_SOON)).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Pieces" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
     expect(screen.queryByText(/left to answer/)).not.toBeInTheDocument();
     expect(screen.getByText("Ring · Silver 925 is yours.")).toBeInTheDocument();
@@ -143,5 +181,110 @@ describe("JobPage", () => {
     expect(await screen.findByText("This job couldn't be loaded.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1, name: "Job" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+});
+
+describe("JobPage: a job the partner holds", () => {
+  beforeEach(() => {
+    navigation.groupId = RING_BAND_JOB_ID;
+  });
+
+  it("shows an accepted job's steps and tabs", async () => {
+    renderPage();
+    expect(await screen.findByRole("heading", { level: 1, name: "Ring band · Brass" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Design file" })).toBeInTheDocument();
+    const strip = screen.getByRole("list", { name: "Progress through the steps" });
+    for (const name of ["Finish", "Not with you yet", "Your part done", "Finished", "Scrapped"]) expect(within(strip).getByText(name)).toBeInTheDocument();
+    expect(within(strip).queryByText("Print")).not.toBeInTheDocument();
+    // The scratched piece failed at Finish after the hand-over, so Quality counts it as staff's does.
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Pieces", "Quality 1 failed", "History", "Comments"]);
+    expect(screen.queryByText(/coming soon/)).not.toBeInTheDocument();
+  });
+
+  it("opens the design file", async () => {
+    const tab = stubNewTab();
+    const asked = watchRequests();
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Design file" }));
+    await waitFor(() => expect(tab.location.href).toMatch(/^https:\/\/storage\.example\.test\//));
+    expect(asked).toContain(`/partner-portal/partners/${NORTHCAST_ID}/jobs/${RING_BAND_JOB_ID}/design`);
+  });
+
+  it("downloads a step's instructions", async () => {
+    const tab = stubNewTab();
+    const asked = watchRequests();
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Instructions for Finish" }));
+    await waitFor(() => expect(tab.location.href).not.toBe(""));
+    expect(asked).toContain(`/partner-portal/partners/${NORTHCAST_ID}/jobs/${RING_BAND_JOB_ID}/steps/finish/sop`);
+  });
+
+  it("offers no instructions for a step without them", async () => {
+    navigation.groupId = LONG_NAME_JOB_ID;
+    renderPage();
+    expect(await screen.findByRole("list", { name: "Your steps" })).toHaveTextContent("Casting");
+    expect(screen.queryByRole("button", { name: /^Instructions for/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Design file" })).not.toBeInTheDocument();
+  });
+
+  it("reads the brief", async () => {
+    serveBrief({
+      status: "done",
+      description: "A brass ring band, 4 mm wide.",
+      watch_outs: ["Thin walls near the seam"],
+      recommendations: ["Polish before plating"],
+      production_days: 3,
+      used_history: true,
+      created_at: new Date(NOW).toISOString(),
+    });
+    renderPage();
+    const toggle = await screen.findByRole("button", { name: "AI brief" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(toggle);
+    expect(screen.getByRole("heading", { name: "What to make" })).toBeInTheDocument();
+    expect(screen.getByText("A brass ring band, 4 mm wide.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Watch out for" })).toBeInTheDocument();
+    expect(screen.getByText("Thin walls near the seam")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Recommendations" })).toBeInTheDocument();
+    expect(screen.getByText("About 3 working days")).toBeInTheDocument();
+  });
+
+  it("says the brief is being written", async () => {
+    serveBrief({ status: "pending", description: null, watch_outs: null, recommendations: null, production_days: null, used_history: null, created_at: new Date(NOW).toISOString() });
+    renderPage();
+    expect(await screen.findByText("Writing the brief…")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "AI brief" })).not.toBeInTheDocument();
+  });
+
+  it("shows no brief when there is none", async () => {
+    renderPage();
+    expect(await screen.findByRole("heading", { level: 1, name: "Ring band · Brass" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "AI brief" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Writing the brief…")).not.toBeInTheDocument();
+  });
+
+  it("names only the partner's own people", async () => {
+    const detail = fakeState().partnerJobs.detail(NORTHCAST_ID, RING_BAND_JOB_ID);
+    if (!detail.ok) throw new Error("expected Ring band");
+    const piece = detail.body.work_orders.filter((one) => one.step_key === "finish")[1]!;
+    fakeState().partnerJobs.move(
+      NORTHCAST_ID,
+      { kind: "pass", work_order_ids: [piece.id], at_step: "finish", answers: [{ item: "surface_smooth", value: true }], photo_file_version_ids: ["f1f1f1f1-0000-4000-8000-000000000001"] },
+      null,
+      { id: PARTNER.id, name: PARTNER.name },
+    );
+    navigation.search = "tab=history";
+    renderPage();
+
+    expect(await screen.findByText("Nora")).toBeInTheDocument();
+    expect(screen.getAllByText("Workspace").length).toBeGreaterThan(0);
+    expect(screen.getByText("Came to you")).toBeInTheDocument();
+    expect(screen.queryByText("Ana Ruiz")).not.toBeInTheDocument();
+  });
+
+  it("keeps the tab in the address", async () => {
+    renderPage();
+    await userEvent.click(await screen.findByRole("tab", { name: "History" }));
+    expect(navigation.replace).toHaveBeenCalledWith(`${JOBS_PATH}/${RING_BAND_JOB_ID}?tab=history`, { scroll: false });
   });
 });

@@ -14,7 +14,7 @@ import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
 import { OrderDetailPage } from "./order-detail-page";
-import { PiecePanel } from "./piece-panel";
+import { StaffPiecePanel as PiecePanel } from "./staff-tabs";
 
 const navigation = vi.hoisted(() => ({ id: "", search: "", replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
