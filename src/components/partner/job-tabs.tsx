@@ -11,6 +11,7 @@ import { PhotoLinksProvider } from "@/components/production/photo-links";
 import { PiecesTab } from "@/components/production/pieces-tab";
 import { QualityTab } from "@/components/production/quality-tab";
 import { StepStrip } from "@/components/production/step-strip";
+import { TAB, TAB_ROW } from "@/components/production/tab-classes";
 import { useMe } from "@/components/session/session-gate";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { PartnerJobComment, PartnerJobDetail } from "@/lib/api/schema-types";
@@ -152,15 +153,10 @@ export function JobTabs({ job, partnerId }: { job: PartnerJobDetail; partnerId: 
       <section aria-label="Work on this job" className="flex flex-col rounded-[20px] bg-card px-4 py-4 sm:px-6">
         <StepStrip stages={partnerStages(job)} />
         <Tabs value={tab} onValueChange={choose} activationMode="manual" className="min-w-0 pt-2">
-          {/* Four tabs and the failed count don't fit 320 px: the row scrolls sideways, as the Orders tabs do. */}
-          <TabsList variant="line" aria-label="Pieces, quality, history and comments" className="h-auto! w-full justify-start overflow-x-auto [scrollbar-width:none]">
+          {/* Four tabs and the failed count don't fit 320 px: the row scrolls sideways. */}
+          <TabsList variant="line" aria-label="Pieces, quality, history and comments" className={TAB_ROW}>
             {TABS.map((value) => (
-              <TabsTrigger
-                key={value}
-                value={value}
-                // The underline sits inside the tab, so the scrolling row doesn't clip it.
-                className="h-11 flex-none px-3 text-ink-2 group-data-horizontal/tabs:after:bottom-0 data-active:font-semibold data-active:text-ink"
-              >
+              <TabsTrigger key={value} value={value} className={TAB}>
                 {TAB_LABEL[value]}
                 {value === "quality" && failed > 0 && (
                   <>

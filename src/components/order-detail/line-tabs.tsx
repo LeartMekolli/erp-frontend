@@ -5,6 +5,7 @@ import { useState } from "react";
 import { LoadFailure } from "@/components/data/load-failure";
 import { PiecesTab, type PieceSection } from "@/components/production/pieces-tab";
 import { StepStrip, type Stage } from "@/components/production/step-strip";
+import { TAB, TAB_ROW } from "@/components/production/tab-classes";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Group, MoveBody, OrderState } from "@/lib/api/schema-types";
@@ -121,9 +122,11 @@ function Progress({ groupId, index, orderState, partnerName = null }: LineTabsPr
     <>
       <StepStrip stages={stagesOf(group.data)} />
       <Tabs defaultValue="pieces" className="min-w-0 pt-2">
-        <TabsList variant="line" aria-label="Pieces, quality and history">
-          <TabsTrigger value="pieces">Pieces</TabsTrigger>
-          <TabsTrigger value="quality">
+        <TabsList variant="line" aria-label="Pieces, quality and history" className={TAB_ROW}>
+          <TabsTrigger value="pieces" className={TAB}>
+            Pieces
+          </TabsTrigger>
+          <TabsTrigger value="quality" className={TAB}>
             Quality
             {failed > 0 && (
               <>
@@ -132,7 +135,9 @@ function Progress({ groupId, index, orderState, partnerName = null }: LineTabsPr
               </>
             )}
           </TabsTrigger>
-          <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="history" className={TAB}>
+            History
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="pieces">
           <StaffPieces group={group.data} orderState={orderState} partnerName={partnerName} />
