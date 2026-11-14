@@ -15,9 +15,8 @@ import { nextStepName } from "@/lib/production/selection";
 import { staffRules } from "@/lib/production/staff";
 import type { UploadTarget } from "@/lib/upload/upload";
 
-import { HistoryTab } from "./history-tab";
-import { QualityTab } from "./quality-tab";
 import { useStaffSectionPieces } from "./staff-pieces";
+import { StaffHistoryTab, StaffQualityTab } from "./staff-tabs";
 
 /** How many of an order's lines load their progress without being asked. */
 const LOADED_UP_FRONT = 5;
@@ -139,10 +138,10 @@ function Progress({ groupId, index, orderState, partnerName = null }: LineTabsPr
           <StaffPieces group={group.data} orderState={orderState} partnerName={partnerName} />
         </TabsContent>
         <TabsContent value="quality">
-          <QualityTab group={group.data} />
+          <StaffQualityTab group={group.data} />
         </TabsContent>
         <TabsContent value="history">
-          <HistoryTab group={group.data} />
+          <StaffHistoryTab group={group.data} />
         </TabsContent>
       </Tabs>
     </>

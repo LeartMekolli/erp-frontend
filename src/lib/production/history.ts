@@ -1,12 +1,15 @@
 /**
- * How a line's History words its actions. An action is one `POST /workflow/moves`: every piece it moved,
- * with what they share (erp-api `move-history-response.ts:21`). Each piece also carries its own result,
- * because one request can end its pieces differently, such as a restore cancelling the replacement.
+ * How History words its actions, on a staff line or a partner's job. An action is one move: every piece it
+ * moved, with what they share (erp-api `move-history-response.ts:21`). Each piece also carries its own
+ * result, because one request can end its pieces differently, such as a restore cancelling the replacement.
  */
 
-import type { ActionPiece, LineAction, WorkflowStep } from "@/lib/api/schema-types";
+import type { ActionPiece } from "@/lib/api/schema-types";
 import { dayKey, formatDate, formatDayMonth } from "@/lib/format/dates";
 
+import type { Actor, MoveEntry, StepRules } from "./shape";
+
+type LineAction = MoveEntry;
 type Outcome = NonNullable<LineAction["outcome"]>;
 
 const DONE: Record<Outcome, string> = { scrap: "Scrapped", rework: "Redone", continue: "Sent on" };
@@ -64,25 +67,39 @@ export function pieceResult(piece: ActionPiece): string {
 }
 
 /**
- * Why a fail didn't follow its defect's default, against that default in the workflow version. A step or
- * defect no longer in the version gives the reason alone.
+ * Why a fail didn't follow its defect's default, against that default in the step's rules. A step or
+ * defect no longer in the rules gives the reason alone.
  */
-export function overrideText(action: LineAction, steps: WorkflowStep[]): string | null {
+export function overrideText(action: LineAction, rules: StepRules[]): string | null {
   const reason = action.override_reason;
   if (!reason) return null;
-  const setup = steps.find((step) => step.key === action.from_step?.key)?.defects.find((defect) => defect.key === action.defect?.key);
-  if (setup && action.outcome) {
+  const step = rules.find((candidate) => candidate.key === action.from_step?.key);
+  const setup = step?.defects.find((defect) => defect.key === action.defect?.key);
+  if (step && setup && action.outcome) {
     if (action.outcome !== setup.outcome) return `${DONE[action.outcome]} instead of ${INSTEAD[setup.outcome]}: ${reason}`;
-    const usual = steps.find((step) => step.key === setup.rework_to)?.name;
-    if (action.outcome === "rework" && action.to_step && usual && action.to_step.key !== setup.rework_to) {
+    const usual = [...step.reworkTargets, ...rules].find((candidate) => candidate.key === setup.reworkTo)?.name;
+    if (action.outcome === "rework" && action.to_step && usual && action.to_step.key !== setup.reworkTo) {
       return `Redone at ${action.to_step.name} instead of ${usual}: ${reason}`;
     }
   }
   return `Changed because: ${reason}`;
 }
 
-export function actorText(action: LineAction): string {
-  return action.partner ? `${action.actor.name}, for ${action.partner.name}` : action.actor.name;
+/**
+ * Who made a move. Staff see the person, and the partner a move counted for; a partner sees its own
+ * people by name, and the workspace's and another workshop's moves by kind alone.
+ */
+export function actorText({ actor }: { actor: Actor }): string {
+  switch (actor.kind) {
+    case "staff":
+      return actor.forPartner ? `${actor.name}, for ${actor.forPartner}` : (actor.name ?? "");
+    case "own":
+      return actor.name ?? "";
+    case "workspace":
+      return "Workspace";
+    case "other_partner":
+      return "Another workshop";
+  }
 }
 
 /** The calendar day before a `YYYY-MM-DD` key, by the calendar rather than 24 hours, which clock changes break. */
@@ -91,11 +108,11 @@ function dayBefore(key: string): string {
   return new Date(Date.UTC(year, month - 1, day - 1)).toISOString().slice(0, 10);
 }
 
-/** Actions under their day in the workspace's zone, keeping the list's order: "Today", "Yesterday, 11 Nov", then dates. */
-export function groupByDay(actions: LineAction[], now: number, timeZone: string): { key: string; heading: string; actions: LineAction[] }[] {
+/** Items under their day in the workspace's zone, keeping the list's order: "Today", "Yesterday, 11 Nov", then dates. */
+export function groupByDay<T extends { created_at: string }>(actions: T[], now: number, timeZone: string): { key: string; heading: string; actions: T[] }[] {
   const today = dayKey(new Date(now).toISOString(), timeZone);
   const yesterday = dayBefore(today);
-  const days: { key: string; heading: string; actions: LineAction[] }[] = [];
+  const days: { key: string; heading: string; actions: T[] }[] = [];
   for (const action of actions) {
     const key = dayKey(action.created_at, timeZone);
     const last = days.at(-1);

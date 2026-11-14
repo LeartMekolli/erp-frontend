@@ -5,11 +5,12 @@ import { CircleCheck, CircleDashed, CircleDotDashed, Clock, TriangleAlert, type 
 import { cn } from "cn";
 
 import { LoadFailure } from "@/components/data/load-failure";
-import type { Group } from "@/lib/api/schema-types";
-import { useCan } from "@/lib/auth/permissions";
 import { useFormat } from "@/lib/format/use-format";
-import { usePhotoUrl, useWorkflowVersion } from "@/lib/production/queries";
+import { actorText } from "@/lib/production/history";
 import { qualityCards, type QualityCard, type QualityState } from "@/lib/production/quality";
+import type { Actor, Photo, StepProgress, StepRules } from "@/lib/production/shape";
+
+import { usePhotoLink, usePhotoLinks } from "./photo-links";
 
 const list = new Intl.ListFormat("en", { style: "long", type: "conjunction" });
 
@@ -50,8 +51,8 @@ function Bar({ card }: { card: QualityCard }) {
   );
 }
 
-function CheckPhoto({ photo, alt }: { photo: NonNullable<QualityCard["latestCheck"]>["photos"][number]; alt: string }) {
-  const url = usePhotoUrl(photo.file_id, photo.file_version_id);
+function CheckPhoto({ photo, alt }: { photo: Photo; alt: string }) {
+  const url = usePhotoLink(photo);
   return (
     <div className="size-12 shrink-0 overflow-hidden rounded-lg bg-ground">
       {/* A signed link that runs out: next/image would keep a copy under a dead address. */}
@@ -61,9 +62,15 @@ function CheckPhoto({ photo, alt }: { photo: NonNullable<QualityCard["latestChec
   );
 }
 
+/** Staff say where a staff member's check counted ("Lena Park at Northcast Foundry"); the rest as in History. */
+function checkedBy(actor: Actor): string {
+  if (actor.kind === "staff") return `${actor.name ?? ""}${actor.forPartner ? ` at ${actor.forPartner}` : ""}`;
+  return actorText({ actor });
+}
+
 function LatestCheck({ card }: { card: QualityCard }) {
   const { dateTime } = useFormat();
-  const mayView = useCan("file.read");
+  const { mayView } = usePhotoLinks();
   const check = card.latestCheck;
   if (!check) return null;
   const photo = check.photos[0];
@@ -71,8 +78,8 @@ function LatestCheck({ card }: { card: QualityCard }) {
     <div className="flex items-center gap-2.5 border-t border-line pt-2">
       {mayView && photo && <CheckPhoto photo={photo} alt={`Latest check at ${card.name}`} />}
       <div className="flex min-w-0 flex-col text-caption">
-        <p className="font-medium break-words text-ink">{`Latest check by ${check.actor.name}${check.partner ? ` at ${check.partner.name}` : ""}`}</p>
-        <p className="text-ink-2">{dateTime(check.created_at)}</p>
+        <p className="font-medium break-words text-ink">{`Latest check by ${checkedBy(check.actor)}`}</p>
+        <p className="text-ink-2">{dateTime(check.createdAt)}</p>
       </div>
     </div>
   );
@@ -95,7 +102,7 @@ function Card({ card }: { card: QualityCard }) {
       {card.inRework > 0 && <p className="text-caption text-ink-2 tabular-nums">{`${card.inRework} being redone`}</p>}
       {card.sampling && (
         <p className="text-caption text-ink-2 tabular-nums">
-          <span>{`Sampled: ${card.sampling.inspect} of every ${card.sampling.of_every}`}</span>
+          <span>{`Sampled: ${card.sampling.inspect} of every ${card.sampling.ofEvery}`}</span>
           <br />
           <span>{`Inspected ${card.passed - card.notInspected + card.failed}, left out ${card.notInspected}`}</span>
         </p>
@@ -115,18 +122,25 @@ function Card({ card }: { card: QualityCard }) {
   );
 }
 
-/** Each checked step of a line at a glance: what passed and failed there, the defects found and the latest check. */
-export function QualityTab({ group }: { group: Group }) {
-  const version = useWorkflowVersion(group.workflow.id, group.workflow.version);
-
-  if (version.isPending) {
+/** Each checked step at a glance: what passed and failed there, the defects found and the latest check. */
+export function QualityTab({
+  progress,
+  rules,
+  rulesState,
+}: {
+  progress: StepProgress[];
+  /** The steps' rules, which say which steps are checked; undefined until loaded. */
+  rules: StepRules[] | undefined;
+  rulesState: { isPending: boolean; error: unknown; refetch: () => unknown };
+}) {
+  if (rulesState.isPending) {
     return <div role="status" aria-label="Loading the quality checks" className="h-24 animate-pulse rounded-2xl bg-panel-soft motion-reduce:animate-none" />;
   }
-  if (!version.data) {
-    return <LoadFailure error={version.error} fallback="The quality checks couldn't be loaded." onRetry={() => void version.refetch()} />;
+  if (!rules) {
+    return <LoadFailure error={rulesState.error} fallback="The quality checks couldn't be loaded." onRetry={() => void rulesState.refetch()} />;
   }
 
-  const { cards, noChecks } = qualityCards(group.steps, version.data.steps);
+  const { cards, noChecks } = qualityCards(progress, rules);
   if (cards.length === 0) return <p className="py-2 text-sm text-ink-2">No step on this line has quality checks.</p>;
 
   return (

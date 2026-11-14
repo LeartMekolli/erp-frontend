@@ -21,9 +21,9 @@ import { CommentsPanel } from "./comments-panel";
 import { LinePanel } from "./line-panel";
 import { CancelledBanner, OrderHeader } from "./order-header";
 import { PaymentPanel } from "./payment-panel";
-import { PiecePanel } from "./piece-panel";
 import { NotePanel, ShippingPanel } from "./shipping-panel";
 import { StaffSelectionProvider } from "./staff-pieces";
+import { StaffPiecePanel } from "./staff-tabs";
 
 /** `/orders/:id`: one order, and everything staff can do with it. */
 export function OrderDetailPage() {
@@ -142,7 +142,7 @@ function OrderDetail({ id }: { id: string }) {
       <ShipDialog order={order} open={shipping} onOpenChange={setShipping} onShipped={setNotice} />
       <RecordPaymentDialog order={order} open={paying} onOpenChange={setPaying} onRecorded={setNotice} />
       {cancelling && <CancelDialog order={order} open onOpenChange={setCancelling} onCancelled={setNotice} />}
-      <PiecePanel id={pieceId} onClose={() => router.replace(`/orders/${id}`, { scroll: false })} />
+      <StaffPiecePanel id={pieceId} onClose={() => router.replace(`/orders/${id}`, { scroll: false })} />
     </StaffSelectionProvider>
   );
 }

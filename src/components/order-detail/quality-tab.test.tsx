@@ -14,8 +14,8 @@ import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
 import { LineTabs } from "./line-tabs";
-import { QualityTab } from "./quality-tab";
 import { StaffSelectionProvider as StepSelectionProvider } from "./staff-pieces";
+import { StaffQualityTab as QualityTab } from "./staff-tabs";
 
 const GROUP = groupIdOf(1048, 0);
 const VERSIONS = `${FAKE_API_URL}/workflow/workflows/:id/versions/:number`;

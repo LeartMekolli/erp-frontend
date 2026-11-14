@@ -5,7 +5,10 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import { useMe } from "@/components/session/session-gate";
-import type { ActionPiece, LineAction, WorkflowStep } from "@/lib/api/schema-types";
+import { StaffPhotoLinks } from "@/components/order-detail/staff-tabs";
+import type { ActionPiece, LineAction } from "@/lib/api/schema-types";
+import type { MoveEntry, StepRules } from "@/lib/production/shape";
+import { staffEntry, staffRules } from "@/lib/production/staff";
 
 import { FAKE_API_URL, STAFF, WORKFLOW_READER } from "../../../test/fake-erp-api/seed";
 import { fakeState } from "../../../test/fake-erp-api/state";
@@ -63,22 +66,24 @@ const FAIL = action({
   pieces: [piece(4, { to_step: null, status: "scrapped" })],
 });
 
-function steps(): WorkflowStep[] {
+function steps(): StepRules[] {
   const answer = fakeState().production.version("b2b2b2b2-0000-4000-8000-000000000001", 1);
   if (!answer.ok) throw new Error("expected the fake's workflow");
-  return answer.body.steps;
+  return answer.body.steps.map((step) => staffRules(step, answer.body.steps));
 }
 
 function WithMe({ children }: { children: ReactNode }) {
-  return useMe().data ? children : null;
+  return useMe().data ? <StaffPhotoLinks>{children}</StaffPhotoLinks> : null;
 }
 
+/** A staff action as erp-api sends it, shown through staff's translation. */
 function renderEntry(shown: LineAction, user = STAFF) {
+  const entry: MoveEntry = staffEntry(shown);
   renderAs(
     user,
     <WithMe>
       <ol>
-        <HistoryEntry action={shown} steps={steps()} />
+        <HistoryEntry action={entry} steps={steps()} />
       </ol>
     </WithMe>,
   );

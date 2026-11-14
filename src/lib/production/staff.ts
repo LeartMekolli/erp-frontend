@@ -15,7 +15,7 @@ function staffPhotos(photos: { file_id: string; file_version_id: string }[]): Ph
 }
 
 /** A step's rules from the workflow version, its rework targets named from the line's path (by key when not on it). */
-export function staffRules(step: WorkflowStep, path: Group["steps"]): StepRules {
+export function staffRules(step: WorkflowStep, path: { key: string; name: string }[]): StepRules {
   return {
     key: step.key,
     name: step.name,

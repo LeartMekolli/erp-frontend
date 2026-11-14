@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import type { Group, WorkflowStep } from "@/lib/api/schema-types";
 
-import { failedOnLine, qualityCards } from "./quality";
+import { failedOnLine, qualityCards as cardsOf } from "./quality";
+import { staffProgress, staffRules } from "./staff";
 
 type Step = Group["steps"][number];
 
@@ -17,9 +18,14 @@ const steps: Group["steps"] = [
   at("packing", "Packing", { count: 1 }),
 ];
 
+const NONE = { min_photos: 0, comment_required: false };
+
 function config(key: string, fields: Partial<WorkflowStep> = {}): WorkflowStep {
-  return { key, checklist: [], defects: [], sampling: null, ...fields } as WorkflowStep;
+  return { key, name: key, checklist: [], defects: [], rework_targets: [], pass: NONE, fail: NONE, sampling: null, sop_file_version_id: null, done_by: "workspace", ...fields } as WorkflowStep;
 }
+
+/** Staff's line and workflow version, through staff's translation. */
+const qualityCards = (path: Group["steps"], version: WorkflowStep[]) => cardsOf(path.map(staffProgress), version.map((step) => staffRules(step, path)));
 
 const CHECK = { key: "smooth", label: "Smooth", kind: "yes_no", required: true, passing_answer: true } as WorkflowStep["checklist"][number];
 const DEFECT = { defect_id: "d", key: "scratch", name: "Scratch", outcome: "scrap", rework_to: null } as WorkflowStep["defects"][number];
@@ -42,9 +48,8 @@ describe("qualityCards", () => {
   });
 
   it("carries a step's sampling", () => {
-    const sampling = { inspect: 1, of_every: 3 };
-    const { cards } = qualityCards(steps, [config("finish", { checklist: [CHECK], sampling })]);
-    expect(cards[0]!.sampling).toEqual(sampling);
+    const { cards } = qualityCards(steps, [config("finish", { checklist: [CHECK], sampling: { inspect: 1, of_every: 3 } })]);
+    expect(cards[0]!.sampling).toEqual({ inspect: 1, ofEvery: 3 });
   });
 
   it("treats a step missing from the version as having no checks", () => {
@@ -58,7 +63,13 @@ describe("qualityCards", () => {
       { key: "crack", name: "Crack", count: 1 },
     ];
     const { cards } = qualityCards([at("finish", "Finish", { passed: 6, failed: 3, not_inspected: 2, defects, latest_check: check })], CHECKED);
-    expect(cards[0]).toMatchObject({ passed: 6, failed: 3, notInspected: 2, defects, latestCheck: check });
+    expect(cards[0]).toMatchObject({
+      passed: 6,
+      failed: 3,
+      notInspected: 2,
+      defects,
+      latestCheck: { moveId: null, actor: { kind: "staff", name: "Ana Ruiz", forPartner: null }, createdAt: check.created_at, photos: [] },
+    });
   });
 
   describe("state", () => {
