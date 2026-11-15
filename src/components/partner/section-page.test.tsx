@@ -19,9 +19,9 @@ beforeEach(() => {
 
 describe("PartnerSectionPage", () => {
   it("shows a section not built yet as coming soon", () => {
-    navigation.section = "earnings";
+    navigation.section = "performance";
     render(<PartnerSectionPage />);
-    expect(screen.getByRole("heading", { level: 1, name: "Earnings" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Performance" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Back to Jobs" })).toHaveAttribute("href", `/partner-portal/${NORTHCAST_ID}/jobs`);
     expect(navigation.notFound).not.toHaveBeenCalled();
   });

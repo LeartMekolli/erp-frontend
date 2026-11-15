@@ -3,9 +3,10 @@
 import Link from "next/link";
 
 import { SidebarFrame, type SidebarItem } from "@/components/shell/sidebar-frame";
+import { partnerRoleAtLeast, usePartnerRole } from "@/lib/auth/permissions";
 import { initials } from "@/lib/format/initials";
 
-import { PARTNER_NAV, partnerHref } from "./nav";
+import { PARTNER_NAV, partnerHref, type PartnerNavLink } from "./nav";
 import { useWorkshop } from "./use-workshop";
 
 const GROUPS = [
@@ -24,8 +25,11 @@ export function PartnerSidebar({
   onNavigate?: () => void;
 }) {
   const { partnerId, name, several } = useWorkshop();
+  const role = usePartnerRole(partnerId);
+  // A link for some roles only waits for the role, so it never shows to someone it would turn away.
+  const visible = (link: PartnerNavLink) => !link.role || (role !== undefined && partnerRoleAtLeast(role, link.role));
   const items = (group: "work" | "setup"): SidebarItem[] =>
-    PARTNER_NAV.filter((link) => link.group === group).map((link) => ({
+    PARTNER_NAV.filter((link) => link.group === group && visible(link)).map((link) => ({
       key: link.section,
       label: link.label,
       href: partnerHref(partnerId, link.section),

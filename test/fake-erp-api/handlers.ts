@@ -1,7 +1,7 @@
 import { HttpResponse, http as rawHttp, type HttpHandler } from "msw";
 import { createOpenApiHttp } from "openapi-msw";
 
-import type { paths, Permission } from "../../src/lib/api/schema-types";
+import type { PartnerRole, paths, Permission } from "../../src/lib/api/schema-types";
 import type { Answer } from "./orders";
 import { PARTNER_NAMES, type FakeUser } from "./seed";
 import { search } from "./search";
@@ -64,19 +64,24 @@ function fileCaller(request: Request, partnerId?: string): 200 | 401 | 404 {
 /**
  * Who may call a partner route: someone acting for that workshop. A 401 with
  * no user and a 404 for anyone else (`route-markers.ts:41-48`); an answer
- * (`write`) from a suspended workshop is a 403, while reads still work.
- * Returns the problem to send, or null when the call may go on.
+ * (`write`) from a suspended workshop is a 403, while reads still work. A
+ * role below `role` is a 403. Returns the problem to send, or null when the
+ * call may go on.
  */
-function partnerCaller(request: Request, partnerId: string, write = false): Response | null {
-  const caller = partnerPerson(request, partnerId, write);
+function partnerCaller(request: Request, partnerId: string, write = false, role: PartnerRole = "member"): Response | null {
+  const caller = partnerPerson(request, partnerId, write, role);
   return caller instanceof Response ? caller : null;
 }
 
+/** erp-api's order of partner roles (`src/modules/partners/partner-roles.ts:2-7`). */
+const PARTNER_ROLES: readonly PartnerRole[] = ["member", "admin", "owner"];
+
 /** As `partnerCaller`, but gives the person when the call may go on. */
-function partnerPerson(request: Request, partnerId: string, write = false): FakeUser | Response {
+function partnerPerson(request: Request, partnerId: string, write = false, role: PartnerRole = "member"): FakeUser | Response {
   const user = fakeState().authenticate(bearer(request));
   if (!user) return problem(401, "Unauthorized");
   if (user.kind !== "partner" || !user.organisations.includes(partnerId)) return problem(404, "Partner not found");
+  if (PARTNER_ROLES.indexOf(user.partnerRole ?? "owner") < PARTNER_ROLES.indexOf(role)) return problem(403, "Your role can't do this");
   if (write && fakeState().isPartnerSuspended(partnerId)) return problem(403, "The partner is suspended");
   return user;
 }
@@ -224,6 +229,35 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       const refusedCall = partnerCaller(request, params.partnerId, true);
       if (refusedCall) return response.untyped(refusedCall);
       const answer = fakeState().partnerJobs.answer(params.partnerId, params.groupId, "decline", request.headers.get("idempotency-key"));
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    // The partner's pay (`partner-jobs.controller.ts:41`, `payouts.controller.ts:59`, `payout-accounts.controller.ts:27-48`):
+    // admins and owners read it; only the owner gets the payout account link, never while suspended.
+    http.get("/partner-portal/partners/{partnerId}/owed", ({ request, params, response }) => {
+      const refusedCall = partnerCaller(request, params.partnerId, false, "admin");
+      if (refusedCall) return response.untyped(refusedCall);
+      const answer = fakeState().earnings.owed(params.partnerId, new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/partner-portal/partners/{partnerId}/payouts", ({ request, params, response }) => {
+      const refusedCall = partnerCaller(request, params.partnerId, false, "admin");
+      if (refusedCall) return response.untyped(refusedCall);
+      const answer = fakeState().earnings.payouts(params.partnerId, new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/partner-portal/partners/{partnerId}/payout-account", ({ request, params, response }) => {
+      const refusedCall = partnerCaller(request, params.partnerId, false, "admin");
+      if (refusedCall) return response.untyped(refusedCall);
+      return response(200).json(fakeState().earnings.account(params.partnerId));
+    }),
+
+    http.post("/partner-portal/partners/{partnerId}/payout-account/link", ({ request, params, response }) => {
+      const refusedCall = partnerCaller(request, params.partnerId, true, "owner");
+      if (refusedCall) return response.untyped(refusedCall);
+      const answer = fakeState().earnings.link(params.partnerId, new URL(request.url).origin);
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 

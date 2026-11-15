@@ -135,6 +135,20 @@ export type PartnerMoveHistory = JsonOk<"/partner-portal/partners/{partnerId}/jo
 /** One comment on a partner's job as the partner reads it, from `GET .../jobs/{groupId}/comments`. */
 export type PartnerJobComment = JsonOk<"/partner-portal/partners/{partnerId}/jobs/{groupId}/comments", "get">["data"][number];
 
+/** `GET .../owed`: what a partner is owed, with its totals across every page, newest hand-over first. */
+export type PartnerOwed = JsonOk<"/partner-portal/partners/{partnerId}/owed", "get">;
+
+/** One job on the owed list: what it's worth, what payouts have paid and what's left. */
+export type OwedJob = PartnerOwed["jobs"][number];
+
+/** One payout to the partner, with what it paid per job, from `GET .../payouts`. */
+export type PartnerPayout = JsonOk<"/partner-portal/partners/{partnerId}/payouts", "get">["data"][number];
+
+export type PayoutStatus = PartnerPayout["status"];
+
+/** Where the partner's payout account stands, from `GET .../payout-account`. */
+export type PayoutAccountState = JsonOk<"/partner-portal/partners/{partnerId}/payout-account", "get">["state"];
+
 /** One comment as staff read it, from `GET /orders/{id}/comments`, with the partner that reads it too, if any. */
 export type OrderComment = JsonOk<"/orders/{id}/comments", "get">["data"][number];
 

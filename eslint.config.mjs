@@ -6,7 +6,7 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
-    files: ["src/app/partner-portal/**", "src/components/partner/**", "src/lib/partner-jobs/**"],
+    files: ["src/app/partner-portal/**", "src/components/partner/**", "src/lib/partner-jobs/**", "src/lib/partner-earnings/**"],
     rules: {
       "no-restricted-imports": [
         "error",

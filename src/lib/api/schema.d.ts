@@ -2163,7 +2163,7 @@ export interface paths {
         };
         /**
          * What a partner is owed, per job it has or had, newest first, a page at a time.
-         * @description A job is owed once every live piece has passed its workflow's payout step: the cost frozen when it was handed over, or what staff set instead. `total` counts only what is owed now, across every page; paying it comes with Payments.
+         * @description A job is owed once every live piece has passed its workflow's payout step: the cost frozen when it was handed over, or what staff set instead. `due_total` is what Pay would transfer and `not_yet_total` what the jobs not owed yet will be, across every page.
          *
          *     Access: permission `partner.read`.
          */
@@ -3013,7 +3013,7 @@ export interface paths {
         };
         /**
          * What the partner is owed, per job it has or had, newest first, a page at a time.
-         * @description A job is owed once every live piece has passed the payout step: its cost, or an amount the workspace set. `total` counts only what is owed now, across every page.
+         * @description A job is owed once every live piece has passed the payout step: its cost, or an amount the workspace set. `due_total` is what the next payout pays and `not_yet_total` what the jobs not owed yet will be, across every page.
          *
          *     Access: a person acting for the partner, at least `admin`; a suspended partner only reads.
          */
@@ -5273,7 +5273,9 @@ export interface paths {
         };
         /**
          * The partner's payouts, newest first, a page at a time, each with what it paid per job.
-         * @description Access: a person acting for the partner, at least `admin`; a suspended partner only reads.
+         * @description Never why the provider refused a transfer; only staff see that.
+         *
+         *     Access: a person acting for the partner, at least `admin`; a suspended partner only reads.
          */
         get: operations["PayoutsController_portalList"];
         put?: never;
@@ -7409,6 +7411,12 @@ export interface operations {
                                 id: string;
                             };
                             job: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                partner_id: string;
+                            } | null;
+                            payout: {
                                 /** Format: uuid */
                                 id: string;
                                 /** Format: uuid */
@@ -16681,6 +16689,8 @@ export interface operations {
                         quantity: number;
                         /** @enum {string} */
                         state: "not_yet" | "owed";
+                        /** @enum {string} */
+                        holding: "with_you" | "taken_back" | "cancelled";
                         amount: string;
                         override_reason: string | null;
                         paid: string;
@@ -16748,7 +16758,10 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        total: string;
+                        due_total: string;
+                        not_yet_total: string;
+                        not_yet_count: number;
+                        currency: string;
                         jobs: {
                             /** Format: uuid */
                             assignment_id: string;
@@ -16760,6 +16773,8 @@ export interface operations {
                             quantity: number;
                             /** @enum {string} */
                             state: "not_yet" | "owed";
+                            /** @enum {string} */
+                            holding: "with_you" | "taken_back" | "cancelled";
                             amount: string;
                             override_reason: string | null;
                             paid: string;
@@ -20838,7 +20853,10 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        total: string;
+                        due_total: string;
+                        not_yet_total: string;
+                        not_yet_count: number;
+                        currency: string;
                         jobs: {
                             /** Format: uuid */
                             assignment_id: string;
@@ -20850,6 +20868,8 @@ export interface operations {
                             quantity: number;
                             /** @enum {string} */
                             state: "not_yet" | "owed";
+                            /** @enum {string} */
+                            holding: "with_you" | "taken_back" | "cancelled";
                             amount: string;
                             paid: string;
                             due: string;
@@ -32519,7 +32539,6 @@ export interface operations {
                             currency: string;
                             /** @enum {string} */
                             status: "pending" | "paid" | "failed" | "reversed";
-                            failure: string | null;
                             /** Format: date-time */
                             created_at: string;
                             /** Format: date-time */

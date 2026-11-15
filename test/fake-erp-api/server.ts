@@ -2,6 +2,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 
 import { getResponse } from "msw";
 
+import { APP_URL } from "../../e2e/urls";
+
 import { createHandlers } from "./handlers";
 import { fakeState, resetFakeState } from "./state";
 
@@ -15,6 +17,9 @@ import { fakeState, resetFakeState } from "./state";
  *   that order's next label with a 503.
  * - `POST /__suspend-partner/<partnerId>` suspends that workshop: its
  *   `/partner-portal/me` status says so and its accept and decline answer 403.
+ * - `GET /fake-provider/onboarding?partner=<partnerId>` stands in for the
+ *   payment provider's setup page: the payout account turns ready and the
+ *   browser goes back to AMI's `/payout-account?onboarding=done`.
  * - `GET /__link?to=<url>` is a page with one link, so a test can follow a
  *   link into AMI from another site.
  * - `PUT /__storage/uploads/<fileId>/<versionId>` stands in for the bucket a
@@ -77,6 +82,15 @@ createServer(async (req, res) => {
   if (req.method === "POST" && failLabel) {
     fakeState().orders.failNextLabel(decodeURIComponent(failLabel[1]!));
     res.writeHead(204).end();
+    return;
+  }
+
+  // The payment provider's onboarding, finished at once: the account turns ready, as its webhook would
+  // say, and the owner goes back to AMI the way erp-api's return link sends them.
+  if (req.method === "GET" && url.pathname === "/fake-provider/onboarding") {
+    const partnerId = url.searchParams.get("partner") ?? "";
+    fakeState().earnings.setAccount(partnerId, "ready");
+    res.writeHead(302, { location: `${APP_URL}/partner-portal/${encodeURIComponent(partnerId)}/payout-account?onboarding=done` }).end();
     return;
   }
 
