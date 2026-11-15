@@ -45,6 +45,25 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    // Shared by staff and partners: each area passes its data and actions in.
+    files: ["src/components/earnings/**", "src/lib/payouts/**"],
+    ignores: ["**/*.test.ts", "**/*.test.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@/lib/api/client",
+              importNames: ["api", "partnerApi"],
+              message: "Shared earnings views take their data as props: each area fetches its own.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

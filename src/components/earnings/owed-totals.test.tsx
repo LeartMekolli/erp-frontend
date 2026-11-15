@@ -2,17 +2,23 @@ import { screen } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
-import { FAKE_API_URL, NORTHCAST_ID, PARTNER } from "../../../../test/fake-erp-api/seed";
-import { fakeState } from "../../../../test/fake-erp-api/state";
-import { server } from "../../../../test/msw";
-import { renderAs } from "../../../../test/render";
+import { FAKE_API_URL, NORTHCAST_ID, PARTNER, STAFF } from "../../../test/fake-erp-api/seed";
+import { fakeState } from "../../../test/fake-erp-api/state";
+import { server } from "../../../test/msw";
+import { renderAs, WithMe } from "../../../test/render";
 import { usePartnerOwed } from "@/lib/partner-earnings/queries";
+import { useStaffPartnerOwed } from "@/lib/partners/queries";
 
 import { OwedTotals } from "./owed-totals";
 
 function Totals() {
   const owed = usePartnerOwed(NORTHCAST_ID, { enabled: true, poll: false });
-  return <OwedTotals owed={owed} />;
+  return <OwedTotals owed={owed} audience="partner" />;
+}
+
+function StaffTotals() {
+  const owed = useStaffPartnerOwed(NORTHCAST_ID, { poll: false });
+  return <OwedTotals owed={owed} audience="staff" />;
 }
 
 describe("OwedTotals", () => {
@@ -47,5 +53,19 @@ describe("OwedTotals", () => {
 
     expect(await screen.findByText("What you're owed couldn't be loaded.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  it("words the numbers for staff", async () => {
+    renderAs(
+      STAFF,
+      <WithMe>
+        <StaffTotals />
+      </WithMe>,
+    );
+
+    expect(await screen.findByText("€1,240.00")).toBeInTheDocument();
+    expect(screen.getByText("Owed now")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "What's owed" })).toBeInTheDocument();
+    expect(screen.queryByText("Paid when the workspace sends a payout.")).not.toBeInTheDocument();
   });
 });

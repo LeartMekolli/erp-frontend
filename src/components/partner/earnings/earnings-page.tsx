@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { OwedTotals } from "@/components/earnings/owed-totals";
+import { PayoutsTab } from "@/components/earnings/payouts-tab";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isApiProblem } from "@/lib/api/problem";
@@ -15,9 +17,7 @@ import { partnerHref } from "../nav";
 import { useWorkshop } from "../use-workshop";
 
 import { OwedJobsTab } from "./owed-jobs-tab";
-import { OwedTotals } from "./owed-totals";
 import { PayoutAccountPanel } from "./payout-account-panel";
-import { PayoutsTab } from "./payouts-tab";
 
 const isForbidden = (error: unknown) => isApiProblem(error) && error.status === 403;
 
@@ -85,7 +85,7 @@ export function EarningsPage() {
         role !== undefined && (
           <>
             <PayoutAccountPanel partnerId={partnerId} role={role} suspended={suspended} onboarding={onboarding} />
-            <OwedTotals owed={owed} />
+            <OwedTotals owed={owed} audience="partner" />
             <Tabs value={tab} onValueChange={choose} activationMode="manual" className="gap-0 rounded-[20px] bg-card">
               <TabsList variant="line" aria-label="Your earnings" className="h-auto! w-full justify-start border-b border-line px-2 pt-2">
                 {(["payouts", "jobs"] as const).map((value) => (
@@ -99,7 +99,7 @@ export function EarningsPage() {
                 ))}
               </TabsList>
               <TabsContent value="payouts" className="p-3">
-                <PayoutsTab payouts={payouts} />
+                <PayoutsTab payouts={payouts} audience="partner" />
               </TabsContent>
               <TabsContent value="jobs" className="p-3">
                 <OwedJobsTab owed={owed} partnerId={partnerId} />
