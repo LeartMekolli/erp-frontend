@@ -3,6 +3,7 @@ import { render, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { vi } from "vitest";
 
+import { useMe } from "../src/components/session/session-gate";
 import { clientSession } from "../src/lib/session/client-session";
 
 import { FAKE_PASSWORD, WORKSPACE, type FakeUser } from "./fake-erp-api/seed";
@@ -27,6 +28,14 @@ function wrapperFor(client: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   };
+}
+
+/**
+ * Renders its children once `/me` has loaded, as SessionGate does in the app, so a page that formats
+ * dates or money with `useFormat` can be tested on its own.
+ */
+export function WithMe({ children }: { children: ReactNode }) {
+  return useMe().data ? children : null;
 }
 
 /** Renders `ui` signed in as `user`, against the fake erp-api. */

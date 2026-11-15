@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isApiProblem } from "@/lib/api/problem";
 import { partnerRoleAtLeast, usePartnerRole } from "@/lib/auth/permissions";
 import { usePartnerOwed, usePartnerPayouts, usePayoutAccount } from "@/lib/partner-earnings/queries";
@@ -12,8 +13,10 @@ import { usePartnerOwed, usePartnerPayouts, usePayoutAccount } from "@/lib/partn
 import { partnerHref } from "../nav";
 import { useWorkshop } from "../use-workshop";
 
+import { OwedJobsTab } from "./owed-jobs-tab";
 import { OwedTotals } from "./owed-totals";
 import { PayoutAccountPanel } from "./payout-account-panel";
+import { PayoutsTab } from "./payouts-tab";
 
 const isForbidden = (error: unknown) => isApiProblem(error) && error.status === 403;
 
@@ -30,6 +33,10 @@ function NotForYou({ partnerId }: { partnerId: string }) {
 }
 
 type Onboarding = "done" | "expired" | null;
+
+type Tab = "payouts" | "jobs";
+
+const TAB_LABEL: Record<Tab, string> = { payouts: "Payouts", jobs: "Jobs" };
 
 const onboardingOf = (value: string | null): Onboarding => (value === "done" || value === "expired" ? value : null);
 
@@ -60,6 +67,12 @@ export function EarningsPage() {
   const account = usePayoutAccount(partnerId, { enabled: allowed, checking: false });
   const refused = [payouts.error, owed.error, account.error].some(isForbidden);
 
+  const tab: Tab = search.get("tab") === "jobs" ? "jobs" : "payouts";
+  const choose = (value: string) => {
+    const earnings = partnerHref(partnerId, "earnings");
+    router.replace(value === "jobs" ? `${earnings}?tab=jobs` : earnings, { scroll: false });
+  };
+
   return (
     <>
       <h1 className="pt-1 text-title font-semibold">Earnings</h1>
@@ -70,6 +83,25 @@ export function EarningsPage() {
           <>
             <PayoutAccountPanel partnerId={partnerId} role={role} suspended={suspended} onboarding={onboarding} />
             <OwedTotals owed={owed} />
+            <Tabs value={tab} onValueChange={choose} activationMode="manual" className="gap-0 rounded-[20px] bg-card">
+              <TabsList variant="line" aria-label="Your earnings" className="h-auto! w-full justify-start border-b border-line px-2 pt-2">
+                {(["payouts", "jobs"] as const).map((value) => (
+                  <TabsTrigger
+                    key={value}
+                    value={value}
+                    className="h-11 flex-none px-3 text-ink-2 group-data-horizontal/tabs:after:bottom-0 data-active:font-semibold data-active:text-ink"
+                  >
+                    {TAB_LABEL[value]}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              <TabsContent value="payouts" className="p-3">
+                <PayoutsTab payouts={payouts} />
+              </TabsContent>
+              <TabsContent value="jobs" className="p-3">
+                <OwedJobsTab owed={owed} partnerId={partnerId} />
+              </TabsContent>
+            </Tabs>
           </>
         )
       )}
