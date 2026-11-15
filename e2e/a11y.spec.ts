@@ -203,6 +203,23 @@ async function checkTab(page: Page, name: string | RegExp, shows: Locator) {
   await expectAccessibleAndFits(page);
 }
 
+test("partner earnings: accessible and fits the screen", async ({ page }) => {
+  await signIn(page, PARTNER.email);
+  await expect(page.getByRole("heading", { level: 1, name: "Jobs" })).toBeVisible();
+  await page.goto(`/partner-portal/${NORTHCAST_ID}/earnings`);
+  const pending = page.getByRole("button", { name: /^On its way/ });
+  await expect(pending).toBeVisible();
+  await expect(page.getByText("Set up payouts so the workspace can pay you.")).toBeVisible();
+  await expectAccessibleAndFits(page);
+
+  // A payout opened to its jobs, one of them taken back.
+  await pending.click();
+  await expect(page.getByText("Taken back: €40.00")).toBeVisible();
+  await expectAccessibleAndFits(page);
+
+  await checkTab(page, "Jobs", page.getByText("Taken back, nothing owed"));
+});
+
 test("partner job tabs: accessible and fits the screen", async ({ page }) => {
   await openPartnerJobs(page);
   await page.goto(`/partner-portal/${NORTHCAST_ID}/jobs/${RING_BAND_JOB_ID}`);
