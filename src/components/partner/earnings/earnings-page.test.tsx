@@ -53,6 +53,14 @@ describe("EarningsPage", () => {
     expect(requests).toEqual([]);
   });
 
+  it("reads how setup ended once and drops it from the address", async () => {
+    navigation.search = "onboarding=expired";
+    renderPage(PARTNER);
+
+    expect(await screen.findByText("That setup link ran out.")).toBeInTheDocument();
+    expect(navigation.replace).toHaveBeenCalledWith(`/partner-portal/${NORTHCAST_ID}/earnings`, { scroll: false });
+  });
+
   it("treats a 403 as not available", async () => {
     server.use(
       http.get(`${FAKE_API_URL}/partner-portal/partners/:partnerId/owed`, () =>

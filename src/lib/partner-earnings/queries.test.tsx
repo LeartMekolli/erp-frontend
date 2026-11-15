@@ -5,37 +5,17 @@ import { FAKE_API_URL, NORTHCAST_ID, PARTNER } from "../../../test/fake-erp-api/
 import { fakeState, resetFakeState } from "../../../test/fake-erp-api/state";
 import { server } from "../../../test/msw";
 import { renderHookAs } from "../../../test/render";
+import { settle, until } from "../../../test/wait";
 
 import { usePartnerOwed, usePartnerPayouts, usePayoutAccount, usePayoutLink } from "./queries";
 
 const SECOND = 1_000;
 
-/**
- * TanStack Query polls on setInterval, so the tests move it by hand. setTimeout stays real, so the fetches
- * run; Testing Library's `waitFor` re-checks on setInterval, so these tests wait with `until` instead.
- */
+/** TanStack Query polls on setInterval, so the tests move it by hand; setTimeout stays real, so the fetches run. */
 function fakeIntervals() {
   vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
   resetFakeState();
 }
-
-const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
-
-/** Re-checks `check` on real setTimeout until it passes, for up to a second. */
-async function until(check: () => void): Promise<void> {
-  for (let tries = 0; ; tries += 1) {
-    try {
-      check();
-      return;
-    } catch (error) {
-      if (tries >= 100) throw error;
-      await act(tick);
-    }
-  }
-}
-
-/** Lets any fetch a timer started finish, so a count read afterwards is final. */
-const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 50)));
 
 /** Counts the GETs to one of the workshop's routes. */
 function countGets(path: string): { count: number } {

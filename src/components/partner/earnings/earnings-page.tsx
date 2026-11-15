@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { isApiProblem } from "@/lib/api/problem";
@@ -9,6 +11,9 @@ import { usePartnerOwed, usePartnerPayouts, usePayoutAccount } from "@/lib/partn
 
 import { partnerHref } from "../nav";
 import { useWorkshop } from "../use-workshop";
+
+import { OwedTotals } from "./owed-totals";
+import { PayoutAccountPanel } from "./payout-account-panel";
 
 const isForbidden = (error: unknown) => isApiProblem(error) && error.status === 403;
 
@@ -24,15 +29,31 @@ function NotForYou({ partnerId }: { partnerId: string }) {
   );
 }
 
+type Onboarding = "done" | "expired" | null;
+
+const onboardingOf = (value: string | null): Onboarding => (value === "done" || value === "expired" ? value : null);
+
 /**
  * `/partner-portal/:partnerId/earnings`: what the workshop is owed, its payout account, its payouts and
  * its jobs' pay. Admins and owners only: a member, or anyone erp-api answers 403, reads why instead,
- * and a member's page asks erp-api for nothing.
+ * and a member's page asks erp-api for nothing. `?onboarding=` (from the provider, through
+ * `/payout-account`) is read once and dropped from the address, so a reload doesn't check again.
  */
 export function EarningsPage() {
-  const { partnerId } = useWorkshop();
+  const { partnerId, suspended } = useWorkshop();
+  const router = useRouter();
+  const search = useSearchParams();
+  const [onboarding] = useState(() => onboardingOf(search.get("onboarding")));
   const role = usePartnerRole(partnerId);
   const allowed = role !== undefined && partnerRoleAtLeast(role, "admin");
+
+  useEffect(() => {
+    if (!search.has("onboarding")) return;
+    const rest = new URLSearchParams(search);
+    rest.delete("onboarding");
+    const query = rest.toString();
+    router.replace(`${partnerHref(partnerId, "earnings")}${query ? `?${query}` : ""}`, { scroll: false });
+  }, [search, router, partnerId]);
 
   const payouts = usePartnerPayouts(partnerId, allowed);
   const owed = usePartnerOwed(partnerId, { enabled: allowed, poll: payouts.anyPending });
@@ -42,7 +63,16 @@ export function EarningsPage() {
   return (
     <>
       <h1 className="pt-1 text-title font-semibold">Earnings</h1>
-      {(role !== undefined && !allowed) || refused ? <NotForYou partnerId={partnerId} /> : null}
+      {(role !== undefined && !allowed) || refused ? (
+        <NotForYou partnerId={partnerId} />
+      ) : (
+        role !== undefined && (
+          <>
+            <PayoutAccountPanel partnerId={partnerId} role={role} suspended={suspended} onboarding={onboarding} />
+            <OwedTotals owed={owed} />
+          </>
+        )
+      )}
     </>
   );
 }
