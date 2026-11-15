@@ -74,6 +74,49 @@ describe("fake erp-api partner earnings", () => {
     expect(ok(store.owed(NORTHCAST_ID, new URLSearchParams())).due_total).toBe("1240.00");
   });
 
+  it("shows staff the order and why", async () => {
+    const store = createEarningsStore(() => NOW);
+    const params = new URLSearchParams({ limit: "100" });
+    const bangle = ok(store.staffOwed(NORTHCAST_ID, params)).jobs.find((job) => job.product?.name === "Bangle")!;
+    expect(bangle.order).toMatchObject({ number: 1042, line_position: 1 });
+    expect(bangle.customer_paid).toBe(true);
+    const earCuff = ok(store.staffOwed(NORTHCAST_ID, params)).jobs.find((job) => job.product?.name === "Ear cuff")!;
+    expect(earCuff).toMatchObject({ order: { number: 1041, line_position: 0 }, customer_paid: false, override_reason: "Agreed rush surcharge" });
+
+    const portal = ok(store.owed(NORTHCAST_ID, params)).jobs.find((job) => job.assignment_id === bangle.assignment_id)!;
+    expect(portal).not.toHaveProperty("order");
+    expect(portal).not.toHaveProperty("customer_paid");
+    expect(portal).not.toHaveProperty("override_reason");
+  });
+
+  it("refuses to pay without a ready account", () => {
+    const store = createEarningsStore(() => NOW);
+    expect(store.pay(NORTHCAST_ID, null)).toMatchObject({ ok: false, status: 409, code: "payout_account_not_ready" });
+  });
+
+  it("pays everything due once", () => {
+    const store = createEarningsStore(() => NOW);
+    store.setAccount(NORTHCAST_ID, "ready");
+    store.settlePending(NORTHCAST_ID, "paid");
+    const payout = ok(store.pay(NORTHCAST_ID, "key-1"));
+    expect(payout).toMatchObject({ status: "pending", amount: "1240.00", failure: null });
+    expect(ok(store.staffOwed(NORTHCAST_ID, new URLSearchParams())).due_total).toBe("0.00");
+    expect(store.pay(NORTHCAST_ID, "key-2")).toMatchObject({ ok: false, status: 409, code: "nothing_due" });
+    expect(ok(store.pay(NORTHCAST_ID, "key-1")).id).toBe(payout.id);
+    expect(ok(store.staffPayouts(NORTHCAST_ID, new URLSearchParams())).data[0]!.id).toBe(payout.id);
+  });
+
+  it("shows the partner the staff payout", () => {
+    const store = createEarningsStore(() => NOW);
+    store.setAccount(NORTHCAST_ID, "ready");
+    store.settlePending(NORTHCAST_ID, "paid");
+    const payout = ok(store.pay(NORTHCAST_ID, null));
+    const [first] = ok(store.payouts(NORTHCAST_ID, new URLSearchParams())).data;
+    expect(first).toMatchObject({ id: payout.id, status: "pending", amount: "1240.00" });
+    expect(first).not.toHaveProperty("failure");
+    for (const line of first!.jobs) expect(line).not.toHaveProperty("order");
+  });
+
   it("turns a member away", async () => {
     for (const path of ["/owed", "/payouts", "/payout-account"]) {
       expect((await call(NORTHCAST_MEMBER, path)).status).toBe(403);

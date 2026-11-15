@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { getResponse } from "msw";
 
 import { APP_URL } from "../../e2e/urls";
+import type { PayoutAccountState } from "../../src/lib/api/schema-types";
 
 import { createHandlers } from "./handlers";
 import { fakeState, resetFakeState } from "./state";
@@ -17,6 +18,10 @@ import { fakeState, resetFakeState } from "./state";
  *   that order's next label with a 503.
  * - `POST /__suspend-partner/<partnerId>` suspends that workshop: its
  *   `/partner-portal/me` status says so and its accept and decline answer 403.
+ * - `POST /__settle-payout/<partnerId>/<paid|failed>` has the payment provider
+ *   settle that workshop's pending payout; a failed one gives its jobs back.
+ * - `POST /__payout-account/<partnerId>/<state>` sets that workshop's payout
+ *   account (`not_connected`, `onboarding`, `ready` or `restricted`).
  * - `GET /fake-provider/onboarding?partner=<partnerId>` stands in for the
  *   payment provider's setup page: the payout account turns ready and the
  *   browser goes back to AMI's `/payout-account?onboarding=done`.
@@ -74,6 +79,20 @@ createServer(async (req, res) => {
   const suspend = /^\/__suspend-partner\/([^/]+)$/.exec(url.pathname);
   if (req.method === "POST" && suspend) {
     fakeState().suspendPartner(decodeURIComponent(suspend[1]!));
+    res.writeHead(204).end();
+    return;
+  }
+
+  const settle = /^\/__settle-payout\/([^/]+)\/(paid|failed)$/.exec(url.pathname);
+  if (req.method === "POST" && settle) {
+    fakeState().earnings.settlePending(decodeURIComponent(settle[1]!), settle[2] as "paid" | "failed");
+    res.writeHead(204).end();
+    return;
+  }
+
+  const account = /^\/__payout-account\/([^/]+)\/(not_connected|onboarding|ready|restricted)$/.exec(url.pathname);
+  if (req.method === "POST" && account) {
+    fakeState().earnings.setAccount(decodeURIComponent(account[1]!), account[2] as PayoutAccountState);
     res.writeHead(204).end();
     return;
   }

@@ -412,6 +412,51 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       },
     ),
 
+    // Staff and partners (`partners.controller.ts:60`, `jobs.controller.ts:148`, `payouts.controller.ts:31`,
+    // `payout-accounts.controller.ts:62`): each route has its own permission, and a partner that isn't there is a 404.
+    http.get("/partners", ({ request, response }) => {
+      const caller = staffWith(request, "partner.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().partners.list(new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/partners/{id}/owed", ({ request, params, response }) => {
+      const caller = staffWith(request, "partner.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const known = fakeState().partners.get(params.id);
+      if (!known.ok) return response.untyped(refusal(known));
+      const answer = fakeState().earnings.staffOwed(params.id, new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/partners/{id}/payouts", ({ request, params, response }) => {
+      const caller = staffWith(request, "payment.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const known = fakeState().partners.get(params.id);
+      if (!known.ok) return response.untyped(refusal(known));
+      const answer = fakeState().earnings.staffPayouts(params.id, new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/partners/{id}/payouts", ({ request, params, response }) => {
+      const caller = staffWith(request, "payment.payout");
+      if (caller instanceof Response) return response.untyped(caller);
+      const known = fakeState().partners.get(params.id);
+      if (!known.ok) return response.untyped(refusal(known));
+      const answer = fakeState().earnings.pay(params.id, request.headers.get("idempotency-key"));
+      return answer.ok ? response(202).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/partners/{id}/payout-account/link", ({ request, params, response }) => {
+      const caller = staffWith(request, "partner.write");
+      if (caller instanceof Response) return response.untyped(caller);
+      const known = fakeState().partners.get(params.id);
+      if (!known.ok) return response.untyped(refusal(known));
+      const answer = fakeState().earnings.link(params.id, new URL(request.url).origin);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
     http.get("/orders", ({ request, response }) => {
       const caller = staffWith(request, "order.read");
       if (caller instanceof Response) return response.untyped(caller);
@@ -536,6 +581,14 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       if (caller instanceof Response) return response.untyped(caller);
       const answer = fakeState().jobs.reassign(params.groupId, await request.json(), request.headers.get("idempotency-key"));
       return answer.ok ? response(201).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    // After `/partners/eligible`: handlers match in order, and `{id}` would take "eligible".
+    http.get("/partners/{id}", ({ request, params, response }) => {
+      const caller = staffWith(request, "partner.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().partners.get(params.id);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
     http.get("/orders/{id}/comments", ({ request, params, response }) => {
