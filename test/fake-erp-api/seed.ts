@@ -4,7 +4,7 @@
  * and a demo customer person. Every account shares FAKE_PASSWORD.
  */
 
-import type { MeResponse } from "../../src/lib/api/schema-types";
+import type { MeResponse, PartnerRole } from "../../src/lib/api/schema-types";
 
 export const FAKE_API_URL = "http://localhost:4010";
 export const WORKSPACE = "demo";
@@ -25,6 +25,8 @@ export interface FakeUser {
   permissions: MeResponse["permissions"];
   /** Partner ids for a partner person, the customer id for a customer person. */
   organisations: string[];
+  /** A partner person's role at each of their workshops; owner when left out. */
+  partnerRole?: PartnerRole;
 }
 
 export const STAFF: FakeUser = {
@@ -101,6 +103,28 @@ export const LAYERLINE_OWNER: FakeUser = {
   organisations: [LAYERLINE_ID],
 };
 
+/** Not in erp-api's seed: Northcast's admin, who sees earnings but can't set up payouts. */
+export const NORTHCAST_ADMIN: FakeUser = {
+  id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c30",
+  email: "admin@northcast.example.test",
+  name: "Ines",
+  kind: "partner",
+  permissions: [],
+  organisations: [NORTHCAST_ID],
+  partnerRole: "admin",
+};
+
+/** Not in erp-api's seed: a Northcast member, who works on jobs but doesn't see earnings. */
+export const NORTHCAST_MEMBER: FakeUser = {
+  id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c31",
+  email: "member@northcast.example.test",
+  name: "Milo",
+  kind: "partner",
+  permissions: [],
+  organisations: [NORTHCAST_ID],
+  partnerRole: "member",
+};
+
 /** Not in erp-api's seed: a partner person acting for both workshops. */
 export const PARTNER_TWO_SHOPS: FakeUser = {
   id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c04",
@@ -130,7 +154,7 @@ export const NO_ACCESS: FakeUser = {
   organisations: [],
 };
 
-export const USERS: readonly FakeUser[] = [STAFF, CLERK, WORKFLOW_READER, ORDER_WRITER, PARTNER, LAYERLINE_OWNER, PARTNER_TWO_SHOPS, CUSTOMER, NO_ACCESS];
+export const USERS: readonly FakeUser[] = [STAFF, CLERK, WORKFLOW_READER, ORDER_WRITER, PARTNER, LAYERLINE_OWNER, NORTHCAST_ADMIN, NORTHCAST_MEMBER, PARTNER_TWO_SHOPS, CUSTOMER, NO_ACCESS];
 
 export const PARTNER_NAMES: Record<string, string> = {
   [NORTHCAST_ID]: "Northcast Foundry",

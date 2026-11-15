@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { PAID_PAYOUT_ID } from "./earnings";
 import type { Answer } from "./orders";
 import { groupIdOf } from "./orders-seed";
 import {
@@ -263,21 +264,25 @@ describe("fake erp-api partner jobs over HTTP", () => {
 
   it("gives Northcast's owner the two job offers as unread notices", async () => {
     const token = await tokenFor(PARTNER.email);
-    const res = await fetch(`${FAKE_API_URL}/notifications`, { headers: { authorization: `Bearer ${token}` } });
+    // Unread only: the owner's older payout notice is read already.
+    const res = await fetch(`${FAKE_API_URL}/notifications?unread=true`, { headers: { authorization: `Bearer ${token}` } });
     const { data } = (await res.json()) as { data: { title: string; body: string; read_at: string | null; subject: { type: string } }[] };
     expect(data.map((entry) => entry.title)).toEqual(["New job offered: Ring", "New job offered: Pendant"]);
     expect(data.map((entry) => entry.body)).toEqual(["10 pieces, answer within 5 hours.", "3 pieces, answer within 90 minutes."]);
     expect(data.every((entry) => entry.read_at === null && entry.subject.type === "job_assignment")).toBe(true);
   });
 
-  it("says which job a hand-over notice is for", async () => {
+  it("says which job a hand-over notice is for, and which workshop a payout notice is for", async () => {
     const token = await tokenFor(PARTNER.email);
     const res = await fetch(`${FAKE_API_URL}/notifications`, { headers: { authorization: `Bearer ${token}` } });
-    const { data } = (await res.json()) as { data: { job: { id: string; partner_id: string } | null }[] };
+    type Ref = { id: string; partner_id: string } | null;
+    const { data } = (await res.json()) as { data: { job: Ref; payout: Ref }[] };
     expect(data.map((entry) => entry.job)).toEqual([
       { id: RING_OFFER_ID, partner_id: NORTHCAST_ID },
       { id: PENDANT_OFFER_ID, partner_id: NORTHCAST_ID },
+      null,
     ]);
+    expect(data.map((entry) => entry.payout)).toEqual([null, null, { id: PAID_PAYOUT_ID, partner_id: NORTHCAST_ID }]);
   });
 
   it("posts a partner comment staff can read", async () => {

@@ -6,6 +6,7 @@
 
 import type { FeedEntry } from "../../src/lib/api/schema-types";
 
+import { PAID_PAYOUT_ID } from "./earnings";
 import type { Answer, Page } from "./orders";
 import { PENDANT_OFFER_ID, RING_OFFER_ID } from "./partner-jobs";
 import { NORTHCAST_ID, PARTNER, STAFF } from "./seed";
@@ -47,9 +48,27 @@ function partnerEntries(now: number): StoredEntry[] {
       read_at: null,
     },
   });
+  const paidAt = new Date(now - 72 * 3_600_000).toISOString();
+  // `payout.paid` (erp-api `payouts.service.ts:151`): read already, naming the payout and its workshop.
+  const paid: StoredEntry = {
+    userId: PARTNER.id,
+    entry: {
+      // Older than both offers, so below their ids: the next page is everything below the cursor's id.
+      id: uuid(0),
+      event_key: "payout.paid",
+      subject: { type: "payout", id: PAID_PAYOUT_ID },
+      title: "You have been paid 860.00 EUR",
+      body: "We have sent you 860.00 EUR for 3 jobs. It reaches your account on the payment provider’s schedule.",
+      job: null,
+      payout: { id: PAID_PAYOUT_ID, partner_id: NORTHCAST_ID },
+      created_at: paidAt,
+      read_at: paidAt,
+    },
+  };
   return [
     offered(32, RING_OFFER_ID, "New job offered: Ring", "10 pieces, answer within 5 hours.", 1),
     offered(31, PENDANT_OFFER_ID, "New job offered: Pendant", "3 pieces, answer within 90 minutes.", 2),
+    paid,
   ];
 }
 

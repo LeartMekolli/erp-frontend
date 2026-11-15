@@ -17,6 +17,7 @@ import {
 import { createAiStore } from "./ai";
 import { createCommentsStore } from "./comments";
 import { createJobsStore } from "./jobs";
+import { createEarningsStore } from "./earnings";
 import { createNotificationsStore } from "./notifications";
 import { createOrdersStore } from "./orders";
 import { createPartnerJobsStore } from "./partner-jobs";
@@ -84,6 +85,7 @@ export function createFakeState(now: () => number = Date.now) {
   const notifications = createNotificationsStore(now);
   const ai = createAiStore(now);
   const partnerJobs = createPartnerJobsStore(now, production);
+  const earnings = createEarningsStore(now);
   const suspended = new Set<string>();
 
   /** The file, if the caller may see it: a partner route only sees that workshop's files. */
@@ -124,6 +126,7 @@ export function createFakeState(now: () => number = Date.now) {
     notifications,
     ai,
     partnerJobs,
+    earnings,
 
     /** Suspends a workshop: `/partner-portal/me` says so, and its accept and decline routes answer 403. */
     suspendPartner(id: string): void {
@@ -254,7 +257,7 @@ export function createFakeState(now: () => number = Date.now) {
         partners: user.organisations.map((id) => ({
           id,
           display_name: PARTNER_NAMES[id] ?? "Workshop",
-          role: "owner" as const,
+          role: user.partnerRole ?? ("owner" as const),
           status: suspended.has(id) ? ("suspended" as const) : ("approved" as const),
         })),
       };
