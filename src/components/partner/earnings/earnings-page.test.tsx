@@ -18,6 +18,8 @@ import { server } from "../../../../test/msw";
 import { renderAs, WithMe } from "../../../../test/render";
 import { until } from "../../../../test/wait";
 
+import { partnerEarningsKeys } from "@/lib/partner-earnings/queries";
+
 import { PartnerNoticeProvider } from "../notice";
 
 import { EarningsPage } from "./earnings-page";
@@ -124,6 +126,18 @@ describe("EarningsPage", () => {
     });
 
     // The address mock doesn't change on replace, so each test starts on the tab it leaves.
+    it("re-reads what's owed when the payouts poll sees the payout fail first", async () => {
+      const { client } = renderPage(PARTNER);
+      await payoutRows();
+      expect(await screen.findByText("€1,240.00")).toBeInTheDocument();
+
+      // The two polls drift apart: here the payouts poll lands after the failure, and the owed one hasn't.
+      fakeState().earnings.settlePending(NORTHCAST_ID, "failed");
+      await act(() => client.refetchQueries({ queryKey: partnerEarningsKeys.payouts(NORTHCAST_ID) }));
+
+      await until(() => expect(screen.getByText("€1,660.00")).toBeInTheDocument());
+    });
+
     it("puts the Jobs tab in the address", async () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       renderPage(PARTNER);

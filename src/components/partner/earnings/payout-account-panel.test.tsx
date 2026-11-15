@@ -95,6 +95,24 @@ describe("PayoutAccountPanel", () => {
     expect(linkPosts).toBe(1);
   });
 
+  it("lets the owner ask again after coming Back from the provider", async () => {
+    const user = userEvent.setup();
+    renderPanel(PARTNER);
+    const button = await screen.findByRole("button", { name: "Set up payouts" });
+    await user.click(button);
+    await until(() => expect(go).toHaveBeenCalledTimes(1));
+    expect(button).toBeDisabled();
+
+    // Back from the provider: the browser shows this page again from its cache.
+    act(() => {
+      window.dispatchEvent(Object.assign(new Event("pageshow"), { persisted: true }));
+    });
+
+    expect(button).toBeEnabled();
+    await user.click(button);
+    await until(() => expect(go).toHaveBeenCalledTimes(2));
+  });
+
   it("hides setup while suspended", async () => {
     renderPanel(PARTNER, { suspended: true });
 

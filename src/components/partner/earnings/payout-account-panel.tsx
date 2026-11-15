@@ -67,6 +67,17 @@ export function PayoutAccountPanel({
   const asking = useRef(false);
   const [leaving, setLeaving] = useState(false);
 
+  // Back from the provider, the browser may show this page again from its cache, still leaving: undo that.
+  useEffect(() => {
+    const shown = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      asking.current = false;
+      setLeaving(false);
+    };
+    window.addEventListener("pageshow", shown);
+    return () => window.removeEventListener("pageshow", shown);
+  }, []);
+
   // Back from the provider and ready: say so once, in the notice line.
   const announced = useRef(false);
   useEffect(() => {

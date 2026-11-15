@@ -1,14 +1,15 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isApiProblem } from "@/lib/api/problem";
 import { partnerRoleAtLeast, usePartnerRole } from "@/lib/auth/permissions";
-import { usePartnerOwed, usePartnerPayouts, usePayoutAccount } from "@/lib/partner-earnings/queries";
+import { partnerEarningsKeys, usePartnerOwed, usePartnerPayouts, usePayoutAccount } from "@/lib/partner-earnings/queries";
 
 import { partnerHref } from "../nav";
 import { useWorkshop } from "../use-workshop";
@@ -66,6 +67,15 @@ export function EarningsPage() {
   const owed = usePartnerOwed(partnerId, { enabled: allowed, poll: payouts.anyPending });
   const account = usePayoutAccount(partnerId, { enabled: allowed, checking: false });
   const refused = [payouts.error, owed.error, account.error].some(isForbidden);
+
+  // The two polls drift apart. When the payouts poll sees the last payout settle first, the owed poll
+  // stops before it catches up, so read what's owed once more: a failed payout's money is owed again.
+  const client = useQueryClient();
+  const wasPending = useRef(false);
+  useEffect(() => {
+    if (wasPending.current && !payouts.anyPending) void client.invalidateQueries({ queryKey: partnerEarningsKeys.owed(partnerId) });
+    wasPending.current = payouts.anyPending;
+  }, [payouts.anyPending, client, partnerId]);
 
   const tab: Tab = search.get("tab") === "jobs" ? "jobs" : "payouts";
   const choose = (value: string) => {
