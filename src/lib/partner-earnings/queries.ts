@@ -4,13 +4,12 @@ import { useQuery } from "@tanstack/react-query";
 
 import { partnerApi } from "@/lib/api/client";
 import { problemFrom } from "@/lib/api/problem";
-import type { OwedJob, PartnerOwed, PartnerPayout, PayoutAccountState } from "@/lib/api/schema-types";
+import type { OwedJob, PartnerPayout, PayoutAccountState } from "@/lib/api/schema-types";
+import { PAYOUT_POLL_MS, pendingIn, totalsOf, type OwedTotals } from "@/lib/payouts/poll";
 import { useApiMutation } from "@/lib/query/use-api-mutation";
 import { useCursorList, type Page } from "@/lib/query/use-cursor-list";
 
 const PAGE_SIZE = 20;
-/** While a payout is on its way, payouts and what's owed are re-read this often. */
-const PAYOUT_POLL_MS = 15_000;
 /** After the provider sends the owner back, the account is re-read this often until it's ready. */
 const ACCOUNT_POLL_MS = 5_000;
 
@@ -21,8 +20,7 @@ export const partnerEarningsKeys = {
   account: (partnerId: string) => ["partner-earnings", partnerId, "account"] as const,
 };
 
-/** The owed totals, which cover every page: each page carries the same. */
-export type OwedTotals = Pick<PartnerOwed, "due_total" | "not_yet_total" | "not_yet_count" | "currency">;
+export type { OwedTotals };
 
 /** An owed page in the cursor list's shape: its jobs as `data`. */
 type OwedPage = Page<OwedJob> & OwedTotals;
@@ -42,18 +40,8 @@ export function usePartnerOwed(partnerId: string, { enabled, poll }: { enabled: 
     enabled,
     refetchInterval: poll ? PAYOUT_POLL_MS : false,
   });
-  const first = list.data?.pages[0];
-  const totals: OwedTotals | undefined = first && {
-    due_total: first.due_total,
-    not_yet_total: first.not_yet_total,
-    not_yet_count: first.not_yet_count,
-    currency: first.currency,
-  };
-  return { ...list, totals };
+  return { ...list, totals: totalsOf(list.data?.pages[0]) };
 }
-
-const pendingIn = (pages: readonly Page<PartnerPayout>[] | undefined) =>
-  pages?.some((page) => page.data.some((payout) => payout.status === "pending")) ?? false;
 
 /** The workshop's payouts, newest first, 20 at a time; re-read while any is on its way. */
 export function usePartnerPayouts(partnerId: string, enabled: boolean) {
