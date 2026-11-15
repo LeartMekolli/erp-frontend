@@ -1,17 +1,21 @@
 import { BriefcaseBusiness, Gauge, House, Tag, Users, Wallet, Wrench, type LucideIcon } from "lucide-react";
 
+import type { PartnerRole } from "@/lib/api/schema-types";
+
 export interface PartnerNavLink {
   section: string;
   label: string;
   icon: LucideIcon;
   group: "work" | "setup";
+  /** The least role that sees the link, where erp-api refuses anyone below it; every member otherwise. */
+  role?: PartnerRole;
 }
 
 /** The partner portal's sections, in sidebar order. */
 export const PARTNER_NAV: readonly PartnerNavLink[] = [
   { section: "dashboard", label: "Dashboard", icon: House, group: "work" },
   { section: "jobs", label: "Jobs", icon: BriefcaseBusiness, group: "work" },
-  { section: "earnings", label: "Earnings", icon: Wallet, group: "work" },
+  { section: "earnings", label: "Earnings", icon: Wallet, group: "work", role: "admin" },
   { section: "performance", label: "Performance", icon: Gauge, group: "work" },
   { section: "setup", label: "Setup", icon: Wrench, group: "setup" },
   { section: "prices", label: "Prices", icon: Tag, group: "setup" },

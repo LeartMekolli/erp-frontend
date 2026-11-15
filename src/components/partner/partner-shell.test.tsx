@@ -1,7 +1,7 @@
 import { screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { NORTHCAST_ID, PARTNER, PARTNER_TWO_SHOPS } from "../../../test/fake-erp-api/seed";
+import { NORTHCAST_ADMIN, NORTHCAST_ID, NORTHCAST_MEMBER, PARTNER, PARTNER_TWO_SHOPS } from "../../../test/fake-erp-api/seed";
 import { fakeState } from "../../../test/fake-erp-api/state";
 import { renderAs } from "../../../test/render";
 
@@ -31,6 +31,8 @@ describe("PartnerShell", () => {
   it("lists the partner's sections", async () => {
     renderShell(PARTNER);
     const nav = await screen.findByRole("navigation", { name: "Main" });
+    // Earnings waits for the person's role.
+    await within(nav).findByRole("link", { name: "Earnings" });
     for (const [label, section] of [
       ["Dashboard", "dashboard"],
       ["Jobs", "jobs"],
@@ -44,6 +46,22 @@ describe("PartnerShell", () => {
     }
     expect(within(nav).getByRole("link", { name: "Jobs" })).toHaveAttribute("aria-current", "page");
     expect(within(nav).getByRole("link", { name: "Team" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("shows Earnings to admins and owners only", async () => {
+    for (const user of [PARTNER, NORTHCAST_ADMIN]) {
+      const { unmount } = renderShell(user);
+      const nav = await screen.findByRole("navigation", { name: "Main" });
+      expect(await within(nav).findByRole("link", { name: "Earnings" })).toBeInTheDocument();
+      unmount();
+    }
+
+    renderShell(NORTHCAST_MEMBER);
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    // The workshop's name comes with the role: once it shows, the role is known.
+    await screen.findByText("Northcast Foundry");
+    expect(within(nav).queryByRole("link", { name: "Earnings" })).not.toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Jobs" })).toBeInTheDocument();
   });
 
   it("names the workshop", async () => {
