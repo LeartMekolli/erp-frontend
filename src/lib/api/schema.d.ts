@@ -2142,7 +2142,7 @@ export interface paths {
         get?: never;
         /**
          * Set what a partner is owed for a job instead of its cost, with a reason.
-         * @description For the partner that has the job, or one it was taken from mid-way (else 404). The job is still owed only once every live piece has passed the payout step; for a partner replaced mid-way, at once.
+         * @description For the partner that has the job, or one it was taken from mid-way (else 404). The job is still owed only once every live piece has passed the payout step; for a partner replaced mid-way, at once. The job names the order it is from, for a claim remake the claimed one.
          *
          *     Access: permission `partner.assign`.
          */
@@ -2163,7 +2163,7 @@ export interface paths {
         };
         /**
          * What a partner is owed, per job it has or had, newest first, a page at a time.
-         * @description A job is owed once every live piece has passed its workflow's payout step: the cost frozen when it was handed over, or what staff set instead. `due_total` is what Pay would transfer and `not_yet_total` what the jobs not owed yet will be, across every page.
+         * @description A job is owed once every live piece has passed its workflow's payout step: the cost frozen when it was handed over, or what staff set instead. `due_total` is what Pay would transfer and `not_yet_total` what the jobs not owed yet will be, across every page. Each job names the order it is from, for a claim remake the claimed one.
          *
          *     Access: permission `partner.read`.
          */
@@ -5251,7 +5251,7 @@ export interface paths {
         put?: never;
         /**
          * Pay a partner everything due, in one transfer to its payout account.
-         * @description What is due is what each job is owed now less what payouts have paid for it, so a raised amount or a job taken back shows here. Answers 202 with the payout `pending`; the transfer follows. A partner without a ready payout account, or with nothing due, is a 409; pressing Pay again while one is pending finds nothing due.
+         * @description What is due is what each job is owed now less what payouts have paid for it, so a raised amount or a job taken back shows here. Answers 202 with the payout `pending`; the transfer follows. Without a ready payout account the 409 has `code: 'payout_account_not_ready'`; with nothing due, `code: 'nothing_due'`. Pressing Pay again while one is pending finds nothing due.
          *
          *     Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
          *
@@ -5273,7 +5273,7 @@ export interface paths {
         };
         /**
          * The partner's payouts, newest first, a page at a time, each with what it paid per job.
-         * @description Never why the provider refused a transfer; only staff see that.
+         * @description Never why the provider refused a transfer, nor the order behind a job; only staff see those.
          *
          *     Access: a person acting for the partner, at least `admin`; a suspended partner only reads.
          */
@@ -16687,6 +16687,12 @@ export interface operations {
                             name: string;
                         } | null;
                         quantity: number;
+                        order: {
+                            /** Format: uuid */
+                            id: string;
+                            number: number;
+                            line_position: number;
+                        } | null;
                         /** @enum {string} */
                         state: "not_yet" | "owed";
                         /** @enum {string} */
@@ -16771,6 +16777,12 @@ export interface operations {
                                 name: string;
                             } | null;
                             quantity: number;
+                            order: {
+                                /** Format: uuid */
+                                id: string;
+                                number: number;
+                                line_position: number;
+                            } | null;
                             /** @enum {string} */
                             state: "not_yet" | "owed";
                             /** @enum {string} */
@@ -32371,6 +32383,12 @@ export interface operations {
                                 } | null;
                                 quantity: number;
                                 amount: string;
+                                order: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    number: number;
+                                    line_position: number;
+                                } | null;
                             }[];
                         }[];
                         next_cursor: string | null;
@@ -32458,6 +32476,12 @@ export interface operations {
                             } | null;
                             quantity: number;
                             amount: string;
+                            order: {
+                                /** Format: uuid */
+                                id: string;
+                                number: number;
+                                line_position: number;
+                            } | null;
                         }[];
                     };
                 };
@@ -32504,7 +32528,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/problem+json": components["schemas"]["Problem"];
+                    "application/problem+json": {
+                        type: string;
+                        title: string;
+                        /** @enum {number} */
+                        status: 409;
+                        detail: string;
+                        /** @enum {string} */
+                        code: "payout_account_not_ready" | "nothing_due";
+                    } | components["schemas"]["Problem"];
                 };
             };
         };
