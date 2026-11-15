@@ -42,6 +42,7 @@ function partnerEntries(now: number): StoredEntry[] {
       title,
       body,
       job: { id: groupId, partner_id: NORTHCAST_ID },
+      payout: null,
       created_at: new Date(now - hoursAgo * 3_600_000).toISOString(),
       read_at: null,
     },
@@ -63,7 +64,7 @@ function staffEntries(now: number): StoredEntry[] {
     const createdAt = new Date(now - (index + 1) * 3_600_000).toISOString();
     return {
       userId: STAFF.id,
-      entry: { id: uuid(30 - index), ...structuredClone(event), job: null, created_at: createdAt, read_at: index < EVENTS.length ? null : createdAt },
+      entry: { id: uuid(30 - index), ...structuredClone(event), job: null, payout: null, created_at: createdAt, read_at: index < EVENTS.length ? null : createdAt },
     };
   });
 }
