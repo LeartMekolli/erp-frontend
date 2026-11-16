@@ -17,10 +17,27 @@ const TITLES: Record<number, string> = {
   503: "Service Unavailable",
 };
 
-/** erp-api's error body for a Nest exception (`api-error.ts`, `toApiError`); a `code` brings its extension members. */
-function problem(status: number, detail: string, code?: string, extensions?: Record<string, unknown>) {
+/**
+ * erp-api's error body for a Nest exception (`api-error.ts`, `toApiError`): a `code` brings its
+ * extension members, and `errors` names what it refuses with or without one.
+ */
+function problem(
+  status: number,
+  detail: string,
+  code?: string,
+  extensions?: Record<string, unknown>,
+  errors?: { path: string; message: string }[],
+) {
   return HttpResponse.json(
-    { ...(code ? extensions : {}), type: "about:blank", title: TITLES[status] ?? "Error", status, detail, ...(code ? { code } : {}) },
+    {
+      ...(code ? extensions : {}),
+      type: "about:blank",
+      title: TITLES[status] ?? "Error",
+      status,
+      detail,
+      ...(code ? { code } : {}),
+      ...(errors ? { errors } : {}),
+    },
     { status, headers: { "content-type": "application/problem+json" } },
   );
 }
@@ -100,7 +117,9 @@ function staffWith(request: Request, permission: Permission): FakeUser | Respons
 
 /** A store's refusal as erp-api would send it. */
 function refusal(answer: Exclude<Answer<unknown>, { ok: true }>): Response {
-  return answer.status === 400 ? validation(answer.errors) : problem(answer.status, answer.detail, answer.code, answer.extensions);
+  return answer.status === 400
+    ? validation(answer.errors)
+    : problem(answer.status, answer.detail, answer.code, answer.extensions, answer.errors);
 }
 
 /** The bucket's CORS rules: browsers may PUT with `content-type` (erp-api `README.md`, "File storage"). */
@@ -655,6 +674,34 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       if (caller instanceof Response) return response.untyped(caller);
       const answer = fakeState().catalog.speeds(new URL(request.url).searchParams.get("customer_id"));
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    // Quoting and placing (`quotes.controller.ts`, `couriers.controller.ts:104`, `orders.controller.ts:24-47`).
+    // A quote that can't be priced is a 200, which erp-api documents under its 201.
+    http.post("/pricing/quotes", async ({ request, response }) => {
+      const caller = staffWith(request, "quote.create");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().quotes.quote(await request.json(), request.headers.get("idempotency-key"));
+      if (!answer.ok) return response.untyped(refusal(answer));
+      return answer.body.accepted ? response(201).json(answer.body) : response.untyped(HttpResponse.json(answer.body, { status: 200 }));
+    }),
+
+    http.post("/orders/shipping-rates", async ({ request, response }) => {
+      const caller = staffWith(request, "order.write");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().quotes.rates((await request.json()).customer_id);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/orders", async ({ request, response }) => {
+      const caller = staffWith(request, "order.write");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().quotes.place(
+        await request.json(),
+        { id: caller.id, name: caller.name },
+        request.headers.get("idempotency-key"),
+      );
+      return answer.ok ? response(201).json(answer.body) : response.untyped(refusal(answer));
     }),
 
     http.get("/search", ({ request, response }) => {
