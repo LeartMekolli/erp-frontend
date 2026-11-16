@@ -24,7 +24,7 @@ function Banner() {
       <div role="status">
         {suspended && (
           <div className="mx-3 mb-2 flex items-start gap-2 rounded-xl bg-card px-4 py-3 text-sm text-ink sm:mx-5">
-            <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-collect" />
+            <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warn" />
             <p>Your workshop is suspended. You can finish the jobs you have, but you can&apos;t take new ones.</p>
           </div>
         )}

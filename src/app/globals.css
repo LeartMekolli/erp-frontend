@@ -26,6 +26,8 @@
   /* Order status accents: ready to ship, and waiting for payment (never as text colour on white) */
   --color-ship: #1d8f63;
   --color-collect: #e0a33a;
+  /* Warning text and icons, between fine and late: 5.9:1 on white, 5.1:1 on `ground` */
+  --color-warn: #8a5a00;
   --color-panel-soft: #faf9ff;
   --color-panel-soft-ink: #5c5873;
   --color-placeholder: #706d80;
