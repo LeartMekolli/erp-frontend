@@ -10,7 +10,7 @@ import { isApiProblem } from "@/lib/api/problem";
 export const STILL_WORKING = "Still working on it. Try again in a moment.";
 
 /** Objects with sorted keys at every depth, so `{ a, b }` and `{ b, a }` are one input. */
-function canonical(value: unknown): unknown {
+export function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
   if (typeof value === "object" && value !== null) {
     const record = value as Record<string, unknown>;
