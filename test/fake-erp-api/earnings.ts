@@ -263,13 +263,17 @@ export function createEarningsStore(now: () => number) {
       noKeys.add(partnerId);
     },
 
-    /** Test control: the provider settles the partner's pending payout; a failed one gives its jobs back to be paid. */
-    settlePending(partnerId: string, status: "paid" | "failed"): void {
+    /**
+     * Test control: the provider settles the partner's pending payout; a failed one keeps the provider's
+     * words (`failure`, staff only) and gives its jobs back to be paid.
+     */
+    settlePending(partnerId: string, status: "paid" | "failed", failure?: string): void {
       const payout = payouts.find((candidate) => candidate.partnerId === partnerId && candidate.status === "pending");
       if (!payout) return;
       payout.status = status;
       payout.settledAt = now();
       if (status === "paid") return;
+      payout.failure = failure ?? null;
       for (const line of payout.jobs) {
         const job = jobsOf(partnerId).find((candidate) => candidate.id === line.jobId)!;
         job.paid -= line.amount;

@@ -36,13 +36,15 @@ const DOT: Record<PayoutStatus, string> = { pending: "bg-violet", paid: "bg-ship
 
 const STATUS: Record<Audience, Record<PayoutStatus, string>> = { partner: PAYOUT_STATUS, staff: STAFF_PAYOUT_STATUS };
 
-const WORDS: Record<Audience, { loading: string; failed: string; empty: string }> = {
+/** `noProduct` names a job whose product was removed, as each area's jobs list does. */
+const WORDS: Record<Audience, { loading: string; failed: string; empty: string; noProduct: string }> = {
   partner: {
     loading: "Loading your payouts",
     failed: "Your payouts couldn't be loaded.",
     empty: "No payouts yet. The workspace pays what you're owed in one transfer.",
+    noProduct: "Job",
   },
-  staff: { loading: "Loading payouts", failed: "This partner's payouts couldn't be loaded.", empty: "No payouts yet." },
+  staff: { loading: "Loading payouts", failed: "This partner's payouts couldn't be loaded.", empty: "No payouts yet.", noProduct: "Removed product" },
 };
 
 /** One payout: a row that opens in place to list the jobs it paid for. erp-api has no route for one payout. */
@@ -80,7 +82,7 @@ function PayoutRow({ payout, audience, jobDetail }: { payout: PayoutView; audien
           {payout.jobs.map((job) => (
             <li key={job.assignment_id} className="flex flex-col py-1 text-sm">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="min-w-0 truncate text-ink-2">{`${job.product?.name ?? "Job"} · ${piecesText(job.quantity)}`}</span>
+                <span className="min-w-0 truncate text-ink-2">{`${job.product?.name ?? WORDS[audience].noProduct} · ${piecesText(job.quantity)}`}</span>
                 <span className="shrink-0 tabular-nums">{payoutJobAmount(job.amount, payout.currency)}</span>
               </div>
               {jobDetail?.(job)}

@@ -1,8 +1,9 @@
 import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { NORTHCAST_ID, PAYER, STAFF, STAFF_MEMBER } from "../../../test/fake-erp-api/seed";
+import { FAKE_API_URL, NORTHCAST_ID, PAYER, STAFF, STAFF_MEMBER } from "../../../test/fake-erp-api/seed";
 import { fakeState, resetFakeState } from "../../../test/fake-erp-api/state";
 import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
@@ -112,10 +113,11 @@ describe("PartnerPay", () => {
     expect(await screen.findByText(/^Last payout: On its way · €1,240\.00 · /)).toBeInTheDocument();
     await until(() => expect(within(screen.getByRole("region", { name: "What's owed" })).getByText("€0.00")).toBeInTheDocument());
 
-    fakeState().earnings.settlePending(NORTHCAST_ID, "failed");
+    fakeState().earnings.settlePending(NORTHCAST_ID, "failed", "The bank account was closed");
     act(() => vi.advanceTimersByTime(15_000));
 
     await until(() => expect(screen.getByText(/^Last payout: Failed\. Owed again · €1,240\.00 · /)).toBeInTheDocument());
+    expect(screen.getByText("The payment provider said: The bank account was closed")).toBeInTheDocument();
     await until(() => expect(within(screen.getByRole("region", { name: "What's owed" })).getByText("€1,240.00")).toBeInTheDocument());
   });
 
@@ -185,6 +187,22 @@ describe("PartnerPay", () => {
     expect(screen.getByText("Payouts not set up")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Pay/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Copy setup link" })).not.toBeInTheDocument();
+  });
+
+  it("says when the payouts couldn't be loaded, in Pay's place", async () => {
+    settledPaid();
+    server.use(http.get(`${FAKE_API_URL}/partners/:id/payouts`, () => HttpResponse.json({}, { status: 500 }), { once: true }));
+    const user = userEvent.setup();
+    renderAs(STAFF, <PartnerPage />);
+
+    expect(await screen.findByText("This partner's payouts couldn't be loaded.")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Jobs" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("button", { name: /^Pay/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByRole("button", { name: "Pay €1,240.00" })).toBeInTheDocument();
+    expect(screen.queryByText("This partner's payouts couldn't be loaded.")).not.toBeInTheDocument();
   });
 
   it("disables Pay offline", async () => {

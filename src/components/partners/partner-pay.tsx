@@ -3,6 +3,7 @@
 import { CircleAlert, CircleCheck } from "lucide-react";
 import { useId, useRef, useState } from "react";
 
+import { LoadFailure } from "@/components/data/load-failure";
 import { OwedTotals } from "@/components/earnings/owed-totals";
 import { Button } from "@/components/ui/button";
 import { errorMessage } from "@/lib/api/error-message";
@@ -20,7 +21,7 @@ import { PayDialog } from "./pay-dialog";
 import { SetupLink } from "./setup-link";
 import type { PartnerMoney } from "./use-partner-money";
 
-/** Why erp-api didn't pay, by its code (`payment-response.ts:246`); a 409 has already re-read the page. */
+/** Why erp-api didn't pay, by its code (`payment-response.ts:173`); a 409 has already re-read the page. */
 function refusalWords(error: unknown): string {
   switch (payRefusal(error)) {
     case "payout_account_not_ready":
@@ -76,6 +77,8 @@ export function PartnerPay({ partner, money }: { partner: StaffPartner; money: P
   // What Pay would send, as erp-api counts it; Pay waits for the payouts too, to know whether one is on its way.
   const amount = totals && owedNow(totals);
   const showPay = mayPayOut && canReadPayments && firstPage !== undefined;
+  // Without the payouts Pay can't show, so say why rather than leave its place empty.
+  const payoutsFailed = mayPayOut && canReadPayments && firstPage === undefined && payouts.isError;
 
   const pendingFirst = firstPage?.data.some((payout) => payout.status === "pending") ?? false;
   const nothingDue = totals ? signOf(totals.due_total) !== 1 : true;
@@ -146,6 +149,9 @@ export function PartnerPay({ partner, money }: { partner: StaffPartner; money: P
                 }}
               />
             </>
+          )}
+          {payoutsFailed && (
+            <LoadFailure error={payouts.error} fallback="This partner's payouts couldn't be loaded." onRetry={() => void payouts.refetch()} />
           )}
           {canReadPayments && (
             <div role="status" className="flex flex-col gap-0.5 text-sm text-ink-2 sm:text-right">

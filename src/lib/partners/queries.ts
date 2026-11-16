@@ -183,7 +183,7 @@ export function usePayPartner(id: string) {
 
 /**
  * Why erp-api refused a pay: its code, `"other"` for a 409 without one of the two codes, and undefined for
- * any failure that isn't a 409 (`payout_account_not_ready`, `nothing_due`; erp-api `payment-response.ts:246`).
+ * any failure that isn't a 409 (`payout_account_not_ready`, `nothing_due`; erp-api `payment-response.ts:173`).
  */
 export function payRefusal(error: unknown): PayRefusedProblem["code"] | "other" | undefined {
   if (!isApiProblem(error) || error.status !== 409) return undefined;
