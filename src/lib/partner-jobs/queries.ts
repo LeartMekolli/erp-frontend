@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type InfiniteData, type QueryClient } from "@tanstack/react-query";
 
 import { partnerApi } from "@/lib/api/client";
 import { idempotencyHeader } from "@/lib/api/idempotency";
@@ -18,7 +18,7 @@ import type {
 } from "@/lib/api/schema-types";
 import type { Photo } from "@/lib/production/shape";
 import { useApiMutation } from "@/lib/query/use-api-mutation";
-import { useCursorList } from "@/lib/query/use-cursor-list";
+import { useCursorList, type Page } from "@/lib/query/use-cursor-list";
 
 const PAGE_SIZE = 20;
 const MOVES_PAGE = 25;
@@ -78,6 +78,30 @@ export function usePartnerJob(partnerId: string, groupId: string, enabled = true
   });
 }
 
+type JobPages = InfiniteData<Page<PartnerJob>, string | undefined>;
+
+/**
+ * Moves an accepted offer from the offered list to the front of In progress
+ * straight away. Otherwise the offers re-read can land first, and with nothing
+ * else open the Jobs page flashes "No jobs yet" until In progress catches up.
+ * erp-api lists the accepted job as the same job with `status: "accepted"`
+ * (`partner-response.ts:198`); the re-reads that follow put it in its place.
+ */
+function moveToAccepted(client: QueryClient, partnerId: string, groupId: string) {
+  const offered = client.getQueryData<JobPages>(partnerJobsKeys.list(partnerId, "offered"));
+  const job = offered?.pages.flatMap((page) => page.data).find((one) => one.id === groupId);
+  if (!job) return;
+  client.setQueryData<JobPages>(partnerJobsKeys.list(partnerId, "offered"), (old) =>
+    old ? { ...old, pages: old.pages.map((page) => ({ ...page, data: page.data.filter((one) => one.id !== groupId) })) } : old,
+  );
+  client.setQueryData<JobPages>(partnerJobsKeys.list(partnerId, "accepted"), (old) => {
+    const [first, ...rest] = old?.pages ?? [];
+    if (!old || !first) return old;
+    const accepted: PartnerJob = { ...job, status: "accepted" };
+    return { ...old, pages: [{ ...first, data: [accepted, ...first.data.filter((one) => one.id !== groupId)] }, ...rest] };
+  });
+}
+
 /** Accepts or declines an offer; every list and detail of the workshop's jobs fetches again. */
 export function useAnswerOffer(partnerId: string) {
   const client = useQueryClient();
@@ -91,7 +115,12 @@ export function useAnswerOffer(partnerId: string) {
       if (!data) throw problemFrom(error, response);
       return data;
     },
-    { onSettled: () => client.invalidateQueries({ queryKey: partnerJobsKeys.all(partnerId) }) },
+    {
+      onSuccess: (_assignment, { groupId, answer }) => {
+        if (answer === "accept") moveToAccepted(client, partnerId, groupId);
+      },
+      onSettled: () => client.invalidateQueries({ queryKey: partnerJobsKeys.all(partnerId) }),
+    },
   );
 }
 
