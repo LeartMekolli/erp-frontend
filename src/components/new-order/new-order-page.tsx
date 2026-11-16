@@ -10,6 +10,7 @@ import { canPlaceOrders } from "@/lib/auth/permissions";
 import { EMPTY_VALUES, newOrderSchema, type NewOrderValues } from "@/lib/new-order/form";
 
 import { COPY } from "./copy";
+import { CustomerSection } from "./customer-section";
 import { LeaveDialog } from "./leave-dialog";
 import { Section } from "./section";
 import { useLeaveGuard } from "./use-leave-guard";
@@ -37,7 +38,9 @@ function NewOrder() {
           </Button>
         </div>
 
-        <Section number={1} title={COPY.sections.customer} open />
+        <Section number={1} title={COPY.sections.customer} open>
+          <CustomerSection />
+        </Section>
         <Section number={2} title={COPY.sections.product} open={customerId !== ""} closedHint={COPY.closed.product} />
         {/* Tasks 9 and 10 open these two, once there is a product and a price. */}
         <Section number={3} title={COPY.sections.price} open={false} closedHint={COPY.closed.price} />

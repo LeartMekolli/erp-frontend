@@ -14,6 +14,16 @@ export const COPY = {
     price: "Fill in the product first.",
     delivery: "Get a price first.",
   },
+  customer: {
+    label: "Customer",
+    placeholder: "Search customers by name",
+    searching: "Searching…",
+    loading: "Loading the customer…",
+    searchFailed: "Couldn't search customers.",
+    loadFailed: "Couldn't load the customer.",
+    noMatch: (text: string) => `No customer matches “${text}”.`,
+    disabled: (name: string) => `${name} is disabled. Pick another customer.`,
+  },
   leave: {
     title: "Leave this order?",
     text: "What you've entered here will be lost.",

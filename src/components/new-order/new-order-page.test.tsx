@@ -70,6 +70,32 @@ describe("NewOrderPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(navigation.push).toHaveBeenCalledWith("/orders");
   });
+
+  it("asks before leaving with a customer picked", async () => {
+    renderAs(
+      ORDER_TAKER,
+      <>
+        <a href="/orders">Orders</a>
+        <NewOrderPage />
+      </>,
+    );
+    await userEvent.type(await screen.findByRole("combobox", { name: "Customer" }), "Luna");
+    await userEvent.click(await screen.findByRole("option", { name: "Luna Jewels" }));
+    // The customer is set once loaded, which also opens the product section.
+    await waitFor(() => expect(screen.queryByText("Pick a customer first.")).not.toBeInTheDocument());
+
+    // Only the link's click counts; picking the customer clicked too.
+    reached = [];
+    await userEvent.click(screen.getByRole("link", { name: "Orders" }));
+    expect(await screen.findByRole("dialog", { name: "Leave this order?" })).toBeInTheDocument();
+    expect(reached).toEqual([]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Stay" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(navigation.push).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { level: 1, name: "New order" })).toBeInTheDocument();
+    expect(screen.getByText("Group: Trade · Pays first · Plan: Free")).toBeInTheDocument();
+  });
 });
 
 function Harness({ dirty }: { dirty: boolean }) {
