@@ -619,6 +619,44 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
+    // What the New order page reads (`customers.controller.ts:70,152`, `products.controller.ts`,
+    // `options.controller.ts:39`, `quotes.controller.ts`): each route has its own permission.
+    http.get("/customers/{id}", ({ request, params, response }) => {
+      const caller = staffWith(request, "customer.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().catalog.customer(params.id);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/customers/{id}/addresses", ({ request, params, response }) => {
+      const caller = staffWith(request, "customer.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().catalog.addresses(params.id);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/catalog/products", ({ request, response }) => {
+      const caller = staffWith(request, "catalog.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const query = new URL(request.url).searchParams;
+      const answer = fakeState().catalog.products(query.get("customer_id"), query);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/catalog/option-groups", ({ request, response }) => {
+      const caller = staffWith(request, "catalog.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().catalog.optionGroups();
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/pricing/quotes/delivery-speeds", ({ request, response }) => {
+      const caller = staffWith(request, "quote.create");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().catalog.speeds(new URL(request.url).searchParams.get("customer_id"));
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
     http.get("/search", ({ request, response }) => {
       const user = fakeState().authenticate(bearer(request));
       if (!user) return response.untyped(problem(401, "Unauthorized"));

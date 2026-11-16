@@ -15,6 +15,7 @@ import {
   type FakeUser,
 } from "./seed";
 import { createAiStore } from "./ai";
+import { createCatalogStore } from "./catalog";
 import { createCommentsStore } from "./comments";
 import { createJobsStore } from "./jobs";
 import { createEarningsStore } from "./earnings";
@@ -89,6 +90,7 @@ export function createFakeState(now: () => number = Date.now) {
   const earnings = createEarningsStore(now);
   const suspended = new Set<string>();
   const partners = createPartnersStore((id) => earnings.account(id).state, (id) => suspended.has(id));
+  const catalog = createCatalogStore();
 
   /** The file, if the caller may see it: a partner route only sees that workshop's files. */
   function ownFile(fileId: string, partnerId?: string): FakeFile | null {
@@ -130,6 +132,7 @@ export function createFakeState(now: () => number = Date.now) {
     partnerJobs,
     earnings,
     partners,
+    catalog,
 
     /** Suspends a workshop: `/partner-portal/me` says so, and its accept and decline routes answer 403. */
     suspendPartner(id: string): void {
