@@ -17,6 +17,17 @@ export function useCan(permission: Permission): boolean {
   return can(useMe().data, permission);
 }
 
+const PLACE_ORDER_PERMISSIONS = ["order.write", "quote.create", "customer.read", "catalog.read"] as const satisfies readonly Permission[];
+
+/** Whether the New order page can work: it places, quotes, and reads customers and the catalog. */
+export function canPlaceOrders(me: MeResponse | undefined): boolean {
+  return PLACE_ORDER_PERMISSIONS.every((permission) => can(me, permission));
+}
+
+export function useCanPlaceOrders(): boolean {
+  return canPlaceOrders(useMe().data);
+}
+
 /** erp-api's order of partner roles (`src/modules/partners/partner-roles.ts:2-7`). */
 const PARTNER_ROLES = ["member", "admin", "owner"] as const satisfies readonly PartnerRole[];
 
