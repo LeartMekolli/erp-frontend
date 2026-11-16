@@ -50,7 +50,8 @@ export default defineConfig({
     },
     {
       // A production build on its own port, so a running `npm run dev` (3001, real erp-api) is left alone.
-      command: `next build && next start -p ${new URL(APP_URL).port}`,
+      // CI builds it in a step of its own first (`.github/workflows/ci.yml`), with the same settings, so here it only starts.
+      command: `${process.env.CI ? "" : "next build && "}next start -p ${new URL(APP_URL).port}`,
       url: `${APP_URL}/sign-in`,
       timeout: 180_000,
       reuseExistingServer: false,

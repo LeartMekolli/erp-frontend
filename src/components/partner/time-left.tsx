@@ -11,7 +11,7 @@ export function TimeLeft({ expiresAt, now }: { expiresAt: string; now: number })
   const { text, urgent } = timeLeft(expiresAt, now);
   if (!urgent) return <span className="text-sm text-ink-2">{text}</span>;
   return (
-    <span className="inline-flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-late">
+    <span className="inline-flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-warn">
       <Clock aria-hidden className="size-4 shrink-0" />
       <span>Urgent</span>
       <span>{text}</span>

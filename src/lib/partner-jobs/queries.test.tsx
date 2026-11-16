@@ -1,4 +1,5 @@
 import { act, waitFor } from "@testing-library/react";
+import { http } from "msw";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { RING_BAND_JOB_ID, RING_OFFER_ID, PENDANT_OFFER_ID } from "../../../test/fake-erp-api/partner-jobs";
@@ -34,6 +35,36 @@ describe("partner job queries", () => {
     expect(keys[0]).toBeTruthy();
     await waitFor(() => expect(result.current.offers.items.map((job) => job.id)).toEqual([PENDANT_OFFER_ID]));
     expect(client.getQueryState(partnerJobsKeys.list(NORTHCAST_ID, "offered"))?.isInvalidated).toBe(false);
+  });
+
+  it("moves an accepted offer to In progress before the lists are read again", async () => {
+    const { result } = renderHookAs(PARTNER, () => ({
+      offers: usePartnerJobs(NORTHCAST_ID, "offered"),
+      inProgress: usePartnerJobs(NORTHCAST_ID, "accepted"),
+      answer: useAnswerOffer(NORTHCAST_ID),
+    }));
+    await waitFor(() => expect(result.current.offers.items).toHaveLength(2));
+    await waitFor(() => expect(result.current.inProgress.isSuccess).toBe(true));
+    // The re-reads after the accept never answer, so only the move in the cache can change the lists.
+    server.use(http.get(`${FAKE_API_URL}/partner-portal/partners/:partnerId/jobs`, () => new Promise<never>(() => {})));
+
+    act(() => result.current.answer.mutate({ groupId: RING_OFFER_ID, answer: "accept" }));
+
+    await waitFor(() => expect(result.current.inProgress.items[0]).toMatchObject({ id: RING_OFFER_ID, status: "accepted" }));
+    expect(result.current.offers.items.map((job) => job.id)).toEqual([PENDANT_OFFER_ID]);
+  });
+
+  it("leaves In progress alone after a decline", async () => {
+    const { result } = renderHookAs(PARTNER, () => ({
+      inProgress: usePartnerJobs(NORTHCAST_ID, "accepted"),
+      answer: useAnswerOffer(NORTHCAST_ID),
+    }));
+    await waitFor(() => expect(result.current.inProgress.isSuccess).toBe(true));
+    const before = result.current.inProgress.items.map((job) => job.id);
+
+    await act(() => result.current.answer.mutateAsync({ groupId: PENDANT_OFFER_ID, answer: "decline" }));
+
+    expect(result.current.inProgress.items.map((job) => job.id)).toEqual(before);
   });
 
   it("moves through the partner's route", async () => {
