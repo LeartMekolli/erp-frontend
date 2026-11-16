@@ -1004,6 +1004,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/portal/customers/{customerId}/delivery-speeds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The delivery speeds the customer can order at, by key.
+         * @description Names and working days only; the price of a speed comes with a quote.
+         *
+         *     Access: a person acting for the customer, at least `viewer`.
+         */
+        get: operations["PortalSpeedsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/catalog/units": {
         parameters: {
             query?: never;
@@ -1273,7 +1295,9 @@ export interface paths {
         };
         /**
          * List products with their options and design file, newest first.
-         * @description Access: permission `catalog.read`.
+         * @description With `customer_id`, only the products that customer can see and quote.
+         *
+         *     Access: permission `catalog.read`.
          */
         get: operations["ProductsController_list"];
         put?: never;
@@ -1311,7 +1335,7 @@ export interface paths {
         head?: never;
         /**
          * Change a product's name, category, sizing or fixed material.
-         * @description Key and kind stay as created. Moving a ready-made product to a category whose required measures its design file lacks is a 409.
+         * @description Key and kind stay as created. Moving a ready-made product to a category whose required measures its design file lacks is a 409, and so is changing the customer of a product that carries a customer's own design file.
          *
          *     Access: permission `catalog.write`.
          */
@@ -1372,7 +1396,7 @@ export interface paths {
         get?: never;
         /**
          * Pin a measured design file version as a ready-made product's own file.
-         * @description A 409 when the product is custom, the file is not a design, the version is not measured yet, or it lacks a measure the product's category requires. A later upload never changes the product until it is pinned again.
+         * @description A 409 when the product is custom, the file is not a design, the version is not measured yet, or it lacks a measure the product's category requires; also when the file is a customer's own and the product isn't that customer's. A later upload never changes the product until it is pinned again.
          *
          *     Access: permission `catalog.write`.
          */
@@ -1965,13 +1989,35 @@ export interface paths {
         put?: never;
         /**
          * Price a configuration of a product and save it as a quote.
-         * @description Runs the configuration check, works out the steps, prices them and applies overhead, margin, the quantity tier, the customer group and the delivery speed. A saved quote is a 201 with the customer summary; its price holds until `expires_at`. A configuration that cannot be priced is a 200 with `accepted: false` and every reason, and nothing is saved. An unknown `customer_group` or `delivery_speed` is a 400. With `customer_id`, the quote is for that customer: the customer's group applies (naming `customer_group` as well is a 400) and its people see the quote in the portal. A product made of parts is priced as its own steps plus a quote per part, at the options it shares with the part, the part's size and the quantity the line needs; any part that can't be priced refuses it, naming the part. `GET` shows the parts under `breakdown.parts`.
+         * @description Runs the configuration check, works out the steps, prices them and applies overhead, margin, the quantity tier, the customer group and the delivery speed. A saved quote is a 201 with the customer summary; its price holds until `expires_at`. A configuration that cannot be priced is a 200 with `accepted: false` and every reason, and nothing is saved. An unknown `customer_group` or `delivery_speed` is a 400. With `customer_id`, the quote is for that customer: the customer's group applies (naming `customer_group` as well is a 400) and its people see the quote in the portal. With `customer_id`, the product must be one that customer can see and `file_version_id` one of its own files; without it, the file must not be a customer's. Anything else is a 404. A product made of parts is priced as its own steps plus a quote per part, at the options it shares with the part, the part's size and the quantity the line needs; any part that can't be priced refuses it, naming the part. `GET` shows the parts under `breakdown.parts`. `partner_id` (with `customer_id`) quotes with that workshop's prices, as the customer's own pick would: 403 unless the workspace lets the customer pick, and a workshop that can't take the job is refused with `partner_unavailable`.
          *
          *     Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
          *
          *     Access: permission `quote.create`.
          */
         post: operations["QuotesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pricing/quotes/delivery-speeds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The delivery speeds a quote can name, by key.
+         * @description Without surcharges: whoever quotes needs the names and the days, the prices come with a quote. With `customer_id`, only the speeds the customer's plan offers.
+         *
+         *     Access: permission `quote.create`.
+         */
+        get: operations["QuotesController_deliverySpeeds"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3340,6 +3386,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/pricing/quotes/partners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The workshops a customer may pick for a configuration, each at the price the customer would pay with it.
+         * @description As the customer's own list, acting for `customer_id`: only workshops that take direct orders and can take the job right now; nothing is saved. Quote with one by sending its id as `partner_id` to `POST /pricing/quotes`. 403 unless the workspace lets the customer pick; a product made of parts is a 400.
+         *
+         *     Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
+         *
+         *     Access: permission `quote.create`.
+         */
+        post: operations["StaffPartnerQuotesController_choices"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orders/shipping-methods": {
         parameters: {
             query?: never;
@@ -3433,7 +3503,7 @@ export interface paths {
         put?: never;
         /**
          * Place an order for a customer from the quotes it was shown, and start every line.
-         * @description Each line is a quote of the customer, ordered once, at its price. The totals, tax and promised date are frozen now. A line whose quote names a workshop the customer picked starts as that workshop's job; if the workshop can no longer take it, the whole order is refused (409, naming the line) and nothing is created. Other lines start with no partner. Unless the workspace's `partners.routing.splitOrderLines` is on, lines picked at different workshops are a 409 naming each line that differs from the first. A quote of another customer is not found; one already ordered is a 409. A quote past its hold is priced again: unchanged, the order uses the new quote; changed or refused, nothing is placed and the 409 has `code: 'price_changed'` with each such line's new quote to order with. A live-rate shipping method is priced now by the courier service: no rate for it is a 400 on `shipping_method`, a service that fails a 503.
+         * @description Each line is a quote of the customer, ordered once, at its price. The totals, tax and promised date are frozen now. A line whose quote names a workshop the customer picked starts as that workshop's job; if the workshop can no longer take it, the whole order is refused (409 with `code: 'partner_unavailable'` and each reason on the line) and nothing is created: price the line again to pick another. Other lines start with no partner. Unless the workspace's `partners.routing.splitOrderLines` is on, lines picked at different workshops are a 409 naming each line that differs from the first. A quote of another customer is not found; one already ordered is a 409. A quote past its hold is priced again: unchanged, the order uses the new quote; changed or refused, nothing is placed and the 409 has `code: 'price_changed'` with each such line's new quote to order with. A live-rate shipping method is priced now by the courier service: no rate for it is a 400 on `shipping_method`, a service that fails a 503.
          *
          *     Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
          *
@@ -3667,7 +3737,7 @@ export interface paths {
         put?: never;
         /**
          * Order from the customer's quotes, at the prices shown, and start every line.
-         * @description Each line is one of the customer's quotes, ordered once; another customer's quote is not found, one already ordered is a 409. The totals, tax and promised date are frozen now. A quote past its hold is priced again: unchanged, the order uses the new quote; changed or refused, nothing is placed and the 409 has `code: 'price_changed'` with each such line's new quote to order with, or why it can't be priced in plain words. A line at a workshop the customer picked that can no longer take it refuses the whole order (409, naming the line); so do lines picked at different workshops, unless the workspace allows it. A live-rate shipping method is priced now by the courier service: no rate for it is a 400 on `shipping_method`, a service that fails a 503.
+         * @description Each line is one of the customer's quotes, ordered once; another customer's quote is not found, one already ordered is a 409. The totals, tax and promised date are frozen now. A quote past its hold is priced again: unchanged, the order uses the new quote; changed or refused, nothing is placed and the 409 has `code: 'price_changed'` with each such line's new quote to order with, or why it can't be priced in plain words. A line at a workshop the customer picked that can no longer take it refuses the whole order (409 with `code: 'partner_unavailable'` and each reason on the line): price the line again to pick another. So do lines picked at different workshops, unless the workspace allows it. A live-rate shipping method is priced now by the courier service: no rate for it is a 400 on `shipping_method`, a service that fails a 503.
          *
          *     Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
          *
@@ -10665,6 +10735,71 @@ export interface operations {
             };
         };
     };
+    PortalSpeedsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            key: string;
+                            name: string;
+                            working_days: number;
+                            is_default: boolean;
+                        }[];
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     UnitsController_list: {
         parameters: {
             query?: never;
@@ -11943,6 +12078,7 @@ export interface operations {
             query?: {
                 limit?: number;
                 cursor?: string;
+                customer_id?: string;
             };
             header?: never;
             path?: never;
@@ -12040,6 +12176,15 @@ export interface operations {
             };
             /** @description Not allowed */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15826,6 +15971,8 @@ export interface operations {
                     customer_group?: string;
                     /** Format: uuid */
                     customer_id?: string;
+                    /** Format: uuid */
+                    partner_id?: string;
                 };
             };
         };
@@ -15912,6 +16059,71 @@ export interface operations {
             };
             /** @description Conflict with the current state */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    QuotesController_deliverySpeeds: {
+        parameters: {
+            query?: {
+                customer_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            key: string;
+                            name: string;
+                            working_days: number;
+                            is_default: boolean;
+                        }[];
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22394,6 +22606,114 @@ export interface operations {
             };
             /** @description Not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    StaffPartnerQuotesController_choices: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @default {} */
+                    options?: {
+                        [key: string]: string;
+                    };
+                    size?: {
+                        scale: string;
+                    } | {
+                        named: string;
+                    };
+                    /** Format: uuid */
+                    file_version_id?: string;
+                    /** Format: uuid */
+                    product_id: string;
+                    quantity: number;
+                    delivery_speed?: string;
+                    /** Format: uuid */
+                    customer_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            partner: {
+                                /** Format: uuid */
+                                id: string;
+                                display_name: string;
+                            };
+                            score: number | null;
+                            price: {
+                                currency: string;
+                                lines: {
+                                    /** @enum {string} */
+                                    label: "material" | "making" | "finishing" | "quantity_discount" | "your_discount" | "plan_discount" | "delivery_speed";
+                                    amount: string;
+                                }[];
+                                unit_price: string;
+                                total: string;
+                            };
+                        }[];
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Conflict with the current state */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -8,6 +8,12 @@ type JsonOk<P extends keyof paths, M extends "get" | "post"> = paths[P][M] exten
   ? Body
   : never;
 
+type JsonCreated<P extends keyof paths, M extends "post"> = paths[P][M] extends {
+  responses: { 201: { content: { "application/json": infer Body } } };
+}
+  ? Body
+  : never;
+
 /** `GET /me`: the signed-in user's kind, workspace, roles, permissions and memberships. */
 export type MeResponse = JsonOk<"/me", "get">;
 
@@ -189,6 +195,56 @@ export type SuggestionKind = NonNullable<NonNullable<AiRun["answer"]>["action"]>
 
 /** One in-app notification, from `GET /notifications`. */
 export type FeedEntry = JsonOk<"/notifications", "get">["data"][number];
+
+/** One product as `GET /catalog/products` lists it; with `customer_id`, only what that customer can see. */
+export type CatalogProduct = JsonOk<"/catalog/products", "get">["data"][number];
+
+/** How a product is sized: not at all, a scale in a range, or named sizes. */
+export type ProductSizing = CatalogProduct["sizing"];
+
+/** One option group with its values' keys and names, from `GET /catalog/option-groups`. */
+export type OptionGroup = JsonOk<"/catalog/option-groups", "get">["data"][number];
+
+/** `GET /customers/{id}`: a customer with its group, payment terms and plan. */
+export type Customer = JsonOk<"/customers/{id}", "get">;
+
+/** `GET /customers/{id}/addresses`: the saved shipping and billing addresses. */
+export type CustomerAddresses = JsonOk<"/customers/{id}/addresses", "get">;
+
+/** Where an order goes, as erp-api checks it. */
+export type Address = NonNullable<CustomerAddresses["shipping_address"]>;
+
+/** A delivery speed a quote can name, from `GET /pricing/quotes/delivery-speeds`; no surcharge, that comes with the quote. */
+export type SpeedChoice = JsonOk<"/pricing/quotes/delivery-speeds", "get">["data"][number];
+
+/** `POST /pricing/quotes`: a configuration of a product, for a customer. */
+export type QuoteBody = JsonBody<"/pricing/quotes", "post">;
+
+/**
+ * That post's answer: a saved quote (201) or why it can't be priced. erp-api documents both under 201,
+ * though a refusal comes as a 200; openapi-fetch reads either as data.
+ */
+export type QuoteResult = JsonCreated<"/pricing/quotes", "post">;
+
+/** A saved quote as the customer would see it: summary lines, unit price, total and until when it holds. */
+export type QuoteSummary = Extract<QuoteResult, { accepted: true }>["quote"];
+
+/** One reason a configuration can't be priced. */
+export type QuoteRefusal = Extract<QuoteResult, { accepted: false }>["reasons"][number];
+
+export type SummaryLabel = QuoteSummary["lines"][number]["label"];
+
+/** One shipping method's price for an order to an address, from `POST /orders/shipping-rates`. */
+export type ShippingRate = JsonOk<"/orders/shipping-rates", "post">["data"][number];
+
+/** `POST /orders`: a customer's quotes, the shipping method, and an address when not the saved one. */
+export type PlaceOrderBody = JsonBody<"/orders", "post">;
+
+/** The order `POST /orders` answers once placed. */
+export type PlacedOrder = JsonCreated<"/orders", "post">;
+
+/** That post's 409 when a quote's hold ran out and its price changed: each line's new quote, or why it can't be priced. */
+export type PriceChangedProblem = CodedProblem<"/orders", "post", 409, "price_changed">;
 
 /** `POST /auth/invitations/preview`: what an invitation link is, before the page shows a form. */
 export type InvitationPreview = JsonOk<"/auth/invitations/preview", "post">;
