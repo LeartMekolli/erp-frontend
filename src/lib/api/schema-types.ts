@@ -149,6 +149,24 @@ export type PayoutStatus = PartnerPayout["status"];
 /** Where the partner's payout account stands, from `GET .../payout-account`. */
 export type PayoutAccountState = JsonOk<"/partner-portal/partners/{partnerId}/payout-account", "get">["state"];
 
+/** One partner workshop as staff see it, from `GET /partners/{id}`; `GET /partners` lists the same shape. */
+export type StaffPartner = JsonOk<"/partners/{id}", "get">;
+
+/** `GET /partners/{id}/owed`: what a partner is owed as staff read it, with the order behind each job. */
+export type StaffPartnerOwed = JsonOk<"/partners/{id}/owed", "get">;
+
+/** One job on that list: the portal's fields, plus its order, why staff set its amount and whether the customer paid. */
+export type StaffOwedJob = StaffPartnerOwed["jobs"][number];
+
+/** The order and line a job is from; for a claim remake, the claimed ones. `line_position` counts from 0. */
+export type JobOrder = NonNullable<StaffOwedJob["order"]>;
+
+/** One payout as staff read it, from `GET /partners/{id}/payouts`: the portal's fields, plus why the provider refused and each job's order. */
+export type StaffPayout = JsonOk<"/partners/{id}/payouts", "get">["data"][number];
+
+/** `POST /partners/{id}/payouts`'s 409: the payout account isn't ready, or nothing is due. */
+export type PayRefusedProblem = CodedProblem<"/partners/{id}/payouts", "post", 409, "payout_account_not_ready" | "nothing_due">;
+
 /** One comment as staff read it, from `GET /orders/{id}/comments`, with the partner that reads it too, if any. */
 export type OrderComment = JsonOk<"/orders/{id}/comments", "get">["data"][number];
 

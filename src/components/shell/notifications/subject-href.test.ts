@@ -13,6 +13,13 @@ const everything = createFakeState().me({
 });
 const ordersOnly: MeResponse = { ...everything, permissions: ["order.read"] };
 
+/** A feed entry about `subject`, with no payout and an ordinary event. */
+const entryFor = (subject: { type: string; id: string }, extra: { payout?: { id: string; partner_id: string }; event_key?: string } = {}) => ({
+  subject,
+  payout: extra.payout ?? null,
+  event_key: extra.event_key ?? "order.placed",
+});
+
 describe("subjectHref", () => {
   it.each([
     ["order", "/orders/x"],
@@ -27,15 +34,27 @@ describe("subjectHref", () => {
     ["material", "/catalog"],
     ["credit_campaign", "/payments"],
   ])("sends a %s notification to %s", (type, href) => {
-    expect(subjectHref({ type, id: "x" }, everything)).toBe(href);
+    expect(subjectHref(entryFor({ type, id: "x" }), everything)).toBe(href);
   });
 
   it.each(["tenant", "file_version", "something_new"])("has nowhere to send a %s notification", (type) => {
-    expect(subjectHref({ type, id: "x" }, everything)).toBeNull();
+    expect(subjectHref(entryFor({ type, id: "x" }), everything)).toBeNull();
   });
 
   it("has nowhere to send a notification about a section the person can't open", () => {
-    expect(subjectHref({ type: "order", id: "x" }, ordersOnly)).toBe("/orders/x");
-    expect(subjectHref({ type: "partner", id: "x" }, ordersOnly)).toBeNull();
+    expect(subjectHref(entryFor({ type: "order", id: "x" }), ordersOnly)).toBe("/orders/x");
+    expect(subjectHref(entryFor({ type: "partner", id: "x" }), ordersOnly)).toBeNull();
+  });
+
+  it("opens the failed payout's partner", () => {
+    const entry = entryFor({ type: "payout", id: "pay1" }, { payout: { id: "pay1", partner_id: "p1" }, event_key: "payout.failed" });
+    expect(subjectHref(entry, everything)).toBe("/partners/p1?tab=payouts");
+    expect(subjectHref(entry, ordersOnly)).toBeNull();
+  });
+
+  it("opens Partners for the weekly reminder", () => {
+    const entry = entryFor({ type: "tenant", id: "t1" }, { event_key: "payouts.reminder" });
+    expect(subjectHref(entry, everything)).toBe("/partners");
+    expect(subjectHref(entry, ordersOnly)).toBeNull();
   });
 });

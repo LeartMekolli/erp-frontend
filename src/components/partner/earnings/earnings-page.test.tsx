@@ -125,6 +125,21 @@ describe("EarningsPage", () => {
       expect(screen.queryByText("On its way")).not.toBeInTheDocument();
     });
 
+    it("keeps staff words off partner earnings", async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      renderPage(PARTNER);
+      await payoutRows();
+
+      fakeState().earnings.settlePending(NORTHCAST_ID, "failed");
+      act(() => vi.advanceTimersByTime(15_000));
+      await until(() => expect(screen.getByText("€1,660.00")).toBeInTheDocument());
+      const rows = within(screen.getByRole("tabpanel", { name: "Payouts" })).getAllByRole("button", { expanded: false });
+      for (const row of rows) await user.click(row);
+
+      expect(screen.getAllByRole("list", { name: "Jobs this payout paid for" }).length).toBeGreaterThan(0);
+      expect(document.body).not.toHaveTextContent(/payment provider said|Order #|Customer/);
+    });
+
     // The address mock doesn't change on replace, so each test starts on the tab it leaves.
     it("re-reads what's owed when the payouts poll sees the payout fail first", async () => {
       const { client } = renderPage(PARTNER);

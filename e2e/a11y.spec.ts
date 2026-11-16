@@ -4,6 +4,7 @@ import { LONG_NAME_JOB_ID, LONG_PRODUCT_NAME, RING_BAND_JOB_ID } from "../test/f
 import { NORTHCAST_ID, PARTNER, PARTNER_TWO_SHOPS, RESET_TOKEN, STAFF, STAFF_INVITE_TOKEN } from "../test/fake-erp-api/seed";
 
 import { expect, expectNoAxeViolations, expectNoSideScroll, settled, signIn, test } from "./helpers";
+import { FAKE_URL } from "./urls";
 
 const link = (path: string, token: string) => `${path}#token=${encodeURIComponent(token)}`;
 
@@ -218,6 +219,30 @@ test("partner earnings: accessible and fits the screen", async ({ page }) => {
   await expectAccessibleAndFits(page);
 
   await checkTab(page, "Jobs", page.getByText("Taken back, nothing owed"));
+});
+
+test("partners: accessible and fits the screen", async ({ page }) => {
+  await signIn(page, STAFF.email);
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+  await page.goto("/partners");
+  await expect(page.getByRole("heading", { level: 1, name: "Partners" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Northcast Foundry/ })).toBeVisible();
+  await expectAccessibleAndFits(page);
+});
+
+test("partner page: accessible and fits the screen", async ({ page, request }) => {
+  // Northcast's payout account is ready and its seeded payout is still on its way, so Pay shows closed, with its reason.
+  await request.post(`${FAKE_URL}/__payout-account/${NORTHCAST_ID}/ready`);
+  await signIn(page, STAFF.email);
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+  await page.goto(`/partners/${NORTHCAST_ID}`);
+  await expect(page.getByRole("heading", { level: 1, name: "Northcast Foundry" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pay €1,240.00" })).toBeVisible();
+  await expect(page.getByText("A payout is on its way.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Order #1042 · line 2" })).toBeVisible();
+  await expectAccessibleAndFits(page);
+
+  await checkTab(page, "Payouts", page.getByText("The payment provider said: The partner's bank refused the transfer"));
 });
 
 test("partner job tabs: accessible and fits the screen", async ({ page }) => {

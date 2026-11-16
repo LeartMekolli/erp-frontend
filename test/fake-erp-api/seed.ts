@@ -40,9 +40,11 @@ export const STAFF: FakeUser = {
     "order.ship",
     "customer.read",
     "partner.read",
+    "partner.write",
     "payment.read",
     "payment.write",
     "payment.refund",
+    "payment.payout",
     "ai.use",
     "report.read",
     "workflow.read",
@@ -154,7 +156,27 @@ export const NO_ACCESS: FakeUser = {
   organisations: [],
 };
 
-export const USERS: readonly FakeUser[] = [STAFF, CLERK, WORKFLOW_READER, ORDER_WRITER, PARTNER, LAYERLINE_OWNER, NORTHCAST_ADMIN, NORTHCAST_MEMBER, PARTNER_TWO_SHOPS, CUSTOMER, NO_ACCESS];
+/** Like erp-api's seeded member: reads orders, partners and payments, and can't pay anyone. */
+export const STAFF_MEMBER: FakeUser = {
+  id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c22",
+  email: "member@demo.example.test",
+  name: "Ravi",
+  kind: "staff",
+  permissions: ["order.read", "partner.read", "payment.read"],
+  organisations: [],
+};
+
+/** Not in erp-api's seed: may pay a partner but can't read payments, so sees no Pay and no Payouts. */
+export const PAYER: FakeUser = {
+  id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c23",
+  email: "payer@demo.example.test",
+  name: "Pia",
+  kind: "staff",
+  permissions: ["partner.read", "payment.payout"],
+  organisations: [],
+};
+
+export const USERS: readonly FakeUser[] = [STAFF, CLERK, STAFF_MEMBER, PAYER, WORKFLOW_READER, ORDER_WRITER, PARTNER, LAYERLINE_OWNER, NORTHCAST_ADMIN, NORTHCAST_MEMBER, PARTNER_TWO_SHOPS, CUSTOMER, NO_ACCESS];
 
 export const PARTNER_NAMES: Record<string, string> = {
   [NORTHCAST_ID]: "Northcast Foundry",

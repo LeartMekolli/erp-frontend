@@ -1,23 +1,23 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
+import { OwedTotals } from "@/components/earnings/owed-totals";
+import { PayoutsTab } from "@/components/earnings/payouts-tab";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isApiProblem } from "@/lib/api/problem";
 import { partnerRoleAtLeast, usePartnerRole } from "@/lib/auth/permissions";
 import { partnerEarningsKeys, usePartnerOwed, usePartnerPayouts, usePayoutAccount } from "@/lib/partner-earnings/queries";
+import { useOwedCatchUp } from "@/lib/payouts/poll";
 
 import { partnerHref } from "../nav";
 import { useWorkshop } from "../use-workshop";
 
 import { OwedJobsTab } from "./owed-jobs-tab";
-import { OwedTotals } from "./owed-totals";
 import { PayoutAccountPanel } from "./payout-account-panel";
-import { PayoutsTab } from "./payouts-tab";
 
 const isForbidden = (error: unknown) => isApiProblem(error) && error.status === 403;
 
@@ -68,14 +68,7 @@ export function EarningsPage() {
   const account = usePayoutAccount(partnerId, { enabled: allowed, checking: false });
   const refused = [payouts.error, owed.error, account.error].some(isForbidden);
 
-  // The two polls drift apart. When the payouts poll sees the last payout settle first, the owed poll
-  // stops before it catches up, so read what's owed once more: a failed payout's money is owed again.
-  const client = useQueryClient();
-  const wasPending = useRef(false);
-  useEffect(() => {
-    if (wasPending.current && !payouts.anyPending) void client.invalidateQueries({ queryKey: partnerEarningsKeys.owed(partnerId) });
-    wasPending.current = payouts.anyPending;
-  }, [payouts.anyPending, client, partnerId]);
+  useOwedCatchUp(payouts.anyPending, partnerEarningsKeys.owed(partnerId));
 
   const tab: Tab = search.get("tab") === "jobs" ? "jobs" : "payouts";
   const choose = (value: string) => {
@@ -92,7 +85,7 @@ export function EarningsPage() {
         role !== undefined && (
           <>
             <PayoutAccountPanel partnerId={partnerId} role={role} suspended={suspended} onboarding={onboarding} />
-            <OwedTotals owed={owed} />
+            <OwedTotals owed={owed} audience="partner" />
             <Tabs value={tab} onValueChange={choose} activationMode="manual" className="gap-0 rounded-[20px] bg-card">
               <TabsList variant="line" aria-label="Your earnings" className="h-auto! w-full justify-start border-b border-line px-2 pt-2">
                 {(["payouts", "jobs"] as const).map((value) => (
@@ -106,7 +99,7 @@ export function EarningsPage() {
                 ))}
               </TabsList>
               <TabsContent value="payouts" className="p-3">
-                <PayoutsTab payouts={payouts} />
+                <PayoutsTab payouts={payouts} audience="partner" />
               </TabsContent>
               <TabsContent value="jobs" className="p-3">
                 <OwedJobsTab owed={owed} partnerId={partnerId} />

@@ -21,6 +21,7 @@ import { createEarningsStore } from "./earnings";
 import { createNotificationsStore } from "./notifications";
 import { createOrdersStore } from "./orders";
 import { createPartnerJobsStore } from "./partner-jobs";
+import { createPartnersStore } from "./partners";
 import { createProductionStore } from "./production";
 
 /** What erp-api's login and refresh answer (`session.service.ts:22-26`). */
@@ -87,6 +88,7 @@ export function createFakeState(now: () => number = Date.now) {
   const partnerJobs = createPartnerJobsStore(now, production);
   const earnings = createEarningsStore(now);
   const suspended = new Set<string>();
+  const partners = createPartnersStore((id) => earnings.account(id).state, (id) => suspended.has(id));
 
   /** The file, if the caller may see it: a partner route only sees that workshop's files. */
   function ownFile(fileId: string, partnerId?: string): FakeFile | null {
@@ -127,6 +129,7 @@ export function createFakeState(now: () => number = Date.now) {
     ai,
     partnerJobs,
     earnings,
+    partners,
 
     /** Suspends a workshop: `/partner-portal/me` says so, and its accept and decline routes answer 403. */
     suspendPartner(id: string): void {

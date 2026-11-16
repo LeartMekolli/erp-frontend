@@ -1,15 +1,8 @@
 import type { OwedJob, PartnerOwed, PayoutStatus } from "@/lib/api/schema-types";
-import { formatMoney } from "@/lib/format/money";
+import { formatMoney, signOf } from "@/lib/format/money";
+import { type PayFact, payFacts } from "@/lib/payouts/pay-facts";
 
-/** erp-api's money: a plain decimal string (ADR 0002). */
-const AMOUNT = /^-?\d+(\.\d+)?$/;
-
-/** An amount's sign, read from the string so no digit passes through a float. `-0.00` is 0. */
-export function signOf(amount: string): -1 | 0 | 1 {
-  if (!AMOUNT.test(amount)) throw new Error(`Not a money amount: ${JSON.stringify(amount)}`);
-  if (!/[1-9]/.test(amount)) return 0;
-  return amount.startsWith("-") ? -1 : 1;
-}
+export { signOf };
 
 const withoutSign = (amount: string) => amount.replace(/^-/, "");
 
@@ -29,24 +22,31 @@ export const PAYOUT_STATUS: Record<PayoutStatus, string> = {
   reversed: "Reversed. Owed to you again",
 };
 
-const LOST: Record<Exclude<OwedJob["holding"], "with_you">, string> = { taken_back: "Taken back", cancelled: "Cancelled" };
+const LOST: Record<Extract<PayFact, { kind: "lost" }>["lost"], string> = { taken_back: "Taken back", cancelled: "Cancelled" };
 
-/** Where a job's pay stands, from its state and numbers: `paid` counts a payout still on its way. */
-function payWords(job: OwedJob, currency: string): string[] {
-  const due = signOf(job.due);
-  if (job.state === "not_yet") {
-    return due === -1 ? ["Still being made", `${formatMoney(withoutSign(job.due), currency)} taken off your next payout`] : ["Still being made"];
+/** The partner's word for one fact about where a job's pay stands. */
+function partnerWord(fact: PayFact, currency: string): string {
+  switch (fact.kind) {
+    case "lost":
+      return fact.nothingOwed ? `${LOST[fact.lost]}, nothing owed` : LOST[fact.lost];
+    case "making":
+      return "Still being made";
+    case "making_overpaid":
+      return `${formatMoney(fact.amount, currency)} taken off your next payout`;
+    case "overpaid":
+      return "Taken off your next payout";
+    case "owed":
+      return "Owed";
+    case "partly_paid":
+      return "Partly paid";
+    case "paid":
+      return "Paid";
   }
-  if (due === -1) return ["Taken off your next payout"];
-  if (due === 1) return [signOf(job.paid) === 1 ? "Partly paid" : "Owed"];
-  return ["Paid"];
 }
 
 /** A row's words on the Jobs tab, in order; a job the partner lost says so first. */
 export function owedJobWords(job: OwedJob, currency: string): string[] {
-  if (job.holding === "with_you") return payWords(job, currency);
-  const lost = LOST[job.holding];
-  return signOf(job.amount) === 0 ? [`${lost}, nothing owed`] : [lost, ...payWords(job, currency)];
+  return payFacts(job).map((fact) => partnerWord(fact, currency));
 }
 
 /** What a payout paid for one job; negative when it takes back an earlier overpayment. */

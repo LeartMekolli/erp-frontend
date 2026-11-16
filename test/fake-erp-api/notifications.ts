@@ -6,7 +6,7 @@
 
 import type { FeedEntry } from "../../src/lib/api/schema-types";
 
-import { PAID_PAYOUT_ID } from "./earnings";
+import { FAILED_PAYOUT_ID, PAID_PAYOUT_ID } from "./earnings";
 import type { Answer, Page } from "./orders";
 import { PENDANT_OFFER_ID, RING_OFFER_ID } from "./partner-jobs";
 import { NORTHCAST_ID, PARTNER, STAFF } from "./seed";
@@ -31,6 +31,13 @@ const FILLER: Pick<FeedEntry, "event_key" | "subject" | "title" | "body">[] = [
   { event_key: "job.accepted", subject: { type: "job_assignment", id: uuid(900) }, title: "Northcast Foundry accepted a job", body: "Brackets for order #1041." },
   { event_key: "partner.capacity_changed", subject: { type: "partner", id: "2f1c5d7e-0a9b-4e3c-8d2f-6a5b4c3d2e10" }, title: "Northcast Foundry updated its capacity", body: "They can take 20 more jobs this week." },
 ];
+
+const PAYOUT_FAILED: Pick<FeedEntry, "event_key" | "subject" | "title" | "body"> = {
+  event_key: "payout.failed",
+  subject: { type: "payout", id: FAILED_PAYOUT_ID },
+  title: "A payout to Northcast Foundry failed",
+  body: "The payment provider refused 120.00 EUR. It is owed again.",
+};
 
 /** The two offers waiting for Northcast's owner (`jobs.service.ts:199`): both unread, each naming its job. */
 function partnerEntries(now: number): StoredEntry[] {
@@ -79,11 +86,20 @@ function seedEntries(now: number): StoredEntry[] {
 /** Thirty entries for the main staff account, an hour apart before `now`. */
 function staffEntries(now: number): StoredEntry[] {
   return Array.from({ length: 30 }, (_, index) => {
-    const event = EVENTS[index] ?? FILLER[index % FILLER.length]!;
+    // `payout.failed` (erp-api `payouts.service.ts`): read already, the first read entry; it takes a filler's place so the feed stays at 30.
+    const failed = index === EVENTS.length;
+    const event = failed ? PAYOUT_FAILED : (EVENTS[index] ?? FILLER[index % FILLER.length]!);
     const createdAt = new Date(now - (index + 1) * 3_600_000).toISOString();
     return {
       userId: STAFF.id,
-      entry: { id: uuid(30 - index), ...structuredClone(event), job: null, payout: null, created_at: createdAt, read_at: index < EVENTS.length ? null : createdAt },
+      entry: {
+        id: uuid(30 - index),
+        ...structuredClone(event),
+        job: null,
+        payout: failed ? { id: FAILED_PAYOUT_ID, partner_id: NORTHCAST_ID } : null,
+        created_at: createdAt,
+        read_at: index < EVENTS.length ? null : createdAt,
+      },
     };
   });
 }
