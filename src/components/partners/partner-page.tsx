@@ -9,10 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isApiProblem } from "@/lib/api/problem";
 import { can } from "@/lib/auth/permissions";
-import { PAYOUT_ACCOUNT } from "@/lib/partners/labels";
 import { usePartner } from "@/lib/partners/queries";
 
+import { PartnerPay } from "./partner-pay";
 import { PartnerStatusTag } from "./partner-status-tag";
+import { usePartnerMoney } from "./use-partner-money";
 
 type Tab = "jobs" | "payouts";
 
@@ -37,6 +38,8 @@ function BackToPartners() {
 
 function Partner({ id, canReadPayments }: { id: string; canReadPayments: boolean }) {
   const query = usePartner(id);
+  // Read beside the partner, not after it: the numbers, Pay and both tabs share this one poll.
+  const money = usePartnerMoney(id);
   const router = useRouter();
   const search = useSearchParams();
 
@@ -79,11 +82,10 @@ function Partner({ id, canReadPayments }: { id: string; canReadPayments: boolean
       <BackToPartners />
       <header className="flex flex-col gap-1.5">
         <h1 className="text-title font-semibold break-words">{partner.name}</h1>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <PartnerStatusTag status={partner.status} />
-          <span className="text-sm text-ink-2">{PAYOUT_ACCOUNT[partner.payout_account]}</span>
-        </div>
+        <PartnerStatusTag status={partner.status} />
       </header>
+
+      <PartnerPay partner={partner} money={money} />
 
       <Tabs value={tab} onValueChange={choose} activationMode="manual" className="gap-0 rounded-[20px] bg-card">
         <TabsList variant="line" aria-label="This partner's pay" className="h-auto! w-full justify-start border-b border-line px-2 pt-2">
