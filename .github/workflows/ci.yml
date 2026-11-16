@@ -34,8 +34,15 @@ jobs:
 
       - run: npm test
 
-      # The browser tests build AMI themselves (`playwright.config.ts`), against
-      # the fake erp-api with a test-only session key, so no secrets are needed.
+      # The production build, on its own so a failure shows here. It points at
+      # the fake erp-api with a test-only session key, the same settings as
+      # `playwright.config.ts`, which then starts this build without rebuilding.
+      - run: npm run build
+        env:
+          ERP_API_URL: http://localhost:4010
+          NEXT_PUBLIC_ERP_API_URL: http://localhost:4010
+          SESSION_SECRET: AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+
       - run: npx playwright install --with-deps chromium webkit
 
       - run: npm run e2e
