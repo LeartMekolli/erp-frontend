@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { isApiProblem } from "@/lib/api/problem";
 import type { Order } from "@/lib/api/schema-types";
-import { can } from "@/lib/auth/permissions";
+import { canPlaceOrders } from "@/lib/auth/permissions";
 import { TAB_LABEL, workspaceToday } from "@/lib/orders/labels";
 import { useOrdersList } from "@/lib/orders/queries";
 import type { OrdersView } from "@/lib/orders/view";
@@ -125,7 +125,7 @@ export function OrdersTable({
       return (
         <Empty>
           <p className="text-base font-semibold text-ink">No orders yet</p>
-          {can(me, "order.write") && (
+          {canPlaceOrders(me) && (
             <Button asChild>
               <Link href="/orders/new">New order</Link>
             </Button>

@@ -5,7 +5,7 @@ import { notFound, useParams } from "next/navigation";
 import { ComingSoon } from "@/components/shell/coming-soon";
 import { useCan } from "@/lib/auth/permissions";
 
-/** `/orders/new` and `/orders/:id`: not built yet. */
+/** Only `/orders/:id/...` lands here: `/orders/new` and `/orders/:id` have their own routes. Not built yet. */
 export default function OrderSubpage() {
   const { rest } = useParams<{ rest: string[] }>();
   const allowed = useCan("order.read");
