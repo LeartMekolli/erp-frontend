@@ -33,7 +33,7 @@ export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
         </Link>
       )}
       {/* The bell has always waited for /me. */}
-      {me && <Bell hrefFor={(entry) => subjectHref(entry.subject, me)} />}
+      {me && <Bell hrefFor={(entry) => subjectHref(entry, me)} />}
       <UserMenu />
     </header>
   );
