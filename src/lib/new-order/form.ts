@@ -136,7 +136,11 @@ export function quantityError(quantity: string): string | null {
  * no customer, a bad quantity or size, or a custom product with no measured model.
  * Never names a workshop.
  */
-export function quoteBody(values: NewOrderValues, product: CatalogProduct, versionId: string | undefined): QuoteBody | null {
+export function quoteBody(
+  values: Pick<NewOrderValues, "customerId" | "options" | "size" | "quantity" | "speed">,
+  product: CatalogProduct,
+  versionId: string | undefined,
+): QuoteBody | null {
   if (!values.customerId || !validQuantity(values.quantity)) return null;
   if (sizeError(product.sizing, values.size) !== null) return null;
   if (product.kind === "custom" && !versionId) return null;

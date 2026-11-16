@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ORDER_TAKER, ORDER_WRITER } from "../../../test/fake-erp-api/seed";
+import { ORDER_TAKER, ORDER_WRITER, STAFF } from "../../../test/fake-erp-api/seed";
 import { renderAs } from "../../../test/render";
 
 import { LeaveDialog } from "./leave-dialog";
@@ -96,6 +96,40 @@ describe("NewOrderPage", () => {
     expect(screen.getByRole("heading", { level: 1, name: "New order" })).toBeInTheDocument();
     expect(screen.getByText("Group: Trade · Pays first · Plan: Free")).toBeInTheDocument();
   });
+
+  it(
+    "a second upload hides the price",
+    async () => {
+      // Through the real upload and the fake's storage and measuring: the version id is what changes
+      // the body. The recorder prevents every click, which would stop user-event opening the file picker.
+      document.removeEventListener("click", recordClick);
+      const stl = () => new File(["solid ring"], "ring.stl", { type: "model/stl" });
+      renderAs(STAFF, <NewOrderPage />);
+      await userEvent.type(await screen.findByRole("combobox", { name: "Customer" }), "Luna");
+      await userEvent.click(await screen.findByRole("option", { name: "Luna Jewels" }));
+      const product = await screen.findByRole("combobox", { name: "Product" });
+      await waitFor(() => expect(product).toBeEnabled());
+      await userEvent.selectOptions(product, "Cast ring");
+      await userEvent.type(await screen.findByRole("textbox", { name: "Size" }), "1");
+
+      await userEvent.upload(screen.getByLabelText("Upload a model"), stl());
+      expect(await screen.findByText("Ready", {}, { timeout: 4_000 })).toBeInTheDocument();
+      const getPrice = screen.getByRole("button", { name: "Get price" });
+      await waitFor(() => expect(getPrice).toHaveAttribute("aria-disabled", "false"));
+      await userEvent.click(getPrice);
+      expect(await screen.findByText("Unit price")).toBeInTheDocument();
+
+      await userEvent.upload(screen.getByLabelText("Replace the model"), stl());
+      expect(screen.queryByText("Unit price")).not.toBeInTheDocument();
+      expect(getPrice).toHaveAttribute("aria-disabled", "true");
+
+      // Measured, the new model is another body: the old price stays gone until staff ask again.
+      expect(await screen.findByText("Ready", {}, { timeout: 4_000 })).toBeInTheDocument();
+      expect(screen.queryByText("Unit price")).not.toBeInTheDocument();
+      await waitFor(() => expect(getPrice).toHaveAttribute("aria-disabled", "false"));
+    },
+    15_000,
+  );
 });
 
 function Harness({ dirty }: { dirty: boolean }) {

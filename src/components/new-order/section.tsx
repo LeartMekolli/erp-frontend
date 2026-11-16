@@ -15,6 +15,7 @@ export function Section({
   title,
   open,
   closedHint,
+  focusOnOpen = true,
   children,
 }: {
   number: number;
@@ -22,6 +23,8 @@ export function Section({
   open: boolean;
   /** What to do before this section opens. */
   closedHint?: string;
+  /** False for a section that opens while staff are still filling in the one above, so focus stays there. */
+  focusOnOpen?: boolean;
   children?: ReactNode;
 }) {
   const headingId = useId();
@@ -29,9 +32,9 @@ export function Section({
   const wasOpen = useRef(open);
 
   useEffect(() => {
-    if (open && !wasOpen.current) body.current?.querySelector<HTMLElement>(FIRST_FIELD)?.focus();
+    if (open && !wasOpen.current && focusOnOpen) body.current?.querySelector<HTMLElement>(FIRST_FIELD)?.focus();
     wasOpen.current = open;
-  }, [open]);
+  }, [open, focusOnOpen]);
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3 rounded-[20px] bg-card px-4 py-5 sm:px-6 md:grid md:grid-cols-[10rem_1fr] md:gap-x-6">

@@ -1,3 +1,5 @@
+import type { SummaryLabel } from "@/lib/api/schema-types";
+
 /** Fixed words on the New order page. */
 export const COPY = {
   title: "New order",
@@ -50,6 +52,27 @@ export const COPY = {
     upload: "Upload a model",
     replace: "Replace the model",
     noAccess: "You can't upload the model. Ask an admin for file access.",
+  },
+  price: {
+    get: "Get price",
+    getting: "Getting a price…",
+    /** erp-api's summary line labels, as the customer would read them. */
+    lines: {
+      material: "Material",
+      making: "Making",
+      finishing: "Finishing",
+      quantity_discount: "Quantity discount",
+      your_discount: "Customer discount",
+      plan_discount: "Plan discount",
+      delivery_speed: "Delivery speed",
+    } satisfies Record<SummaryLabel, string>,
+    unitPrice: "Unit price",
+    times: (quantity: string) => `${quantity} ×`,
+    holdsUntil: (dateTime: string) => `Holds until ${dateTime}`,
+    expired: "Price expired. Placing gets a new price.",
+    changed: "The price changed since it was quoted. Check the new price, then place the order.",
+    refused: "This can't be priced:",
+    offline: "You're offline.",
   },
   leave: {
     title: "Leave this order?",
