@@ -126,6 +126,11 @@ function validQuantity(quantity: string): boolean {
   return /^[1-9]\d*$/.test(quantity) && Number(quantity) <= MAX_QUANTITY;
 }
 
+/** Why the quantity can't be used, or null when it can. */
+export function quantityError(quantity: string): string | null {
+  return validQuantity(quantity) ? null : QUANTITY_ERROR;
+}
+
 /**
  * What to ask erp-api to price, or null while the form can't be priced yet:
  * no customer, a bad quantity or size, or a custom product with no measured model.
