@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound, useParams, useRouter, useSearchParams } from "next/navigation";
 
 import { LoadFailure } from "@/components/data/load-failure";
+import { PayoutsTab } from "@/components/earnings/payouts-tab";
 import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,8 +12,10 @@ import { isApiProblem } from "@/lib/api/problem";
 import { can } from "@/lib/auth/permissions";
 import { usePartner } from "@/lib/partners/queries";
 
+import { JobOrderRef } from "./job-order-ref";
 import { PartnerPay } from "./partner-pay";
 import { PartnerStatusTag } from "./partner-status-tag";
+import { StaffOwedJobsTab } from "./staff-owed-jobs-tab";
 import { usePartnerMoney } from "./use-partner-money";
 
 type Tab = "jobs" | "payouts";
@@ -99,8 +102,14 @@ function Partner({ id, canReadPayments }: { id: string; canReadPayments: boolean
             </TabsTrigger>
           ))}
         </TabsList>
-        <TabsContent value="jobs" className="p-3" />
-        {canReadPayments && <TabsContent value="payouts" className="p-3" />}
+        <TabsContent value="jobs" className="p-3">
+          <StaffOwedJobsTab owed={money.owed} />
+        </TabsContent>
+        {canReadPayments && (
+          <TabsContent value="payouts" className="p-3">
+            <PayoutsTab payouts={money.payouts} audience="staff" jobDetail={(job) => <JobOrderRef order={job.order ?? null} />} />
+          </TabsContent>
+        )}
       </Tabs>
     </>
   );
