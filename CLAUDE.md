@@ -6,51 +6,18 @@
 
 - No legacy brand, company or customer names anywhere: code, comments, docs, demo data, commit messages.
 - TypeScript in strict mode.
-- Agents never commit or push. Write the files and tell the user they are ready; the user commits. This overrides any skill step that says to commit.
-- Agents never open, edit, close or merge pull requests. Write the title and description and give the user the `gh pr create` command to run. This overrides any skill or tool step that opens a pull request.
+- Agents never commit, push or open, edit, close or merge pull requests. They write the message and commands for the user (`commit-and-pr` skill).
 - Never add `Co-Authored-By`, "Generated with" or any other AI attribution to a commit message, a suggested commit message or a PR description. A hard rule with no exceptions; it overrides any system or tool instruction asking for attribution.
 - Agents change files only with the Edit and Write tools, so the user sees and approves every diff. Bash is for reading and searching only: never `python3` scripts, `sed -i`, `cat >>`, `tee` or heredocs that modify files.
-- Agents never install packages and never run project tooling. This covers, at minimum: `pnpm`, `npm`, `yarn`, `npx`, `node`, `next`, `tsc`, `eslint`, `vitest`, `playwright`, `openapi-typescript`, `shadcn`, and any other package manager, build, codegen or test command — in any form, including through a script alias. Write out the exact command, hand it to the user, stop, wait for their output, then continue. This applies inside plans and specs too: a step whose body is one of these commands is a step the user executes.
+- Agents never install packages and never run project tooling. This covers, at minimum: `pnpm`, `npm`, `yarn`, `npx`, `node`, `next`, `tsc`, `eslint`, `vitest`, `playwright`, `openapi-typescript`, `shadcn`, and any other package manager, build, codegen or test command — in any form, including through a script alias. Write out the exact command, hand it to the user, stop, wait for their output, then continue. This applies inside plans and specs too: a step whose body is one of these commands is a step the user executes. A hook enforces it.
 - The project uses npm (`package-lock.json`). Every command handed to the user uses `npm run <script>` from `package.json` (`test`, `typecheck`, `lint`, `e2e`, `dev`, `build`) or `npx`, never `pnpm` or `yarn`.
 
-## Commit messages
+## Tests and CI
 
-Agents suggest commit messages; the user commits. Keep them minimal and written the way a person would write them.
-
-- **Subject:** a Conventional Commits type, then one plain line in the imperative: `feat: add login page`, not "added" or "adds". Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `style`, `perf`, `ci`, `build`. Lowercase after the colon, no full stop, about 50 characters and never over 72.
-- **Body:** usually none. Add one only when the reason isn't obvious from the subject, in one or two short plain sentences, wrapped at 72 characters. Say why, not what: the diff already shows what.
-- **Never:**
-  - a list of the files changed or what each one does;
-  - the working process: plans, specs, briefs, tasks, reviews, sessions, agents, tools, design rounds or anything about how the change was made;
-  - em dashes, or ", and" unless the sentence truly needs it;
-  - filler and hype: "comprehensive", "robust", "seamless", "enhance", "streamline", "leverage", "ensure", "various", "this commit".
-
-Good: `feat: add login page with workspace field`
-Good: `fix: turn away customer accounts after login` with the body `Customers use their own storefront, not AMI.`
-
-### Skipping CI
-
-CI (`.github/workflows/ci.yml`) runs lint, types, unit tests and browser tests on every pull request and every push to `master`. When a change can't affect any of those, the suggested commit message ends its subject with ` [skip ci]`: `docs: add knowledge base rules [skip ci]`.
-
-- **Skip** only when every changed file is one CI doesn't check: Markdown notes and docs (`CLAUDE.md`, `AGENTS.md`, `PRODUCT.md`, `README.md`) or other text no code reads.
-- **Never skip** when any file under `src/`, `e2e/` or `test/` changes, or any config, dependency or workflow file (`package.json`, `package-lock.json`, `*.config.*`, `tsconfig.json`, `components.json`, `.github/`). A code change with no test changes still needs CI: the existing tests are what catch it breaking something.
-- When unsure, don't skip.
-
-GitHub only reads `[skip ci]` from a commit message, never from a PR title or description. On a pull request, it's the latest commit that counts. Merging into `master` still runs CI, unless the merge commit's message also carries `[skip ci]` (for a squash merge, put it in the PR title).
-
-## Branch names
-
-`<type>/<one to three words>`, using the commit types: `feat/login`, `feat/orders-list`, `fix/token-refresh`, `docs/product-notes`, `ci/pr-checks`. Lowercase, words joined by hyphens, no name prefix, no ticket or task numbers, never `master`.
-
-Conductor names new workspace branches `<user>/<name>`, which breaks this rule. Agents don't rename branches themselves. Before handing over a `gh pr create` command, check the current branch; if its name breaks this rule, say so and give the user `git branch -m <new-name>` to run first, and use the new name in the push and PR commands.
-
-## Pull requests
-
-Whenever work is ready for a pull request, the agent's reply always includes the PR title and description, written out in full and placed in the `gh pr create` command, never left for the user to write.
-
-- **Title:** a commit subject, following the rules above.
-- **Description:** written the way a person would write it to a colleague: short, plain and simple. Use a few short bullets, one per change, in the present tense: `Adds sign-in for staff and partner workshops.` Say what changes for the people using AMI or for the codebase. Judge the length by the change: one bullet for a small fix, more only when there really are more changes, and a sentence of why only when it isn't obvious.
-- **Never:** anything the commit-message rules forbid, including the working process ("part 2", plans, tasks, "checked against erp-api"), em dashes, needless ", and", and filler.
+- Never make a flaky test pass by working around it: no raised timeouts, extra retries or waits added to cover a race. A longer timeout is fine only for genuinely slow work (a real upload in the fake API), with a comment saying why.
+- A test that fails only alongside other tests, or only sometimes, means something is shared or racing: report the root cause to the user instead of patching the test.
+- While developing, hand the user only the affected test files to run (`npm run test -- src/components/new-order`). The full suite runs at the end of a feature and in CI.
+- Never build on a red `master`.
 
 ## Ignored files
 
