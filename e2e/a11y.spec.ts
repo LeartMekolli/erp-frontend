@@ -4,6 +4,7 @@ import { LONG_NAME_JOB_ID, LONG_PRODUCT_NAME, RING_BAND_JOB_ID } from "../test/f
 import { NORTHCAST_ID, PARTNER, PARTNER_TWO_SHOPS, RESET_TOKEN, STAFF, STAFF_INVITE_TOKEN } from "../test/fake-erp-api/seed";
 
 import { expect, expectNoAxeViolations, expectNoSideScroll, settled, signIn, test } from "./helpers";
+import { chooseCourier, getPrice, openNewOrder, pickCustomer, pickProduct } from "./new-order-steps";
 import { FAKE_URL } from "./urls";
 
 const link = (path: string, token: string) => `${path}#token=${encodeURIComponent(token)}`;
@@ -59,6 +60,25 @@ test("orders: accessible and fits the screen", async ({ page }) => {
     await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: /^Orders/ }).hover();
     await expect(page.getByRole("tooltip", { name: /Orders/ })).toBeVisible();
   }
+});
+
+test("new order: accessible and fits the screen", async ({ page }) => {
+  await signIn(page, STAFF.email);
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+  await openNewOrder(page);
+  await expectAccessibleAndFits(page);
+
+  // Luna picked: the Product section is open.
+  await pickCustomer(page, "Luna Jewels");
+  await expect(page.getByText(/^Group: Trade/)).toBeVisible();
+  await expectAccessibleAndFits(page);
+
+  // Priced and shipping chosen: all four sections open, with Place order's bar.
+  await pickProduct(page, "Nameplate");
+  await page.getByRole("combobox", { name: "Size" }).selectOption({ label: "M" });
+  await getPrice(page);
+  await chooseCourier(page);
+  await expectAccessibleAndFits(page);
 });
 
 test("command-k: accessible and fits the screen", async ({ page }) => {
