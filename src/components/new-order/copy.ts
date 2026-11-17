@@ -1,4 +1,6 @@
 import type { SummaryLabel } from "@/lib/api/schema-types";
+import { LOCALE } from "@/lib/format/money";
+import type { AddressField } from "@/lib/new-order/form";
 
 /** Fixed words on the New order page. */
 export const COPY = {
@@ -72,6 +74,43 @@ export const COPY = {
     expired: "Price expired. Placing gets a new price.",
     changed: "The price changed since it was quoted. Check the new price, then place the order.",
     refused: "This can't be priced:",
+    offline: "You're offline.",
+  },
+  delivery: {
+    address: "Address",
+    saved: "(saved)",
+    change: "Change",
+    useSaved: "Use the saved address",
+    addressLoading: "Loading the saved address…",
+    addressFailed: "Couldn't load the saved address.",
+    fields: {
+      name: "Name",
+      line1: "Address line 1",
+      line2: "Address line 2 (optional)",
+      city: "City",
+      postal_code: "Postal code",
+      region: "Region (optional)",
+      country: "Country",
+      phone: "Phone (optional)",
+    } satisfies Record<AddressField, string>,
+    countryHint: "Two letters, such as FR",
+    problems: {
+      missing: "Fill this in.",
+      country: "Enter two letters, such as FR.",
+      tooLong: (max: number) => `Use at most ${max} characters.`,
+    },
+    shipping: "Shipping",
+    needsAddress: "Fill in the address to see the shipping methods.",
+    ratesLoading: "Loading the shipping methods…",
+    ratesFailed: "Couldn't load the shipping methods.",
+    noRates: "No shipping methods are set up.",
+    method: (name: string, price: string) => `${name} · ${price}`,
+    note: "Note",
+    noteCount: (length: number) => `${length.toLocaleString(LOCALE)} / 2,000`,
+    total: "Total before tax",
+    place: "Place order",
+    placing: "Placing…",
+    checkFields: "Check the marked fields.",
     offline: "You're offline.",
   },
   leave: {

@@ -1,8 +1,13 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+/* eslint-disable @next/next/no-html-link-for-pages -- the plain links here stand in for any same-site link,
+   which is what the leave guard listens for; next/link would route through the mocked router instead. */
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ORDER_TAKER, ORDER_WRITER, STAFF } from "../../../test/fake-erp-api/seed";
+import { FAKE_API_URL, LUNA_ID, ORDER_TAKER, ORDER_WRITER, STAFF } from "../../../test/fake-erp-api/seed";
+import { fakeState } from "../../../test/fake-erp-api/state";
+import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
 import { LeaveDialog } from "./leave-dialog";
@@ -34,7 +39,57 @@ beforeEach(() => {
 
 afterEach(() => {
   document.removeEventListener("click", recordClick);
+  server.events.removeAllListeners();
 });
+
+/** Every request that goes out from now on, with its body as text. */
+function recordRequests() {
+  const requests: { method: string; url: string; key: string | null; body: Promise<string> }[] = [];
+  server.events.on("request:start", ({ request }) => {
+    requests.push({ method: request.method, url: request.url, key: request.headers.get("idempotency-key"), body: request.clone().text() });
+  });
+  return requests;
+}
+
+/** The bodies of the POSTs to `path` among `requests`, read as JSON. */
+async function postedTo(requests: ReturnType<typeof recordRequests>, path: string): Promise<unknown[]> {
+  const posts = requests.filter((request) => request.method === "POST" && new URL(request.url).pathname === path);
+  return Promise.all(posts.map(async (post) => JSON.parse(await post.body) as unknown));
+}
+
+async function pickCustomer(search: string, name: string) {
+  const box = await screen.findByRole("combobox", { name: "Customer" });
+  await userEvent.clear(box);
+  await userEvent.type(box, search);
+  await userEvent.click(await screen.findByRole("option", { name }));
+}
+
+async function chooseProduct(name: string) {
+  const product = await screen.findByRole("combobox", { name: "Product" });
+  await waitFor(() => expect(product).toBeEnabled());
+  await userEvent.selectOptions(product, name);
+}
+
+async function getPrice() {
+  const button = screen.getByRole("button", { name: "Get price" });
+  await waitFor(() => expect(button).toHaveAttribute("aria-disabled", "false"));
+  await userEvent.click(button);
+  expect(await screen.findByText("Unit price")).toBeInTheDocument();
+}
+
+/** Luna's Gift set priced at €24.00, to go by Courier to the saved address. */
+async function readyToPlace() {
+  // Choosing a radio is a click the recorder would cancel, and with it the choice.
+  document.removeEventListener("click", recordClick);
+  renderAs(ORDER_TAKER, <NewOrderPage />);
+  await pickCustomer("Luna", "Luna Jewels");
+  await chooseProduct("Gift set");
+  await getPrice();
+  await userEvent.click(await screen.findByRole("radio", { name: "Courier · €12.00" }));
+  expect(screen.getByText("€36.00")).toBeInTheDocument();
+}
+
+const placeButton = () => screen.getByRole("button", { name: "Place order" });
 
 describe("NewOrderPage", () => {
   it("is not found without quote.create", async () => {
@@ -127,6 +182,190 @@ describe("NewOrderPage", () => {
       expect(await screen.findByText("Ready", {}, { timeout: 4_000 })).toBeInTheDocument();
       expect(screen.queryByText("Unit price")).not.toBeInTheDocument();
       await waitFor(() => expect(getPrice).toHaveAttribute("aria-disabled", "false"));
+    },
+    15_000,
+  );
+
+  it("opens Delivery once there is a price, leaving focus on Get price", async () => {
+    document.removeEventListener("click", recordClick);
+    renderAs(ORDER_TAKER, <NewOrderPage />);
+    await pickCustomer("Luna", "Luna Jewels");
+    await chooseProduct("Gift set");
+    expect(screen.getByText("Get a price first.")).toBeInTheDocument();
+    await getPrice();
+    expect(screen.queryByText("Get a price first.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Get price" })).toHaveFocus();
+    expect(placeButton()).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("opens the new order after placing", async () => {
+    await readyToPlace();
+    const before = new Set(fakeState().orders.all().map((order) => order.id));
+    await userEvent.click(placeButton());
+
+    await waitFor(() => expect(navigation.push).toHaveBeenCalledTimes(1));
+    const placed = fakeState().orders.all().filter((order) => !before.has(order.id));
+    expect(placed).toHaveLength(1);
+    expect(placed[0]).toMatchObject({ customer: { id: LUNA_ID }, channel: "staff", state: "awaiting_payment", total: "36.00" });
+    expect(navigation.push).toHaveBeenCalledWith(`/orders/${placed[0]!.id}`);
+
+    // The guard is off, though the form is still filled in: the order is placed, nothing is lost.
+    const closing = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(closing);
+    expect(closing.defaultPrevented).toBe(false);
+  });
+
+  it("shows the new price after price_changed", async () => {
+    await readyToPlace();
+    const requests = recordRequests();
+    // The hold runs out: placing prices the quote again, at the total × 1.1.
+    fakeState().quotes.expireQuotes();
+    await userEvent.click(placeButton());
+
+    const notice = await screen.findByText("The price changed since it was quoted. Check the new price, then place the order.");
+    await waitFor(() => expect(notice.parentElement).toHaveFocus());
+    expect(screen.getAllByText("€26.40")).toHaveLength(2);
+    expect(screen.getByText("€38.40")).toBeInTheDocument();
+    expect(navigation.push).not.toHaveBeenCalled();
+
+    // Placing again sends the new quote, a new body, so with a new key.
+    await waitFor(() => expect(placeButton()).toHaveAttribute("aria-disabled", "false"));
+    await userEvent.click(placeButton());
+    await waitFor(() => expect(navigation.push).toHaveBeenCalledTimes(1));
+
+    const bodies = (await postedTo(requests, "/orders")) as { lines: { quote_id: string }[] }[];
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]!.lines[0]!.quote_id).not.toBe(bodies[0]!.lines[0]!.quote_id);
+    const keys = requests.filter((request) => request.method === "POST" && new URL(request.url).pathname === "/orders").map((request) => request.key);
+    expect(keys[1]).not.toBe(keys[0]);
+    const order = fakeState().orders.all().find((candidate) => navigation.push.mock.calls[0]?.[0] === `/orders/${candidate.id}`);
+    expect(order?.total).toBe("38.40");
+  });
+
+  it("clears the price after another 409", async () => {
+    server.use(
+      http.post(`${FAKE_API_URL}/orders`, () =>
+        HttpResponse.json(
+          {
+            type: "about:blank",
+            title: "Conflict",
+            status: 409,
+            detail: "A quote is ordered once",
+            errors: [{ path: "lines.0", message: "this quote has already been ordered" }],
+          },
+          { status: 409, headers: { "content-type": "application/problem+json" } },
+        ),
+      ),
+    );
+    await readyToPlace();
+    await userEvent.click(placeButton());
+
+    const message = await screen.findByRole("alert");
+    expect(message).toHaveTextContent("A quote is ordered once");
+    await waitFor(() => expect(message).toHaveFocus());
+    // The price is gone and Place is off until staff get a fresh one; Delivery stays to say why.
+    expect(screen.queryByText("Unit price")).not.toBeInTheDocument();
+    expect(placeButton()).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("radio", { name: "Courier · €12.00" })).toBeChecked();
+
+    await getPrice();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(placeButton()).toHaveAttribute("aria-disabled", "false");
+    expect(navigation.push).not.toHaveBeenCalled();
+  });
+
+  it(
+    "changing the customer clears every section",
+    async () => {
+      // The recorder would cancel the radio and the file picker's clicks.
+      document.removeEventListener("click", recordClick);
+      const requests = recordRequests();
+      renderAs(STAFF, <NewOrderPage />);
+      await pickCustomer("Luna", "Luna Jewels");
+      await chooseProduct("Cast ring");
+      await userEvent.type(await screen.findByRole("textbox", { name: "Size" }), "1");
+      await userEvent.upload(screen.getByLabelText("Upload a model"), new File(["solid ring"], "ring.stl", { type: "model/stl" }));
+      expect(await screen.findByText("Ready", {}, { timeout: 4_000 })).toBeInTheDocument();
+      await getPrice();
+
+      await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+      const name = screen.getByRole("textbox", { name: "Name" });
+      await userEvent.clear(name);
+      await userEvent.type(name, "Luna Jewels Atelier");
+      await userEvent.click(await screen.findByRole("radio", { name: "Courier · €12.00" }));
+      await userEvent.type(screen.getByRole("textbox", { name: "Note" }), "Ring sizes inside.");
+
+      const [lunaQuote] = (await postedTo(requests, "/pricing/quotes")) as { file_version_id?: string }[];
+      const lunaVersion = lunaQuote?.file_version_id;
+      expect(lunaVersion).toBeTruthy();
+      const switchedAt = requests.length;
+
+      await pickCustomer("Mira", "Mira Studio");
+      expect(await screen.findByText("No group · Pays later, 30 days · Plan: Starter")).toBeInTheDocument();
+      expect(await screen.findByRole("combobox", { name: "Product" })).toHaveValue("");
+      expect(screen.getByText("Fill in the product first.")).toBeInTheDocument();
+      expect(screen.getByText("Get a price first.")).toBeInTheDocument();
+      expect(screen.queryByText("Unit price")).not.toBeInTheDocument();
+
+      // The same product again starts with no size and no model: the last one was Luna's.
+      await chooseProduct("Cast ring");
+      expect(await screen.findByRole("textbox", { name: "Size" })).toHaveValue("");
+      expect(screen.getByLabelText("Upload a model")).toBeInTheDocument();
+      expect(screen.queryByText("Ready")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Get price" })).toHaveAttribute("aria-disabled", "true");
+
+      // Priced for Mira, Delivery starts empty: her (missing) saved address, no method, no note.
+      await chooseProduct("Gift set");
+      await getPrice();
+      expect(await screen.findByRole("textbox", { name: "Name" })).toHaveValue("");
+      expect(screen.getByRole("textbox", { name: "Note" })).toHaveValue("");
+      expect(screen.queryByRole("radio", { checked: true, name: /Courier/ })).not.toBeInTheDocument();
+
+      // Nothing sent since names Luna or her model.
+      const later = requests.slice(switchedAt);
+      expect(later.some((request) => request.method === "POST" && new URL(request.url).pathname === "/pricing/quotes")).toBe(true);
+      for (const request of later) {
+        const body = await request.body;
+        expect(`${request.url} ${body}`).not.toContain(LUNA_ID);
+        expect(body).not.toContain(lunaVersion!);
+      }
+    },
+    15_000,
+  );
+
+  it(
+    "changing the customer during an upload drops it",
+    async () => {
+      document.removeEventListener("click", recordClick);
+      const requests = recordRequests();
+      renderAs(STAFF, <NewOrderPage />);
+      await pickCustomer("Luna", "Luna Jewels");
+      await chooseProduct("Cast ring");
+      await userEvent.type(await screen.findByRole("textbox", { name: "Size" }), "1");
+      await userEvent.upload(screen.getByLabelText("Upload a model"), new File(["solid ring"], "ring.stl", { type: "model/stl" }));
+      // Measuring takes a few polls, a second apart at first: the upload is still running here.
+      expect(screen.queryByText("Ready")).not.toBeInTheDocument();
+
+      await pickCustomer("Mira", "Mira Studio");
+      expect(await screen.findByText("No group · Pays later, 30 days · Plan: Starter")).toBeInTheDocument();
+      // The product resets with the customer, which is also when the upload is dropped.
+      await waitFor(() => expect(screen.getByRole("combobox", { name: "Product" })).toHaveValue(""));
+      const switchedAt = requests.length;
+
+      // Long enough for any poll of the dropped upload (the first is 1 s after it starts measuring).
+      await act(() => new Promise((resolve) => setTimeout(resolve, 2_500)));
+      await chooseProduct("Cast ring");
+      expect(await screen.findByRole("textbox", { name: "Size" })).toHaveValue("");
+      expect(screen.getByLabelText("Upload a model")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Replace the model")).not.toBeInTheDocument();
+      expect(screen.queryByText("Ready")).not.toBeInTheDocument();
+
+      // Nothing since touched Luna's file (complete, polling, URL) or named her.
+      for (const request of requests.slice(switchedAt)) {
+        expect(new URL(request.url).pathname).not.toMatch(/^\/files\//);
+        expect(`${request.url} ${await request.body}`).not.toContain(LUNA_ID);
+      }
+      expect(await postedTo(requests.slice(switchedAt), "/pricing/quotes")).toEqual([]);
     },
     15_000,
   );

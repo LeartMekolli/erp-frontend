@@ -2,22 +2,25 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { notFound } from "next/navigation";
+import { useEffect, useRef } from "react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 
 import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
 import { canPlaceOrders } from "@/lib/auth/permissions";
-import { EMPTY_VALUES, newOrderSchema, type NewOrderValues } from "@/lib/new-order/form";
+import { EMPTY_VALUES, bodyKey, newOrderSchema, type NewOrderValues } from "@/lib/new-order/form";
 import { useUpload } from "@/lib/upload/use-upload";
 
 import { COPY } from "./copy";
 import { CustomerSection } from "./customer-section";
+import { DeliverySection } from "./delivery-section";
 import { LeaveDialog } from "./leave-dialog";
 import { readyVersionId } from "./model-field";
 import { PriceSection } from "./price-section";
 import { ProductSection } from "./product-section";
 import { Section } from "./section";
 import { useLeaveGuard } from "./use-leave-guard";
+import { usePlace } from "./use-place";
 import { usePrice, useQuoteBody } from "./use-price";
 
 /** `/orders/new`: staff place an order for a customer, in four sections that open one after another. */
@@ -34,12 +37,26 @@ function NewOrder() {
   const productId = useWatch({ control: form.control, name: "productId" });
   const declaredUnit = useWatch({ control: form.control, name: "declaredUnit" });
   // The model's upload lives here so the price can wait for it: `readyVersionId(upload)` is what to quote.
-  // The product section resets it when the product changes and when it closes with the customer.
+  // The product section resets it when the product changes and when it closes; another customer resets
+  // it here too, since the model is the last customer's file even if the section stayed open.
   const upload = useUpload({ area: "staff", kind: "design", customerId: customerId || undefined, declaredUnit });
+  const resetUpload = useRef(upload.reset);
+  useEffect(() => {
+    resetUpload.current = upload.reset;
+  });
+  useEffect(() => {
+    resetUpload.current();
+  }, [customerId]);
   // A price shows only while the body it was asked for is the one on screen.
   const body = useQuoteBody(form.control, readyVersionId(upload));
   const price = usePrice(body);
   const guard = useLeaveGuard(form.formState.isDirty);
+  const placing = usePlace({
+    form,
+    price,
+    quoteKey: body === null ? null : bodyKey(body),
+    onPlaced: (orderId) => guard.leaveNow(`/orders/${orderId}`),
+  });
 
   return (
     <FormProvider {...form}>
@@ -67,8 +84,17 @@ function NewOrder() {
         >
           <PriceSection price={price} />
         </Section>
-        {/* Task 11 opens this once there is a price. */}
-        <Section number={4} title={COPY.sections.delivery} open={false} closedHint={COPY.closed.delivery} />
+        {/* Opens when a price arrives, and stays open with a refusal at Place that cleared the price.
+            Focus stays on Get price, so staff read the new price before moving on to delivery. */}
+        <Section
+          number={4}
+          title={COPY.sections.delivery}
+          open={price.shown !== null || placing.failure !== null}
+          closedHint={COPY.closed.delivery}
+          focusOnOpen={false}
+        >
+          <DeliverySection price={price} placing={placing} />
+        </Section>
       </div>
       <LeaveDialog {...guard.dialog} />
     </FormProvider>

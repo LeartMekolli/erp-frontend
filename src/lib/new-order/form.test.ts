@@ -3,7 +3,21 @@ import { describe, expect, it } from "vitest";
 import type { ApiProblem } from "@/lib/api/problem";
 import type { CatalogProduct, OptionGroup, QuoteRefusal } from "@/lib/api/schema-types";
 
-import { EMPTY_VALUES, bodyKey, defaultOptions, newOrderSchema, optionFields, placeRefusal, quoteBody, refusalField, sizeError } from "./form";
+import {
+  EMPTY_ADDRESS,
+  EMPTY_VALUES,
+  addressProblems,
+  bodyKey,
+  defaultOptions,
+  newOrderSchema,
+  optionFields,
+  orderAddress,
+  placeBody,
+  placeRefusal,
+  quoteBody,
+  refusalField,
+  sizeError,
+} from "./form";
 import type { NewOrderValues } from "./form";
 
 const CUSTOMER = "11111111-1111-4111-8111-111111111111";
@@ -176,5 +190,41 @@ describe("new order form", () => {
     const note = check({ note: "x".repeat(2001) });
     expect(note.success).toBe(false);
     if (!note.success) expect(note.error.issues[0]?.message).toBe("Keep the note under 2,000 characters.");
+  });
+
+  it("accepts a typed address with its optional fields left blank", () => {
+    const address = { ...EMPTY_ADDRESS, name: "Mira Studio", line1: "3 Canal Street", city: "Leeds", postal_code: "LS1 4AB", country: "GB" };
+    expect(newOrderSchema.safeParse({ ...values, address }).success).toBe(true);
+  });
+
+  it("names what is wrong with a typed address", () => {
+    expect(addressProblems(EMPTY_ADDRESS)).toEqual({
+      name: "missing",
+      line1: "missing",
+      city: "missing",
+      postal_code: "missing",
+      country: "missing",
+    });
+    const typed = { ...EMPTY_ADDRESS, name: " Mira ", line1: "3 Canal Street", city: "Leeds", postal_code: "x".repeat(21), country: "gb" };
+    expect(addressProblems(typed)).toEqual({ postal_code: "too_long", country: "country" });
+    expect(orderAddress(typed)).toBeNull();
+  });
+
+  it("builds the place body: blank optional fields, a blank note and the saved address are left out", () => {
+    const typed = { ...EMPTY_ADDRESS, name: " Mira Studio ", line1: "3 Canal Street", city: "Leeds", postal_code: "LS1 4AB", country: "GB", phone: " " };
+    expect(placeBody({ customerId: CUSTOMER, address: typed, shippingMethod: "courier", note: "  " }, VERSION)).toEqual({
+      customer_id: CUSTOMER,
+      lines: [{ quote_id: VERSION }],
+      shipping_method: "courier",
+      address: { name: "Mira Studio", line1: "3 Canal Street", city: "Leeds", postal_code: "LS1 4AB", country: "GB" },
+    });
+    expect(placeBody({ customerId: CUSTOMER, address: null, shippingMethod: "courier", note: " Ring sizes inside. " }, VERSION)).toEqual({
+      customer_id: CUSTOMER,
+      lines: [{ quote_id: VERSION }],
+      shipping_method: "courier",
+      note: "Ring sizes inside.",
+    });
+    expect(placeBody({ customerId: CUSTOMER, address: null, shippingMethod: "", note: "" }, VERSION)).toBeNull();
+    expect(placeBody({ customerId: CUSTOMER, address: EMPTY_ADDRESS, shippingMethod: "courier", note: "" }, VERSION)).toBeNull();
   });
 });

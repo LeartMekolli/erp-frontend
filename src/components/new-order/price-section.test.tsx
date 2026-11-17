@@ -199,7 +199,8 @@ describe("PriceSection", () => {
     freezeAt(NOW, ["Date", "setInterval", "clearInterval"]);
     renderHarness(GIFT_SET);
     await userEvent.click(await getPriceButton());
-    expect(await screen.findByText("Holds until 18 Nov 2026, 10:00")).toBeInTheDocument();
+    // `findBy` re-checks on setInterval, which is faked here; `until` waits on real setTimeout.
+    await until(() => expect(screen.getByText("Holds until 18 Nov 2026, 10:00")).toBeInTheDocument());
 
     act(() => vi.advanceTimersByTime(HOLD_MS + 30_000));
 

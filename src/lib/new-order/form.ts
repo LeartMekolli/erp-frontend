@@ -5,6 +5,7 @@ import type {
   Address,
   CatalogProduct,
   OptionGroup,
+  PlaceOrderBody,
   PriceChangedProblem,
   ProductSizing,
   QuoteBody,
@@ -18,10 +19,11 @@ export const RADIO_LIMIT = 6;
 const QUANTITY_ERROR = "Enter a whole number from 1 to 1,000,000.";
 const MAX_QUANTITY = 1_000_000;
 
+// A blank optional field is what an empty input gives; `placeBody` leaves it out of what is sent.
 const addressSchema = z.object({
   name: z.string().min(1).max(200),
   line1: z.string().min(1).max(200),
-  line2: z.string().min(1).max(200).optional(),
+  line2: z.string().max(200).optional(),
   city: z.string().min(1).max(200),
   postal_code: z.string().min(1).max(20),
   region: z.string().max(100).optional(),
@@ -188,6 +190,95 @@ export function refusalField(code: QuoteRefusal["code"]): "options" | "size" | "
     default:
       return null;
   }
+}
+
+/** An address's fields, in the order the address form asks for them. */
+export const ADDRESS_FIELDS = ["name", "line1", "line2", "city", "postal_code", "region", "country", "phone"] as const satisfies readonly (keyof Address)[];
+
+export type AddressField = (typeof ADDRESS_FIELDS)[number];
+
+/** erp-api's longest value for each field (`order-response.ts:14`); a country is two capital letters. */
+export const ADDRESS_LIMITS: Record<AddressField, number> = {
+  name: 200,
+  line1: 200,
+  line2: 200,
+  city: 200,
+  postal_code: 20,
+  region: 100,
+  country: 2,
+  phone: 40,
+};
+
+const OPTIONAL_ADDRESS_FIELDS = ["line2", "region", "phone"] as const;
+
+/** An address form with nothing typed in yet. */
+export const EMPTY_ADDRESS: Address = { name: "", line1: "", line2: "", city: "", postal_code: "", region: "", country: "", phone: "" };
+
+/** Why an address field can't be sent as it is. */
+export type AddressProblem = "missing" | "too_long" | "country";
+
+const isOptional = (field: AddressField) => (OPTIONAL_ADDRESS_FIELDS as readonly string[]).includes(field);
+
+/** What is wrong with each field of a typed address, trimmed; fields that are fine are left out. */
+export function addressProblems(draft: Address): Partial<Record<AddressField, AddressProblem>> {
+  const problems: Partial<Record<AddressField, AddressProblem>> = {};
+  for (const field of ADDRESS_FIELDS) {
+    const value = (draft[field] ?? "").trim();
+    if (value === "") {
+      if (!isOptional(field)) problems[field] = "missing";
+    } else if (field === "country") {
+      if (!/^[A-Z]{2}$/.test(value)) problems[field] = "country";
+    } else if (value.length > ADDRESS_LIMITS[field]) {
+      problems[field] = "too_long";
+    }
+  }
+  return problems;
+}
+
+/** A typed address as erp-api takes it: each field trimmed, blank optional ones left out. Null while any field is wrong. */
+export function orderAddress(draft: Address): Address | null {
+  if (Object.keys(addressProblems(draft)).length > 0) return null;
+  const value = (field: AddressField) => (draft[field] ?? "").trim();
+  const address: Address = {
+    name: value("name"),
+    line1: value("line1"),
+    city: value("city"),
+    postal_code: value("postal_code"),
+    country: value("country"),
+  };
+  for (const field of OPTIONAL_ADDRESS_FIELDS) {
+    const text = value(field);
+    if (text !== "") address[field] = text;
+  }
+  return address;
+}
+
+const MAX_NOTE = 2000;
+
+/**
+ * What to place: the shown quote, the shipping method, the address only when it isn't the saved one
+ * (`address` null), and the note trimmed, only when it isn't blank. Null while there is no customer
+ * or method, or the typed address or the note can't be sent.
+ */
+export function placeBody(
+  values: Pick<NewOrderValues, "customerId" | "address" | "shippingMethod" | "note">,
+  quoteId: string,
+): PlaceOrderBody | null {
+  if (!values.customerId || !values.shippingMethod) return null;
+  const body: PlaceOrderBody = {
+    customer_id: values.customerId,
+    lines: [{ quote_id: quoteId }],
+    shipping_method: values.shippingMethod,
+  };
+  if (values.address !== null) {
+    const address = orderAddress(values.address);
+    if (!address) return null;
+    body.address = address;
+  }
+  const note = values.note.trim();
+  if (note.length > MAX_NOTE) return null;
+  if (note !== "") body.note = note;
+  return body;
 }
 
 export type PlaceRefusal =

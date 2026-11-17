@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from "react";
 export interface LeaveGuard {
   /** Goes to `href` at once when nothing is entered; otherwise asks first. */
   requestLeave: (href: string) => void;
+  /** Turns the guard off for good, then goes to `href`: for when what was entered is saved, such as a placed order. */
+  leaveNow: (href: string) => void;
   dialog: { open: boolean; leave: () => void; stay: () => void };
 }
 
@@ -32,6 +34,8 @@ export function useLeaveGuard(dirty: boolean): LeaveGuard {
   const router = useRouter();
   const [pending, setPending] = useState<string | null>(null);
   const dirtyRef = useRef(dirty);
+  // Read by the listeners themselves, so the guard is off at once, before React removes them.
+  const released = useRef(false);
 
   useEffect(() => {
     dirtyRef.current = dirty;
@@ -40,10 +44,12 @@ export function useLeaveGuard(dirty: boolean): LeaveGuard {
   useEffect(() => {
     if (!dirty) return;
     function onBeforeUnload(event: BeforeUnloadEvent) {
+      if (released.current) return;
       event.preventDefault();
       event.returnValue = "";
     }
     function onClick(event: MouseEvent) {
+      if (released.current) return;
       const href = followedHref(event);
       if (href === null) return;
       event.preventDefault();
@@ -59,12 +65,19 @@ export function useLeaveGuard(dirty: boolean): LeaveGuard {
   }, [dirty]);
 
   function requestLeave(href: string) {
-    if (dirtyRef.current) setPending(href);
+    if (dirtyRef.current && !released.current) setPending(href);
     else router.push(href);
+  }
+
+  function leaveNow(href: string) {
+    released.current = true;
+    setPending(null);
+    router.push(href);
   }
 
   return {
     requestLeave,
+    leaveNow,
     dialog: {
       open: pending !== null,
       leave() {

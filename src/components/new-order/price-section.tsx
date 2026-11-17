@@ -26,7 +26,10 @@ export function PriceSection({ price }: { price: Price }) {
   const refusedId = useId();
   const refusedList = useRef<HTMLDivElement>(null);
   const focusedFor = useRef<readonly QuoteRefusal[] | null>(null);
+  const changedNotice = useRef<HTMLDivElement>(null);
+  const focusedChange = useRef<QuoteSummary | null>(null);
   const { refusals, shown } = price;
+  const changedQuote = shown?.changed ? shown.quote : null;
 
   // Focus goes to each new set of refusals once; the same answer showing again (a field changed, then
   // changed back) leaves focus where staff are typing.
@@ -36,10 +39,19 @@ export function PriceSection({ price }: { price: Price }) {
     refusedList.current?.focus();
   }, [refusals]);
 
+  // A price that changed at placing takes focus once, here rather than at Place, so staff read the new
+  // price before placing again. A `price_changed` with no quote shows refusals, focused by the effect above.
+  useEffect(() => {
+    if (changedQuote === null || focusedChange.current === changedQuote) return;
+    focusedChange.current = changedQuote;
+    changedNotice.current?.focus();
+  }, [changedQuote]);
+
   const blocked = !price.ready || price.pending || !online;
 
   return (
-    <div className="flex flex-col gap-4">
+    // Announced as it changes: the price arriving, refused or failing; busy while it is asked for.
+    <div aria-live="polite" aria-busy={price.pending} className="flex flex-col gap-4">
       {refusals.length > 0 && (
         <div
           ref={refusedList}
@@ -59,7 +71,17 @@ export function PriceSection({ price }: { price: Price }) {
         </div>
       )}
 
-      {shown && <Quote quote={shown.quote} changed={shown.changed} />}
+      {changedQuote && (
+        <div
+          ref={changedNotice}
+          tabIndex={-1}
+          className="rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
+        >
+          <FormMessage tone="info">{COPY.price.changed}</FormMessage>
+        </div>
+      )}
+
+      {shown && <Quote quote={shown.quote} />}
 
       {online && price.error && <FormMessage tone="error">{price.error}</FormMessage>}
 
@@ -87,7 +109,7 @@ export function PriceSection({ price }: { price: Price }) {
 }
 
 /** One quote's summary lines, unit price and total, and until when it holds. */
-function Quote({ quote, changed }: { quote: QuoteSummary; changed: boolean }) {
+function Quote({ quote }: { quote: QuoteSummary }) {
   const format = useFormat();
   const now = useNow(EXPIRY_TICK_MS);
   const expired = quote.expired || now >= Date.parse(quote.expires_at);
@@ -95,7 +117,6 @@ function Quote({ quote, changed }: { quote: QuoteSummary; changed: boolean }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {changed && <FormMessage tone="info">{COPY.price.changed}</FormMessage>}
       <dl className="flex flex-col gap-1.5 text-sm">
         {quote.lines.map((line, index) => (
           <Row key={`${line.label}:${index}`} label={COPY.price.lines[line.label]} amount={money(line.amount)} />

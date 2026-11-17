@@ -101,13 +101,17 @@ export function usePrice(body: QuoteBody | null) {
     getPrice(): void {
       if (body !== null && !quote.isPending) void ask(body);
     },
-    /** Shows a quote erp-api priced again at placing (`price_changed`) as the current body's price. */
+    /**
+     * Stores a quote erp-api priced again at placing (`price_changed`) as the price of the body this
+     * render had, not the one on screen when it's called: call it on the `usePrice` result of the render
+     * that placed, so it lands under the placed body and stays hidden if the form changed meanwhile.
+     */
     adopt(changed: QuoteSummary): void {
       if (key === null) return;
       setFailure(null);
       setAnswer({ key, kind: "priced", quote: changed, changed: true });
     },
-    /** Shows why the current body can't be priced now (`price_changed` with no quote). */
+    /** Like `adopt`, for why that body can't be priced now (`price_changed` with no quote). */
     adoptRefusals(reasons: QuoteRefusal[]): void {
       if (key === null) return;
       setFailure(null);
