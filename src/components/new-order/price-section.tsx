@@ -50,8 +50,7 @@ export function PriceSection({ price }: { price: Price }) {
   const blocked = !price.ready || price.pending || !online;
 
   return (
-    // Announced as it changes: the price arriving, refused or failing; busy while it is asked for.
-    <div aria-live="polite" aria-busy={price.pending} className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
       {refusals.length > 0 && (
         <div
           ref={refusedList}
@@ -81,7 +80,12 @@ export function PriceSection({ price }: { price: Price }) {
         </div>
       )}
 
-      {shown && <Quote quote={shown.quote} />}
+      {/* Only the price is announced as it arrives, and it is busy while asked for. The buttons, notes and
+          boxes that take focus stay outside, or a screen reader would read them twice. The failure is
+          already an alert, so it is outside too. */}
+      <div aria-live="polite" aria-busy={price.pending} className="empty:hidden">
+        {shown && <Quote quote={shown.quote} />}
+      </div>
 
       {online && price.error && <FormMessage tone="error">{price.error}</FormMessage>}
 

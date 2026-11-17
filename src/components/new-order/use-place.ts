@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Path, UseFormReturn } from "react-hook-form";
 
 import { noAnswer } from "@/components/auth/copy";
@@ -43,6 +43,7 @@ export function usePlace({
 }) {
   const placeOrder = usePlaceOrder();
   const [failure, setFailure] = useState<PlaceFailure | null>(null);
+  const sending = useRef(false);
 
   const shownId = price.shown?.quote.id ?? null;
   const visible = failure !== null && failure.quoteKey === quoteKey && (shownId === null || shownId === failure.quoteId) ? failure : null;
@@ -82,7 +83,12 @@ export function usePlace({
   return {
     /** Places `body` once; `fields` are the form fields erp-api's field errors may land on. Does nothing while placing. */
     place(body: PlaceOrderBody, fields: readonly Path<NewOrderValues>[]): void {
-      if (!placeOrder.isPending) void send(body, fields);
+      // `isPending` only follows after a render, so a second click that arrives before it is caught by the ref.
+      if (placeOrder.isPending || sending.current) return;
+      sending.current = true;
+      void send(body, fields).finally(() => {
+        sending.current = false;
+      });
     },
     pending: placeOrder.isPending,
     /** A new object for each failure, so focus can move to its message each time. */

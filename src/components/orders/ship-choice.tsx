@@ -18,7 +18,7 @@ export function ShipChoice<T extends string>({
   return (
     <label
       className={cn(
-        "flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg border px-3 text-sm font-medium has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-violet",
+        "flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg border px-3 text-sm font-medium has-disabled:cursor-not-allowed has-disabled:opacity-60 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-violet",
         checked ? "border-ink bg-ink/4 text-ink" : "border-line text-ink-2",
       )}
     >

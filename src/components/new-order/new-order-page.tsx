@@ -67,22 +67,26 @@ function NewOrder() {
           </Button>
         </div>
 
-        <Section number={1} title={COPY.sections.customer} open>
-          <CustomerSection />
-        </Section>
-        <Section number={2} title={COPY.sections.product} open={customerId !== ""} closedHint={COPY.closed.product}>
-          <ProductSection refusals={price.fieldRefusals} upload={upload} />
-        </Section>
-        {/* Opens with the product while staff still fill it in, so focus stays in the product section. */}
-        <Section
-          number={3}
-          title={COPY.sections.price}
-          open={customerId !== "" && productId !== ""}
-          closedHint={COPY.closed.price}
-          focusOnOpen={false}
-        >
-          <PriceSection price={price} />
-        </Section>
+        {/* From Place until erp-api answers, nothing in sections 1 to 3 can be changed. Section 4 locks its
+            own fields, since its Place button must keep focus. */}
+        <fieldset disabled={placing.pending} className="m-0 flex min-w-0 flex-col gap-4 border-0 p-0">
+          <Section number={1} title={COPY.sections.customer} open>
+            <CustomerSection />
+          </Section>
+          <Section number={2} title={COPY.sections.product} open={customerId !== ""} closedHint={COPY.closed.product}>
+            <ProductSection refusals={price.fieldRefusals} upload={upload} />
+          </Section>
+          {/* Opens with the product while staff still fill it in, so focus stays in the product section. */}
+          <Section
+            number={3}
+            title={COPY.sections.price}
+            open={customerId !== "" && productId !== ""}
+            closedHint={COPY.closed.price}
+            focusOnOpen={false}
+          >
+            <PriceSection price={price} />
+          </Section>
+        </fieldset>
         {/* Opens when a price arrives, and stays open with a refusal at Place that cleared the price.
             Focus stays on Get price, so staff read the new price before moving on to delivery. */}
         <Section

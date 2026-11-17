@@ -44,7 +44,7 @@ export function DeliverySection({ price, placing }: { price: Price; placing: Pla
   const { errors } = useFormState({ control });
   const format = useFormat();
   const online = useOnline();
-  const offlineId = useId();
+  const reasonId = useId();
   const addressLabelId = useId();
 
   const addresses = useCustomerAddresses(customerId || null);
@@ -68,6 +68,19 @@ export function DeliverySection({ price, placing }: { price: Price; placing: Pla
   const total = quote && rate?.price ? formatMoney(addMoney(quote.total, rate.price), quote.currency) : null;
   const body = quote && rate ? placeBody({ customerId, address: draft, shippingMethod, note }, quote.id) : null;
   const blocked = body === null || placing.pending || !online;
+
+  // One reason Place is off, in the order staff would fix them. Nothing is said while something is still
+  // loading (the section says so itself), while placing, or when a load failure or an empty list already
+  // explains it. Offline wins over all.
+  const addressKnown = addresses.data !== undefined;
+  const addressComplete = draft === null ? saved !== null : typed !== null;
+  const methodsListed = ratesFor && !waiting && rateList !== undefined && rateList.length > 0;
+  let reason: string | null = null;
+  if (!online) reason = COPY.delivery.offline;
+  else if (!placing.pending && addressKnown) {
+    if (!addressComplete) reason = COPY.delivery.fillAddress;
+    else if (methodsListed && !rate) reason = COPY.delivery.pickMethod;
+  }
 
   // Focus follows Change and Use the saved address to what replaced the button pressed.
   const formBox = useRef<HTMLDivElement>(null);
@@ -112,96 +125,99 @@ export function DeliverySection({ price, placing }: { price: Price; placing: Pla
 
   return (
     <div className="flex flex-col gap-4">
-      <Row label={COPY.delivery.address} labelId={addressLabelId}>
-        <div role="group" aria-labelledby={addressLabelId} className="flex min-w-0 flex-col gap-3">
-          {addresses.isPending && <p className="text-sm text-ink-2">{COPY.delivery.addressLoading}</p>}
-          {addresses.isError && (
-            <LoadFailure error={addresses.error} fallback={COPY.delivery.addressFailed} onRetry={() => void addresses.refetch()} />
-          )}
-          {draft === null && saved && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <p className="min-w-0 text-sm break-words text-ink">
-                {addressLine(saved)} <span className="text-ink-2">{COPY.delivery.saved}</span>
-              </p>
-              <Button
-                ref={changeButton}
-                type="button"
-                variant="outline"
-                className="min-h-11 rounded-full"
-                onClick={() => {
-                  focusNext.current = "form";
-                  setAddress({ ...EMPTY_ADDRESS, ...saved });
-                }}
-              >
-                {COPY.delivery.change}
-              </Button>
-            </div>
-          )}
-          {draft !== null && (
-            <div ref={formBox} className="flex flex-col gap-3">
-              <AddressForm value={draft} onChange={setAddress} errors={typedErrors} />
-              {saved && (
+      {/* Locked while placing. The Place button sits outside it: a disabled button would drop focus. */}
+      <fieldset disabled={placing.pending} className="m-0 flex min-w-0 flex-col gap-4 border-0 p-0">
+        <Row label={COPY.delivery.address} labelId={addressLabelId}>
+          <div role="group" aria-labelledby={addressLabelId} className="flex min-w-0 flex-col gap-3">
+            {addresses.isPending && <p className="text-sm text-ink-2">{COPY.delivery.addressLoading}</p>}
+            {addresses.isError && (
+              <LoadFailure error={addresses.error} fallback={COPY.delivery.addressFailed} onRetry={() => void addresses.refetch()} />
+            )}
+            {draft === null && saved && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <p className="min-w-0 text-sm break-words text-ink">
+                  {addressLine(saved)} <span className="text-ink-2">{COPY.delivery.saved}</span>
+                </p>
                 <Button
+                  ref={changeButton}
                   type="button"
                   variant="outline"
-                  className="min-h-11 self-start rounded-full"
+                  className="min-h-11 rounded-full"
                   onClick={() => {
-                    focusNext.current = "change";
-                    setAddress(null);
+                    focusNext.current = "form";
+                    setAddress({ ...EMPTY_ADDRESS, ...saved });
                   }}
                 >
-                  {COPY.delivery.useSaved}
+                  {COPY.delivery.change}
                 </Button>
-              )}
-            </div>
-          )}
-        </div>
-      </Row>
+              </div>
+            )}
+            {draft !== null && (
+              <div ref={formBox} className="flex flex-col gap-3">
+                <AddressForm value={draft} onChange={setAddress} errors={typedErrors} />
+                {saved && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-11 self-start rounded-full"
+                    onClick={() => {
+                      focusNext.current = "change";
+                      setAddress(null);
+                    }}
+                  >
+                    {COPY.delivery.useSaved}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </Row>
 
-      {rateList && rateList.length > 0 ? (
-        <FieldRow label={COPY.delivery.shipping} problems={errors.shippingMethod?.message ? [errors.shippingMethod.message] : undefined}>
-          {rateList.map((choice) => (
-            <MethodChoice
-              key={choice.key}
-              rate={choice}
-              currency={format.currency}
-              checked={choice.key === shippingMethod}
-              onChoose={(key) => {
-                setValue("shippingMethod", key, { shouldDirty: true });
-                clearErrors("shippingMethod");
+        {rateList && rateList.length > 0 ? (
+          <FieldRow label={COPY.delivery.shipping} problems={errors.shippingMethod?.message ? [errors.shippingMethod.message] : undefined}>
+            {rateList.map((choice) => (
+              <MethodChoice
+                key={choice.key}
+                rate={choice}
+                currency={format.currency}
+                checked={choice.key === shippingMethod}
+                onChoose={(key) => {
+                  setValue("shippingMethod", key, { shouldDirty: true });
+                  clearErrors("shippingMethod");
+                }}
+              />
+            ))}
+          </FieldRow>
+        ) : (
+          <Row label={COPY.delivery.shipping}>
+            {!ratesFor && !waiting && addresses.data && <p className="text-sm text-ink-2 md:pt-3">{COPY.delivery.needsAddress}</p>}
+            {(waiting || (ratesFor && rates.isPending)) && <p className="text-sm text-ink-2 md:pt-3">{COPY.delivery.ratesLoading}</p>}
+            {ratesFor && rates.isError && (
+              <LoadFailure error={rates.error} fallback={COPY.delivery.ratesFailed} onRetry={() => void rates.refetch()} />
+            )}
+            {rateList?.length === 0 && <p className="text-sm text-ink-2 md:pt-3">{COPY.delivery.noRates}</p>}
+          </Row>
+        )}
+
+        <FieldRow
+          label={COPY.delivery.note}
+          hint={COPY.delivery.noteCount(note.length)}
+          problems={errors.note?.message ? [errors.note.message] : undefined}
+        >
+          {(props) => (
+            <Textarea
+              {...props}
+              value={note}
+              maxLength={MAX_NOTE}
+              className="min-h-20 border-line bg-card text-ink focus-visible:border-violet focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-violet/30 aria-invalid:border-late aria-invalid:ring-0"
+              onChange={(event) => {
+                setValue("note", event.target.value, { shouldDirty: true });
+                clearErrors("note");
               }}
             />
-          ))}
-        </FieldRow>
-      ) : (
-        <Row label={COPY.delivery.shipping}>
-          {!ratesFor && !waiting && addresses.data && <p className="text-sm text-ink-2 md:pt-3">{COPY.delivery.needsAddress}</p>}
-          {(waiting || (ratesFor && rates.isPending)) && <p className="text-sm text-ink-2 md:pt-3">{COPY.delivery.ratesLoading}</p>}
-          {ratesFor && rates.isError && (
-            <LoadFailure error={rates.error} fallback={COPY.delivery.ratesFailed} onRetry={() => void rates.refetch()} />
           )}
-          {rateList?.length === 0 && <p className="text-sm text-ink-2 md:pt-3">{COPY.delivery.noRates}</p>}
-        </Row>
-      )}
-
-      <FieldRow
-        label={COPY.delivery.note}
-        hint={COPY.delivery.noteCount(note.length)}
-        problems={errors.note?.message ? [errors.note.message] : undefined}
-      >
-        {(props) => (
-          <Textarea
-            {...props}
-            value={note}
-            maxLength={MAX_NOTE}
-            className="min-h-20 border-line bg-card text-ink focus-visible:border-violet focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-violet/30 aria-invalid:border-late aria-invalid:ring-0"
-            onChange={(event) => {
-              setValue("note", event.target.value, { shouldDirty: true });
-              clearErrors("note");
-            }}
-          />
-        )}
-      </FieldRow>
+        </FieldRow>
+      </fieldset>
 
       {failure && (
         <div
@@ -229,15 +245,15 @@ export function DeliverySection({ price, placing }: { price: Price; placing: Pla
           <Button
             type="button"
             aria-disabled={blocked}
-            aria-describedby={online ? undefined : offlineId}
+            aria-describedby={reason === null ? undefined : reasonId}
             className="min-h-11 w-full rounded-full md:w-auto aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-ink"
             onClick={place}
           >
             {placing.pending ? COPY.delivery.placing : COPY.delivery.place}
           </Button>
-          {!online && (
-            <p id={offlineId} className="text-sm text-ink-2">
-              {COPY.delivery.offline}
+          {reason !== null && (
+            <p id={reasonId} className="text-sm text-ink-2">
+              {reason}
             </p>
           )}
         </div>
@@ -277,7 +293,7 @@ function MethodChoice({
     <div className="flex flex-col gap-1">
       <label
         className={cn(
-          "flex min-h-11 items-center gap-2.5 rounded-lg border px-3 text-sm font-medium has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-violet",
+          "flex min-h-11 items-center gap-2.5 rounded-lg border px-3 text-sm font-medium has-disabled:cursor-not-allowed has-disabled:opacity-60 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-violet",
           !usable && "cursor-not-allowed border-dashed border-line text-ink-2 opacity-60",
           usable && (checked ? "cursor-pointer border-ink bg-ink/4 text-ink" : "cursor-pointer border-line text-ink-2"),
         )}

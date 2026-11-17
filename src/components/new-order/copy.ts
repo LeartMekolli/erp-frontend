@@ -118,6 +118,9 @@ export const COPY = {
     placing: "Placing…",
     checkFields: "Check the marked fields.",
     offline: "You're offline.",
+    /** Why Place order is off, when it is neither offline, loading nor placing. */
+    fillAddress: "Fill in the address first.",
+    pickMethod: "Pick a shipping method.",
   },
   leave: {
     title: "Leave this order?",

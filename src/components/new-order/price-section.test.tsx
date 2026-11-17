@@ -135,6 +135,26 @@ describe("PriceSection", () => {
     expect(quotes).toBe(1);
   });
 
+  it("announces only the price, not the button or the notes", async () => {
+    renderHarness(GIFT_SET);
+    const button = await getPriceButton();
+    await userEvent.click(button);
+    await screen.findByText("Unit price");
+
+    const live = document.querySelector<HTMLElement>("[aria-live]");
+    expect(live).not.toBeNull();
+    expect(live).toHaveAttribute("aria-live", "polite");
+    expect(live).toHaveAttribute("aria-busy", "false");
+    expect(within(live!).getByText("Unit price")).toBeInTheDocument();
+    expect(within(live!).getByText(/^Holds until/)).toBeInTheDocument();
+    expect(live).not.toContainElement(button);
+
+    act(() => setOnline(false));
+    expect(live).not.toContainElement(screen.getByText("You're offline."));
+    // Nothing else on the page is a live region.
+    expect(document.querySelectorAll("[aria-live]")).toHaveLength(1);
+  });
+
   it("hides the price when the body changes", async () => {
     renderHarness(GIFT_SET);
     await userEvent.click(await getPriceButton());

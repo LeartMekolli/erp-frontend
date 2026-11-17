@@ -73,7 +73,7 @@ export function CustomerSection() {
           }}
           maxLength={MAX_SEARCH_LENGTH}
           placeholder={COPY.customer.placeholder}
-          className="h-11 w-full min-w-0 rounded-lg border border-line bg-card px-3.5 text-base text-ink transition-colors placeholder:text-placeholder focus-visible:border-violet focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-violet/30 md:text-sm"
+          className="h-11 w-full min-w-0 rounded-lg border border-line bg-card px-3.5 text-base text-ink transition-colors placeholder:text-placeholder focus-visible:border-violet focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-violet/30 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
         />
         <CommandList className={asking && !searchFailed && customers.length > 0 && !searching ? "mt-2 rounded-lg border border-line bg-card p-1" : "hidden"}>
           {asking && search.settled && !search.isError && customers.map((c) => (

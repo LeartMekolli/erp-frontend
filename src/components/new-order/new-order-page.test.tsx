@@ -215,6 +215,59 @@ describe("NewOrderPage", () => {
     expect(closing.defaultPrevented).toBe(false);
   });
 
+  it("locks every field while placing, with focus staying on Place", async () => {
+    let release = () => {};
+    const answer = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      http.post(`${FAKE_API_URL}/orders`, async () => {
+        await answer;
+        return HttpResponse.json(
+          { type: "about:blank", title: "Conflict", status: 409, detail: "A quote is ordered once" },
+          { status: 409, headers: { "content-type": "application/problem+json" } },
+        );
+      }),
+    );
+    await readyToPlace();
+    const customer = screen.getByRole("combobox", { name: "Customer" });
+    const customerText = (customer as HTMLInputElement).value;
+    const quantity = screen.getByRole("textbox", { name: "Quantity" });
+    const note = screen.getByRole("textbox", { name: "Note" });
+    await userEvent.type(note, "Leave it at reception.");
+    expect(customer).toBeEnabled();
+    expect(quantity).toBeEnabled();
+
+    const place = placeButton();
+    await userEvent.click(place);
+
+    await waitFor(() => expect(quantity).toBeDisabled());
+    expect(customer).toBeDisabled();
+    expect(note).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Product" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Get price" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "Courier · €12.00" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Change" })).toBeDisabled();
+    // Place keeps focus and says nothing more; Cancel stays usable.
+    expect(place).toHaveFocus();
+    expect(place).toHaveTextContent("Placing…");
+    expect(place).toHaveAccessibleDescription("");
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+
+    release();
+    const message = await screen.findByRole("alert");
+    expect(message).toHaveTextContent("A quote is ordered once");
+    await waitFor(() => expect(quantity).toBeEnabled());
+    expect(customer).toBeEnabled();
+    expect(note).toBeEnabled();
+    expect(customer).toHaveValue(customerText);
+    expect(quantity).toHaveValue("1");
+    expect(note).toHaveValue("Leave it at reception.");
+    expect(screen.getByRole("radio", { name: "Courier · €12.00" })).toBeChecked();
+    await waitFor(() => expect(message).toHaveFocus());
+    expect(navigation.push).not.toHaveBeenCalled();
+  });
+
   it("shows the new price after price_changed", async () => {
     await readyToPlace();
     const requests = recordRequests();

@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { FormProvider, useForm } from "react-hook-form";
@@ -96,7 +96,13 @@ beforeEach(() => {
 
 afterEach(() => {
   server.events.removeAllListeners();
+  setOnline(true);
 });
+
+function setOnline(online: boolean) {
+  Object.defineProperty(navigator, "onLine", { value: online, configurable: true });
+  window.dispatchEvent(new Event(online ? "online" : "offline"));
+}
 
 const MIRA_ADDRESS = { name: "Mira Studio", line1: "3 Canal Street", city: "Leeds", postal_code: "LS1 4AB", country: "GB" };
 
@@ -257,6 +263,137 @@ describe("DeliverySection", () => {
     expect(postal).toHaveAttribute("aria-invalid", "false");
     // The new address asks for shipping again; once listed, the methods still carry erp-api's reason.
     expect(await screen.findByRole("radiogroup", { name: "Shipping" })).toHaveAccessibleDescription("Courier doesn't go there");
+  });
+
+  it("says why Place is off, one reason at a time", async () => {
+    renderDelivery(MIRA_ID, giftSetQuote(MIRA_ID));
+    const place = await screen.findByRole("button", { name: "Place order" });
+
+    // No address yet.
+    expect(await screen.findByText("Fill in the address first.")).toBeInTheDocument();
+    expect(place).toHaveAttribute("aria-disabled", "true");
+    expect(place).toHaveAccessibleDescription("Fill in the address first.");
+
+    // A complete address: while its methods load, the section says so and Place adds nothing.
+    await typeMiraAddress();
+    expect(screen.getByText("Loading the shipping methods…")).toBeInTheDocument();
+    expect(screen.queryByText("Fill in the address first.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pick a shipping method.")).not.toBeInTheDocument();
+    expect(place).toHaveAccessibleDescription("");
+
+    // Listed, none picked.
+    await screen.findByRole("radio", { name: "Courier · €12.00" });
+    expect(await screen.findByText("Pick a shipping method.")).toBeInTheDocument();
+    expect(place).toHaveAttribute("aria-disabled", "true");
+    expect(place).toHaveAccessibleDescription("Pick a shipping method.");
+
+    // Offline wins, and the other reason comes back with the connection.
+    act(() => setOnline(false));
+    expect(place).toHaveAccessibleDescription("You're offline.");
+    expect(screen.queryByText("Pick a shipping method.")).not.toBeInTheDocument();
+    act(() => setOnline(true));
+    expect(place).toHaveAccessibleDescription("Pick a shipping method.");
+
+    // Picked: nothing to say, and Place can be pressed.
+    await userEvent.click(screen.getByRole("radio", { name: "Courier · €12.00" }));
+    expect(screen.queryByText("Pick a shipping method.")).not.toBeInTheDocument();
+    expect(place).toHaveAttribute("aria-disabled", "false");
+    expect(place).toHaveAccessibleDescription("");
+
+    // Taking the address apart again.
+    await userEvent.clear(screen.getByRole("textbox", { name: "City" }));
+    expect(place).toHaveAccessibleDescription("Fill in the address first.");
+  });
+
+  it("asks for a method again when a new address no longer offers the chosen one", async () => {
+    // The fake lists the same methods for any address; here Courier isn't offered to a changed one.
+    server.use(
+      http.post(`${FAKE_API_URL}/orders/shipping-rates`, async ({ request }) => {
+        const { address } = (await request.json()) as { address?: unknown };
+        const collect = { key: "collect", name: "Collect", price: "0.00", available: true, reason: null };
+        const courier = { key: "courier", name: "Courier", price: "12.00", available: true, reason: null };
+        return HttpResponse.json({ data: address ? [collect] : [courier, collect] });
+      }),
+    );
+    renderDelivery(LUNA_ID, giftSetQuote(LUNA_ID));
+    await userEvent.click(await screen.findByRole("radio", { name: "Courier · €12.00" }));
+    const place = screen.getByRole("button", { name: "Place order" });
+    expect(place).toHaveAttribute("aria-disabled", "false");
+    expect(place).toHaveAccessibleDescription("");
+
+    await userEvent.click(screen.getByRole("button", { name: "Change" }));
+    // Once the new address's methods are listed, Courier is not among them.
+    expect(await screen.findByText("Pick a shipping method.")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Collect · €0.00" })).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /Courier/ })).not.toBeInTheDocument();
+    expect(place).toHaveAttribute("aria-disabled", "true");
+    expect(place).toHaveAccessibleDescription("Pick a shipping method.");
+
+    await userEvent.click(screen.getByRole("radio", { name: "Collect · €0.00" }));
+    expect(place).toHaveAttribute("aria-disabled", "false");
+    expect(place).toHaveAccessibleDescription("");
+  });
+
+  it("sends nothing when Place is pressed offline, and keeps what was entered", async () => {
+    const onPlaced = renderDelivery(MIRA_ID, giftSetQuote(MIRA_ID));
+    await typeMiraAddress();
+    await userEvent.click(await screen.findByRole("radio", { name: "Courier · €12.00" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Note" }), "Leave it at reception.");
+    const place = screen.getByRole("button", { name: "Place order" });
+    expect(place).toHaveAttribute("aria-disabled", "false");
+
+    act(() => setOnline(false));
+    expect(place).toHaveAttribute("aria-disabled", "true");
+    expect(place).toHaveAccessibleDescription("You're offline.");
+    await userEvent.click(place);
+    expect(keysTo("/orders")).toEqual([]);
+    expect(onPlaced).not.toHaveBeenCalled();
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue(MIRA_ADDRESS.name);
+    expect(screen.getByRole("textbox", { name: "City" })).toHaveValue(MIRA_ADDRESS.city);
+    expect(screen.getByRole("radio", { name: "Courier · €12.00" })).toBeChecked();
+    expect(screen.getByRole("textbox", { name: "Note" })).toHaveValue("Leave it at reception.");
+
+    act(() => setOnline(true));
+    expect(place).toHaveAttribute("aria-disabled", "false");
+    expect(place).toHaveAccessibleDescription("");
+    await userEvent.click(place);
+    await waitFor(() => expect(onPlaced).toHaveBeenCalledTimes(1));
+    expect(await sentTo("/orders")).toEqual([
+      {
+        customer_id: MIRA_ID,
+        lines: [{ quote_id: expect.any(String) as string }],
+        shipping_method: "courier",
+        address: MIRA_ADDRESS,
+        note: "Leave it at reception.",
+      },
+    ]);
+  });
+
+  it("sends one order for a double click on Place", async () => {
+    // erp-api answers only once released, so the second click comes while the first is still running.
+    let release = () => {};
+    const answer = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      http.post(`${FAKE_API_URL}/orders`, async () => {
+        await answer;
+        return HttpResponse.json(
+          { type: "about:blank", title: "Conflict", status: 409, detail: "A quote is ordered once" },
+          { status: 409, headers: { "content-type": "application/problem+json" } },
+        );
+      }),
+    );
+    const onPlaced = renderDelivery(LUNA_ID, giftSetQuote(LUNA_ID));
+    await userEvent.click(await screen.findByRole("radio", { name: "Courier · €12.00" }));
+
+    await userEvent.dblClick(screen.getByRole("button", { name: "Place order" }));
+    await waitFor(() => expect(keysTo("/orders")).toHaveLength(1));
+
+    release();
+    expect(await screen.findByRole("alert")).toHaveTextContent("A quote is ordered once");
+    expect(keysTo("/orders")).toHaveLength(1);
+    expect(onPlaced).not.toHaveBeenCalled();
   });
 
   it("sends the same key when Place is retried after no answer", async () => {
