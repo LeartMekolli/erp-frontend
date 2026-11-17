@@ -29,9 +29,9 @@ describe("can", () => {
 });
 
 describe("canPlaceOrders", () => {
-  const all = ["order.write", "quote.create", "customer.read", "catalog.read"] as const;
+  const all = ["order.read", "order.write", "quote.create", "customer.read", "catalog.read"] as const;
 
-  it("needs all four permissions", () => {
+  it("needs all five permissions", () => {
     expect(canPlaceOrders(staffMe([...all]))).toBe(true);
     for (const missing of all) {
       expect(canPlaceOrders(staffMe(all.filter((permission) => permission !== missing)))).toBe(false);

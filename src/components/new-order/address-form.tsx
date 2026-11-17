@@ -5,12 +5,12 @@ import { useId, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Address } from "@/lib/api/schema-types";
-import { ADDRESS_FIELDS, ADDRESS_LIMITS, addressProblems, type AddressField, type AddressProblem } from "@/lib/new-order/form";
+import { ADDRESS_FIELDS, ADDRESS_LIMITS, OPTIONAL_ADDRESS_FIELDS, addressProblems, type AddressField, type AddressProblem } from "@/lib/new-order/form";
 import { cn } from "@/lib/utils";
 
 import { COPY } from "./copy";
 
-const OPTIONAL: ReadonlySet<AddressField> = new Set(["line2", "region", "phone"]);
+const OPTIONAL: ReadonlySet<AddressField> = new Set<AddressField>(OPTIONAL_ADDRESS_FIELDS);
 /** Fields given the whole width from a tablet up; the others share a row in pairs. */
 const WIDE: ReadonlySet<AddressField> = new Set(["name", "line1", "line2"]);
 

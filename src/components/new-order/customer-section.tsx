@@ -18,8 +18,8 @@ import { COPY } from "./copy";
 export function customerSummary(customer: Customer): string {
   const { customer_group: group, payment_terms: terms, plan } = customer;
   const pays =
-    terms.terms === "pay_first" ? "Pays first" : `Pays later, ${terms.days_to_pay} ${terms.days_to_pay === 1 ? "day" : "days"}`;
-  return [group ? `Group: ${group.name}` : "No group", pays, `Plan: ${plan.name}`].join(" · ");
+    terms.terms === "pay_first" ? COPY.customer.paysFirst : `Pays later, ${terms.days_to_pay} ${terms.days_to_pay === 1 ? "day" : "days"}`;
+  return [group ? `Group: ${group.name}` : COPY.customer.noGroup, pays, COPY.customer.plan(plan.name)].join(" · ");
 }
 
 /**

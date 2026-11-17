@@ -17,9 +17,9 @@ export function useCan(permission: Permission): boolean {
   return can(useMe().data, permission);
 }
 
-const PLACE_ORDER_PERMISSIONS = ["order.write", "quote.create", "customer.read", "catalog.read"] as const satisfies readonly Permission[];
+const PLACE_ORDER_PERMISSIONS = ["order.read", "order.write", "quote.create", "customer.read", "catalog.read"] as const satisfies readonly Permission[];
 
-/** Whether the New order page can work: it places, quotes, and reads customers and the catalog. */
+/** Whether the New order page can work: it places, quotes, and reads customers and the catalog, and it leads to the order list and the placed order, which need `order.read`. */
 export function canPlaceOrders(me: MeResponse | undefined): boolean {
   return PLACE_ORDER_PERMISSIONS.every((permission) => can(me, permission));
 }

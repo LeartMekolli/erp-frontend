@@ -289,6 +289,8 @@ export function createQuotesStore(now: () => number, catalog: CatalogStore, find
     if (body.note !== undefined && (body.note.length < 1 || body.note.length > 2000)) return invalid("note", "must be 1 to 2000 characters");
 
     // Every lapsed quote of the customer is priced again first; a changed price places nothing.
+    // A simplification: the fake always answers 409 for a lapsed quote. Real erp-api places straight
+    // away when the re-quoted total is unchanged (`orders.service.ts:1047-1049`).
     const lapsed = body.lines.flatMap((line, position) => {
       const quote = quotes.get(line.quote_id);
       return quote && quote.draft.customerId === body.customer_id && !quote.ordered && quote.lapsed ? [{ position, quote }] : [];

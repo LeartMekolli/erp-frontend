@@ -180,7 +180,7 @@ export function ProductSection({ refusals, upload }: { refusals: Refusals; uploa
   );
 }
 
-/** One option group: radios up to `RADIO_LIMIT` values, a select above. An optional group can be left out. */
+/** One option group: radios up to `RADIO_LIMIT` values, a select above. An optional group with no default can be left out. */
 function OptionRow({
   field,
   value,
@@ -194,14 +194,16 @@ function OptionRow({
   invalid: boolean;
   problems: readonly string[];
 }) {
+  // erp-api prices a group left out as its default, so "None" is only honest where there is no default.
+  const canLeaveOut = !field.required && !field.hasDefault;
   if (field.values.length > RADIO_LIMIT) {
     return (
       <FieldRow label={field.name} invalid={invalid} problems={problems}>
         {(props) => (
           <NativeSelect {...props} value={value} onChange={(event) => onChoose(event.target.value)}>
-            {(!field.required || value === "") && (
-              <option value="" disabled={field.required}>
-                {field.required ? COPY.product.placeholder : COPY.product.noChoice}
+            {(canLeaveOut || value === "") && (
+              <option value="" disabled={!canLeaveOut}>
+                {canLeaveOut ? COPY.product.noChoice : COPY.product.placeholder}
               </option>
             )}
             {field.values.map((option) => (
@@ -219,7 +221,7 @@ function OptionRow({
       {field.values.map((option) => (
         <ShipChoice key={option.key} name={`option-${field.key}`} value={option.key} label={option.name} choice={value} onChoose={onChoose} />
       ))}
-      {!field.required && <ShipChoice name={`option-${field.key}`} value="" label={COPY.product.noChoice} choice={value} onChoose={onChoose} />}
+      {canLeaveOut && <ShipChoice name={`option-${field.key}`} value="" label={COPY.product.noChoice} choice={value} onChoose={onChoose} />}
     </FieldRow>
   );
 }

@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { Address, ShippingRate } from "@/lib/api/schema-types";
 import { addMoney, formatMoney } from "@/lib/format/money";
 import { useFormat } from "@/lib/format/use-format";
-import { ADDRESS_FIELDS, EMPTY_ADDRESS, orderAddress, placeBody, type AddressField, type NewOrderValues } from "@/lib/new-order/form";
+import { ADDRESS_FIELDS, EMPTY_ADDRESS, MAX_NOTE, orderAddress, placeBody, type AddressField, type NewOrderValues } from "@/lib/new-order/form";
 import { useCustomerAddresses, useShippingRates } from "@/lib/new-order/queries";
 import { useOnline } from "@/lib/query/use-online";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
@@ -21,7 +21,6 @@ import { FieldRow } from "./field-row";
 import type { Placing } from "./use-place";
 import type { Price } from "./use-price";
 
-const NOTE_LIMIT = 2000;
 /** How long a typed address stands still before its shipping methods are asked for. */
 const RATES_DELAY_MS = 400;
 
@@ -194,7 +193,7 @@ export function DeliverySection({ price, placing }: { price: Price; placing: Pla
           <Textarea
             {...props}
             value={note}
-            maxLength={NOTE_LIMIT}
+            maxLength={MAX_NOTE}
             className="min-h-20 border-line bg-card text-ink focus-visible:border-violet focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-violet/30 aria-invalid:border-late aria-invalid:ring-0"
             onChange={(event) => {
               setValue("note", event.target.value, { shouldDirty: true });

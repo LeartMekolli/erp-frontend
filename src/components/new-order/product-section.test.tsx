@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
@@ -50,6 +50,8 @@ describe("ProductSection", () => {
     expect(await screen.findByRole("radio", { name: "Silver 925" })).toBeChecked();
     expect(screen.getByRole("radio", { name: "Gold 18k" })).not.toBeChecked();
     expect(screen.getByRole("radio", { name: "Polished" })).toBeChecked();
+    // Finish is optional but starts on Polished, and erp-api prices a group left out as its default: no "None".
+    expect(screen.queryByRole("radio", { name: "None" })).not.toBeInTheDocument();
     expect(screen.getByText("Between 0.5 and 3")).toBeInTheDocument();
     expect(screen.getByTestId("values")).toHaveTextContent('"options":{"metal":"silver_925","finish":"polished"}');
 
@@ -102,6 +104,53 @@ describe("ProductSection", () => {
 
     expect(await screen.findByRole("combobox", { name: "Alloy" })).toHaveValue("b");
     expect(screen.queryByRole("radiogroup", { name: "Alloy" })).not.toBeInTheDocument();
+  });
+
+  it("offers None only on an optional group with no default", async () => {
+    const group = (id: string, count: number): OptionGroup => ({
+      id,
+      key: id,
+      name: id,
+      values: Array.from({ length: count }, (_, n) => ({ id: `${id}-${n}`, group_id: id, key: `${id}${n}`, name: `${id} ${n}`, material_id: null })),
+    });
+    const groups = [group("engraving", 2), group("box", 2), group("wide", 7), group("wide_default", 7)];
+    const offered = (id: string) => groups.find((g) => g.id === id)!.values.map((value) => value.id);
+    const product: CatalogProduct = {
+      id: "product-pendant",
+      category_id: "category-pendants",
+      key: "pendant",
+      name: "Pendant",
+      kind: "ready_made",
+      status: "active",
+      material_id: null,
+      sizing: { mode: "none" },
+      design_file: null,
+      options: [
+        { group_id: "engraving", required: false, default_value_id: null, value_ids: offered("engraving") },
+        { group_id: "box", required: false, default_value_id: "box-0", value_ids: offered("box") },
+        { group_id: "wide", required: false, default_value_id: null, value_ids: offered("wide") },
+        { group_id: "wide_default", required: false, default_value_id: "wide_default-1", value_ids: offered("wide_default") },
+      ],
+      published: true,
+      customer_id: null,
+      parts: [],
+    };
+    server.use(
+      http.get(`${FAKE_API_URL}/catalog/option-groups`, () => HttpResponse.json({ data: groups })),
+      http.get(`${FAKE_API_URL}/catalog/products`, () => HttpResponse.json({ data: [product], next_cursor: null })),
+    );
+
+    renderAs(ORDER_TAKER, <Harness customerId={LUNA_ID} />);
+    await pickProduct("Pendant");
+
+    // Radios: no default offers None (and it starts unchosen); a default does not.
+    const engraving = await screen.findByRole("radiogroup", { name: "engraving" });
+    expect(within(engraving).getByRole("radio", { name: "None" })).toBeChecked();
+    expect(within(screen.getByRole("radiogroup", { name: "box" })).queryByRole("radio", { name: "None" })).not.toBeInTheDocument();
+
+    // Selects: the same rule.
+    expect(within(screen.getByRole("combobox", { name: "wide" })).getByRole("option", { name: "None" })).toBeInTheDocument();
+    expect(within(screen.getByRole("combobox", { name: "wide_default" })).queryByRole("option", { name: "None" })).not.toBeInTheDocument();
   });
 
   it("hides Delivery with one speed", async () => {

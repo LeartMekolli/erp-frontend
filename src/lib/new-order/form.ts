@@ -1,5 +1,4 @@
-import { z } from "zod";
-
+import { COPY } from "@/components/new-order/copy";
 import type { ApiProblem } from "@/lib/api/problem";
 import type {
   Address,
@@ -16,35 +15,12 @@ import { canonical } from "@/lib/query/use-api-mutation";
 /** Up to this many values an option shows as radios; above it, a select. */
 export const RADIO_LIMIT = 6;
 
-const QUANTITY_ERROR = "Enter a whole number from 1 to 1,000,000.";
 const MAX_QUANTITY = 1_000_000;
 
-// A blank optional field is what an empty input gives; `placeBody` leaves it out of what is sent.
-const addressSchema = z.object({
-  name: z.string().min(1).max(200),
-  line1: z.string().min(1).max(200),
-  line2: z.string().max(200).optional(),
-  city: z.string().min(1).max(200),
-  postal_code: z.string().min(1).max(20),
-  region: z.string().max(100).optional(),
-  country: z.string().regex(/^[A-Z]{2}$/),
-  phone: z.string().max(40).optional(),
-});
+/** The longest note erp-api takes. */
+export const MAX_NOTE = 2000;
 
-export const newOrderSchema = z.object({
-  customerId: z.string(),
-  productId: z.string(),
-  options: z.record(z.string(), z.string()),
-  size: z.string(),
-  quantity: z.string().refine(validQuantity, QUANTITY_ERROR),
-  declaredUnit: z.enum(["mm", "cm", "m", "in"]),
-  speed: z.string(),
-  /** `null` is the customer's saved address. */
-  address: addressSchema.nullable(),
-  shippingMethod: z.string(),
-  note: z.string().max(2000, "Keep the note under 2,000 characters."),
-});
-
+/** What the form holds. It is checked by `quoteBody`, `addressProblems`, `placeBody` and `quantityError`, not by a schema. */
 export interface NewOrderValues {
   customerId: string;
   productId: string;
@@ -54,6 +30,7 @@ export interface NewOrderValues {
   quantity: string;
   declaredUnit: "mm" | "cm" | "m" | "in";
   speed: string;
+  /** `null` is the customer's saved address. */
   address: Address | null;
   shippingMethod: string;
   note: string;
@@ -76,6 +53,8 @@ export interface OptionField {
   key: string;
   name: string;
   required: boolean;
+  /** Whether the product starts this group on a value. erp-api fills in a group left out with it, so such a group can't be left out. */
+  hasDefault: boolean;
   values: { key: string; name: string }[];
 }
 
@@ -90,6 +69,7 @@ export function optionFields(product: CatalogProduct, groups: OptionGroup[]): Op
       key: group.key,
       name: group.name,
       required: option.required,
+      hasDefault: option.default_value_id !== null,
       values: group.values.filter((value) => offered.has(value.id)).map((value) => ({ key: value.key, name: value.name })),
     });
   }
@@ -116,9 +96,9 @@ export function sizeError(sizing: ProductSizing, size: string): string | null {
   const value = size.trim();
   if (sizing.mode === "none") return null;
   if (sizing.mode === "named") {
-    return sizing.sizes.some((s) => s.key === value) ? null : "Pick a size.";
+    return sizing.sizes.some((s) => s.key === value) ? null : COPY.product.sizePick;
   }
-  const message = `Enter a size between ${sizing.min} and ${sizing.max}.`;
+  const message = COPY.product.sizeRange(sizing.min, sizing.max);
   if (!SCALE.test(value)) return message;
   const scale = Number(value);
   return scale >= Number(sizing.min) && scale <= Number(sizing.max) ? null : message;
@@ -130,7 +110,7 @@ function validQuantity(quantity: string): boolean {
 
 /** Why the quantity can't be used, or null when it can. */
 export function quantityError(quantity: string): string | null {
-  return validQuantity(quantity) ? null : QUANTITY_ERROR;
+  return validQuantity(quantity) ? null : COPY.product.quantityError;
 }
 
 /**
@@ -209,7 +189,8 @@ export const ADDRESS_LIMITS: Record<AddressField, number> = {
   phone: 40,
 };
 
-const OPTIONAL_ADDRESS_FIELDS = ["line2", "region", "phone"] as const;
+/** The address fields erp-api lets stay blank. */
+export const OPTIONAL_ADDRESS_FIELDS = ["line2", "region", "phone"] as const satisfies readonly AddressField[];
 
 /** An address form with nothing typed in yet. */
 export const EMPTY_ADDRESS: Address = { name: "", line1: "", line2: "", city: "", postal_code: "", region: "", country: "", phone: "" };
@@ -252,8 +233,6 @@ export function orderAddress(draft: Address): Address | null {
   }
   return address;
 }
-
-const MAX_NOTE = 2000;
 
 /**
  * What to place: the shown quote, the shipping method, the address only when it isn't the saved one

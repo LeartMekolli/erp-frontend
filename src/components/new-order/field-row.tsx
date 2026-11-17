@@ -61,8 +61,8 @@ export function FieldRow({
         )}
         {problemsId && (
           <ul id={problemsId} className="flex flex-col gap-0.5 text-caption text-late">
-            {problems.map((problem) => (
-              <li key={problem}>{problem}</li>
+            {problems.map((problem, index) => (
+              <li key={index}>{problem}</li>
             ))}
           </ul>
         )}

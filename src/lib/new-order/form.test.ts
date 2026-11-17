@@ -9,11 +9,11 @@ import {
   addressProblems,
   bodyKey,
   defaultOptions,
-  newOrderSchema,
   optionFields,
   orderAddress,
   placeBody,
   placeRefusal,
+  quantityError,
   quoteBody,
   refusalField,
   sizeError,
@@ -177,24 +177,25 @@ describe("new order form", () => {
     });
     expect(defaultOptions(p, groups)).toEqual({ metal: "gold" });
     expect(optionFields(p, groups)).toEqual([
-      { key: "metal", name: "Metal", required: true, values: [{ key: "silver", name: "Silver 925" }, { key: "gold", name: "Gold 18k" }] },
-      { key: "finish", name: "Finish", required: false, values: [{ key: "polished", name: "Polished" }, { key: "matte", name: "Matte" }] },
+      { key: "metal", name: "Metal", required: true, hasDefault: true, values: [{ key: "silver", name: "Silver 925" }, { key: "gold", name: "Gold 18k" }] },
+      { key: "finish", name: "Finish", required: false, hasDefault: false, values: [{ key: "polished", name: "Polished" }, { key: "matte", name: "Matte" }] },
     ]);
   });
 
   it("checks quantity and note", () => {
-    const check = (patch: Partial<NewOrderValues>) => newOrderSchema.safeParse({ ...values, ...patch });
-    expect(check({}).success).toBe(true);
-    expect(check({ quantity: "1000000" }).success).toBe(true);
-    for (const quantity of ["0", "1000001", "1.5", "", "007"]) expect(check({ quantity }).success, quantity).toBe(false);
-    const note = check({ note: "x".repeat(2001) });
-    expect(note.success).toBe(false);
-    if (!note.success) expect(note.error.issues[0]?.message).toBe("Keep the note under 2,000 characters.");
+    expect(quantityError("1")).toBeNull();
+    expect(quantityError("1000000")).toBeNull();
+    for (const quantity of ["0", "1000001", "1.5", "", "007"]) {
+      expect(quantityError(quantity), quantity).toBe("Enter a whole number from 1 to 1,000,000.");
+    }
+    const place = (note: string) => placeBody({ customerId: CUSTOMER, address: null, shippingMethod: "courier", note }, VERSION);
+    expect(place("x".repeat(2000))).not.toBeNull();
+    expect(place("x".repeat(2001))).toBeNull();
   });
 
   it("accepts a typed address with its optional fields left blank", () => {
     const address = { ...EMPTY_ADDRESS, name: "Mira Studio", line1: "3 Canal Street", city: "Leeds", postal_code: "LS1 4AB", country: "GB" };
-    expect(newOrderSchema.safeParse({ ...values, address }).success).toBe(true);
+    expect(addressProblems(address)).toEqual({});
   });
 
   it("names what is wrong with a typed address", () => {

@@ -1,6 +1,5 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import { notFound } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
@@ -8,7 +7,7 @@ import { FormProvider, useForm, useWatch } from "react-hook-form";
 import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
 import { canPlaceOrders } from "@/lib/auth/permissions";
-import { EMPTY_VALUES, bodyKey, newOrderSchema, type NewOrderValues } from "@/lib/new-order/form";
+import { EMPTY_VALUES, bodyKey, type NewOrderValues } from "@/lib/new-order/form";
 import { useUpload } from "@/lib/upload/use-upload";
 
 import { COPY } from "./copy";
@@ -32,7 +31,7 @@ export function NewOrderPage() {
 }
 
 function NewOrder() {
-  const form = useForm<NewOrderValues>({ resolver: zodResolver(newOrderSchema), defaultValues: EMPTY_VALUES });
+  const form = useForm<NewOrderValues>({ defaultValues: EMPTY_VALUES });
   const customerId = useWatch({ control: form.control, name: "customerId" });
   const productId = useWatch({ control: form.control, name: "productId" });
   const declaredUnit = useWatch({ control: form.control, name: "declaredUnit" });
