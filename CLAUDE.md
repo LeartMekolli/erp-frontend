@@ -21,12 +21,13 @@
 
 ## Ignored files
 
-`docs/`, `.superpowers/`, `.impeccable/`, `heads-up.md`, `todos.md`, `backend-todos.md` and `.env*` are gitignored, so they don't travel with commits. New workspaces copy them from the main checkout (`~/Desktop/erp-frontend`) in the Conductor setup script, so the main checkout must always hold the latest versions.
+`docs/`, `.superpowers/`, `.impeccable/`, `.claude/`, `heads-up.md`, `todos.md`, `backend-todos.md` and `.env*` are gitignored, so they don't travel with commits. New workspaces copy them from the main checkout (`~/Desktop/erp-frontend`) in the Conductor setup script, so the main checkout must always hold the latest versions.
 
 What the notes are for:
 - `heads-up.md` is the user's own guidebook: decisions and explanations they want to keep. Write to it only when the user asks; never put tasks or reminders there.
 - `todos.md` holds frontend and project work for later (CI/CD, deployment, features postponed by the user).
 - `backend-todos.md` holds erp-api gaps and flaws found while building AMI.
+- `.claude/` holds the agent settings, hooks and skills.
 
 Whenever an agent changes any of them, and always at the end of a feature (when its files are ready for the user to commit), it ends its reply with this command for the user to copy and paste, with the `cd` path set to the agent's own workspace. The workspace's version wins: only files whose contents differ are copied, each one is listed, and every main-checkout file it replaces is first saved to a dated folder under `.git/kb-backups/`, so nothing is ever lost:
 
@@ -37,7 +38,7 @@ B="$D/.git/kb-backups/$(date +%Y-%m-%d_%H-%M-%S)"
 if [ "$(pwd -P)" = "$D" ] || [ ! -d "$D/.git" ]; then
   echo "Stopped: run this from a workspace, and check that $D exists."
 else
-  for p in docs .superpowers .impeccable heads-up.md todos.md backend-todos.md .env .env.local; do
+  for p in docs .superpowers .impeccable .claude heads-up.md todos.md backend-todos.md .env .env.local; do
     [ -e "$p" ] && { rsync -aci --backup --backup-dir="$B" "$p" "$D/" || echo "FAILED: $p"; }
   done
   echo "Done. Any Desktop file that was replaced is saved in $B"
