@@ -66,6 +66,15 @@ const UPLOAD_LINK_MS = 15 * 60 * 1000;
 /** A version's next status on each read once its bytes are in: erp-api's measuring job, one step per poll. */
 const MEASURING: Partial<Record<VersionResponse["status"], VersionResponse["status"]>> = { uploaded: "measuring", measuring: "measured" };
 
+/** The measures the fake finds in every design: a 22 × 18 × 4 mm part. */
+const DESIGN_MEASURES: FakeVersion["measures"] = [
+  { type: "volume", value: "1240", unit: "mm3" },
+  { type: "surface_area", value: "1860", unit: "mm2" },
+  { type: "bounding_box_x", value: "22", unit: "mm" },
+  { type: "bounding_box_y", value: "18", unit: "mm" },
+  { type: "bounding_box_z", value: "4", unit: "mm" },
+];
+
 /**
  * An in-memory erp-api that keeps the rules AMI's session depends on:
  * refresh tokens work once and reuse revokes the session, logout revokes and
@@ -335,13 +344,16 @@ export function createFakeState(now: () => number = Date.now) {
 
     /** 409 when nothing, or not what was declared, reached storage; completing again answers the version as it is (`files.service.ts:302-321`). */
     completeFile(fileId: string, versionId: string, partnerId?: string): VersionResponse | Status<404 | 409> {
-      const version = ownFile(fileId, partnerId)?.versions.find((v) => v.view.id === versionId);
-      if (!version) return { status: 404 };
+      const file = ownFile(fileId, partnerId);
+      const version = file?.versions.find((v) => v.view.id === versionId);
+      if (!file || !version) return { status: 404 };
       if (version.view.status !== "pending") return version.view;
       const { stored } = version;
       if (!stored || stored.size !== version.view.size || stored.contentType !== version.view.content_type)
         return { status: 409 };
       version.view = { ...version.view, status: "uploaded", completed_at: new Date(now()).toISOString() };
+      // What the measuring job finds in a design (`measurers.ts`); the version reads as measured two polls on.
+      if (file.view.kind === "design") version.measures = DESIGN_MEASURES;
       return version.view;
     },
 

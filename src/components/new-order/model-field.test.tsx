@@ -21,6 +21,8 @@ function stub(phase: UploadPhase, upload = vi.fn()): ModelUpload {
     progress: phase === "idle" ? 0 : 1,
     fileId: phase === "idle" ? undefined : "file-1",
     versionId: phase === "idle" ? undefined : "version-1",
+    file: null,
+    measures: [],
     slow: false,
     offline: false,
     message: null,

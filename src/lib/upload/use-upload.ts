@@ -16,6 +16,7 @@ import {
   readFile,
   startUpload,
   versionState,
+  type FileMeasure,
   type UploadClients,
   type UploadTarget,
 } from "./upload";
@@ -25,6 +26,8 @@ export type UploadPhase = "idle" | "uploading" | "completing" | "measuring" | "d
 interface Run {
   step: Exclude<UploadPhase, "done">;
   progress: number;
+  /** The last file passed to `upload`: what a card shows while it goes. */
+  file?: { name: string; size: number };
   fileId?: string;
   versionId?: string;
   message: string | null;
@@ -68,7 +71,7 @@ export function useUpload(target: UploadTarget, options: { clients?: UploadClien
     const controller = new AbortController();
     running.current = controller;
     lastFile.current = file;
-    setRun({ step: "uploading", progress: 0, message: null });
+    setRun({ step: "uploading", progress: 0, file: { name: file.name, size: file.size }, message: null });
 
     // A run that was replaced or stopped no longer updates the state.
     const update = (next: Partial<Run>) => {
@@ -115,6 +118,10 @@ export function useUpload(target: UploadTarget, options: { clients?: UploadClien
   if (run.step === "measuring" && job.state === "done") phase = "done";
   else if (run.step === "measuring" && (job.state === "failed" || job.state === "expired")) phase = "failed";
 
+  // What the server measured on this run's version; nothing until it is ready.
+  const version = job.data?.versions.find((v) => v.id === versionId);
+  const measures: FileMeasure[] = phase === "done" ? (version?.measures ?? []) : [];
+
   return {
     upload,
     retry,
@@ -123,6 +130,8 @@ export function useUpload(target: UploadTarget, options: { clients?: UploadClien
     progress: run.progress,
     fileId,
     versionId,
+    file: run.file ?? null,
+    measures,
     slow: phase === "measuring" && job.slow,
     offline: job.offline,
     message: run.message,
