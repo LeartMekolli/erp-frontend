@@ -23,7 +23,7 @@ export function customerSummary(customer: Customer): string {
 }
 
 /**
- * Section 1: search for the customer the order is for. Picking one loads their record and, once it is
+ * Search for the customer the order is for. Picking one loads their record and, once it is
  * active, sets it as the order's customer with every other field back to its empty value, since prices,
  * products and files are the customer's own. A disabled customer is named and never set.
  */
@@ -64,6 +64,10 @@ export function CustomerSection() {
 
   return (
     <div className="flex flex-col gap-3">
+      {/* The combobox is named by the Command's own label; this is the visible one above it. */}
+      <span aria-hidden className="text-caption font-medium text-ink">
+        {COPY.customer.label}
+      </span>
       <Command shouldFilter={false} label={COPY.customer.label} onKeyDown={onKeyDown} className="size-auto overflow-visible rounded-none! bg-transparent p-0">
         <CommandPrimitive.Input
           value={text}

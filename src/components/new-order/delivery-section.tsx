@@ -26,7 +26,7 @@ export function addressLine(address: Address): string {
 }
 
 /**
- * Section 4: where the order goes, how it ships, a note, the total before tax, and Place order. The
+ * The Delivery panel: where the order goes, how it ships, a note, the total before tax, and Place order. The
  * customer's saved address is used unless staff change it for this order; with none saved, the form is
  * open and must be filled in. Shipping is asked for once the address is the saved one or complete. The
  * address, its methods, the total and Place's reason come from `checkout`, worked out once by the page.
@@ -140,12 +140,12 @@ export function DeliverySection({ checkout, placing }: { checkout: Checkout; pla
           </FieldRow>
         ) : (
           <Row label={COPY.delivery.shipping}>
-            {!ratesFor && !waiting && addresses.data && <p className="text-sm text-ink-2 md:pt-3">{COPY.delivery.needsAddress}</p>}
-            {(waiting || (ratesFor && rates.isPending)) && <p className="text-sm text-ink-2 md:pt-3">{COPY.delivery.ratesLoading}</p>}
+            {!ratesFor && !waiting && addresses.data && <p className="text-sm text-ink-2">{COPY.delivery.needsAddress}</p>}
+            {(waiting || (ratesFor && rates.isPending)) && <p className="text-sm text-ink-2">{COPY.delivery.ratesLoading}</p>}
             {ratesFor && rates.isError && (
               <LoadFailure error={rates.error} fallback={COPY.delivery.ratesFailed} onRetry={() => void rates.refetch()} />
             )}
-            {rateList?.length === 0 && <p className="text-sm text-ink-2 md:pt-3">{COPY.delivery.noRates}</p>}
+            {rateList?.length === 0 && <p className="text-sm text-ink-2">{COPY.delivery.noRates}</p>}
           </Row>
         )}
 
@@ -181,10 +181,10 @@ export function DeliverySection({ checkout, placing }: { checkout: Checkout; pla
       )}
 
       {/* On a phone the total and Place order stay in view at the bottom while staff scroll the section. */}
-      <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-3 border-t border-line bg-card px-4 py-3 sm:-mx-6 sm:px-6 md:static md:mx-0 md:flex-row md:items-start md:justify-between md:border-0 md:p-0">
+      <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-3 border-t border-line bg-card px-4 py-3 sm:-mx-5 sm:px-5 md:static md:mx-0 md:flex-row md:items-start md:justify-between md:border-0 md:p-0">
         {/* Only the total with shipping shows here; the one before shipping is the ticket's. */}
         {total !== null && rate !== undefined ? (
-          <p className="flex items-baseline justify-between gap-4 text-sm md:justify-start md:pt-3">
+          <p className="flex items-baseline justify-between gap-4 text-sm md:justify-start">
             <span className="text-ink-2">{total.label}</span>
             <span className="text-base font-semibold text-ink tabular-nums">{total.amount}</span>
           </p>
@@ -216,8 +216,8 @@ export function DeliverySection({ checkout, placing }: { checkout: Checkout; pla
 /** A row laid out as `FieldRow`'s, for content that isn't one control or a set of radios. */
 function Row({ label, labelId, children }: { label: string; labelId?: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-1.5 md:grid md:grid-cols-[7rem_1fr] md:items-start md:gap-x-4">
-      <span id={labelId} className="text-caption font-medium text-ink md:pt-4">
+    <div className="flex flex-col gap-1.5">
+      <span id={labelId} className="text-caption font-medium text-ink">
         {label}
       </span>
       <div className="flex min-w-0 flex-col gap-1.5">{children}</div>

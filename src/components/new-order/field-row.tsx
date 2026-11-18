@@ -11,8 +11,8 @@ export interface ControlProps {
 }
 
 /**
- * One field of the New order page: its label above the control on a phone and beside it from a tablet
- * up, then erp-api's reasons for refusing it and a hint. Given a function, it hands over the props
+ * One field of the New order page: its label above the control at every width, then erp-api's
+ * reasons for refusing it and a hint. Given a function, it hands over the props
  * a single control needs; given plain children (radios), it wraps them in a labelled radio group.
  */
 export function FieldRow({
@@ -41,13 +41,11 @@ export function FieldRow({
   };
 
   return (
-    <div className="flex flex-col gap-1.5 md:grid md:grid-cols-[7rem_1fr] md:items-start md:gap-x-4">
+    <div className="flex flex-col gap-1.5">
       {typeof children === "function" ? (
-        <Label htmlFor={id} className="md:pt-4">
-          {label}
-        </Label>
+        <Label htmlFor={id}>{label}</Label>
       ) : (
-        <span id={labelId} className="text-caption font-medium text-ink md:pt-4">
+        <span id={labelId} className="text-caption font-medium text-ink">
           {label}
         </span>
       )}

@@ -97,28 +97,65 @@ describe("NewOrderPage", () => {
     await vi.waitFor(() => expect(navigation.notFound).toHaveBeenCalled());
   });
 
-  it("shows the four sections with only the customer open", async () => {
+  it("shows the model and customer panels, and delivery once a customer is picked", async () => {
     renderAs(ORDER_TAKER, <NewOrderPage />);
     expect(await screen.findByRole("heading", { level: 1, name: "New order" })).toBeInTheDocument();
-    const titles = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
-    expect(titles).toEqual(["Customer", "Product", "Price", "Delivery"]);
-    expect(screen.getByRole("region", { name: "Customer" })).toBeInTheDocument();
-    expect(screen.getByText("Pick a customer first.")).toBeInTheDocument();
-    expect(screen.getByText("Fill in the product first.")).toBeInTheDocument();
-    expect(screen.getByText("Get a price first.")).toBeInTheDocument();
+    const titles = () => screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
+    expect(titles()).toEqual(["Model"]);
+    expect(screen.getByRole("region", { name: "Model" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Customer" })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Order" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Delivery" })).not.toBeInTheDocument();
     expect(navigation.notFound).not.toHaveBeenCalled();
+
+    await pickCustomer("Luna", "Luna Jewels");
+    expect(await screen.findByRole("heading", { level: 2, name: "Delivery" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Delivery" })).toBeInTheDocument();
+    expect(titles()).toEqual(["Model", "Delivery"]);
+  });
+
+  it("has no section numbers", async () => {
+    renderAs(ORDER_TAKER, <NewOrderPage />);
+    await screen.findByRole("heading", { level: 1, name: "New order" });
+    await pickCustomer("Luna", "Luna Jewels");
+    await screen.findByRole("heading", { level: 2, name: "Delivery" });
+    for (const heading of screen.getAllByRole("heading")) {
+      expect(heading.textContent).not.toMatch(/^[1-4]$/);
+    }
+  });
+
+  it("shows the model field only for a custom product", async () => {
+    document.removeEventListener("click", recordClick);
+    renderAs(STAFF, <NewOrderPage />);
+    await pickCustomer("Luna", "Luna Jewels");
+    await chooseProduct("Nameplate");
+    expect(await screen.findByText("A model is needed for custom products.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Upload a model")).not.toBeInTheDocument();
+
+    await chooseProduct("Cast ring");
+    expect(await screen.findByLabelText("Upload a model")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Drawn in" })).toHaveValue("mm");
+    expect(screen.queryByText("A model is needed for custom products.")).not.toBeInTheDocument();
+  });
+
+  it("moves focus to the product select when a customer is picked", async () => {
+    document.removeEventListener("click", recordClick);
+    renderAs(ORDER_TAKER, <NewOrderPage />);
+    await pickCustomer("Luna", "Luna Jewels");
+    const product = await screen.findByRole("combobox", { name: "Product" });
+    await waitFor(() => expect(product).toHaveFocus());
   });
 
   it("leaves at once when nothing is entered", async () => {
     renderAs(
       ORDER_TAKER,
       <>
-        <a href="/orders">Orders</a>
+        <a href="/orders">Another page</a>
         <NewOrderPage />
       </>,
     );
     await screen.findByRole("heading", { level: 1, name: "New order" });
-    await userEvent.click(screen.getByRole("link", { name: "Orders" }));
+    await userEvent.click(screen.getByRole("link", { name: "Another page" }));
     // The click went through unprevented and no question was asked.
     expect(reached).toEqual([false]);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -126,22 +163,18 @@ describe("NewOrderPage", () => {
     expect(navigation.push).toHaveBeenCalledWith("/orders");
   });
 
-  it("asks before leaving with a customer picked", async () => {
-    renderAs(
-      ORDER_TAKER,
-      <>
-        <a href="/orders">Orders</a>
-        <NewOrderPage />
-      </>,
-    );
+  it("has a back link to Orders that asks before leaving", async () => {
+    renderAs(ORDER_TAKER, <NewOrderPage />);
+    const back = await screen.findByRole("link", { name: "Orders" });
+    expect(back).toHaveAttribute("href", "/orders");
     await userEvent.type(await screen.findByRole("combobox", { name: "Customer" }), "Luna");
     await userEvent.click(await screen.findByRole("option", { name: "Luna Jewels" }));
-    // The customer is set once loaded, which also opens the product section.
-    await waitFor(() => expect(screen.queryByText("Pick a customer first.")).not.toBeInTheDocument());
+    // The customer is set once loaded, which also opens the product select.
+    await screen.findByText("Group: Trade · Pays first · Plan: Free");
 
     // Only the link's click counts; picking the customer clicked too.
     reached = [];
-    await userEvent.click(screen.getByRole("link", { name: "Orders" }));
+    await userEvent.click(back);
     expect(await screen.findByRole("dialog", { name: "Leave this order?" })).toBeInTheDocument();
     expect(reached).toEqual([]);
 
@@ -186,14 +219,13 @@ describe("NewOrderPage", () => {
     15_000,
   );
 
-  it("opens Delivery once there is a price, leaving focus on Get price", async () => {
+  it("leaves focus on Get price when the price arrives", async () => {
     document.removeEventListener("click", recordClick);
     renderAs(ORDER_TAKER, <NewOrderPage />);
     await pickCustomer("Luna", "Luna Jewels");
     await chooseProduct("Gift set");
-    expect(screen.getByText("Get a price first.")).toBeInTheDocument();
+    expect(placeButton()).toHaveAttribute("aria-disabled", "true");
     await getPrice();
-    expect(screen.queryByText("Get a price first.")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Get price" })).toHaveFocus();
     expect(placeButton()).toHaveAttribute("aria-disabled", "true");
   });
@@ -356,8 +388,7 @@ describe("NewOrderPage", () => {
       await pickCustomer("Mira", "Mira Studio");
       expect(await screen.findByText("No group · Pays later, 30 days · Plan: Starter")).toBeInTheDocument();
       expect(await screen.findByRole("combobox", { name: "Product" })).toHaveValue("");
-      expect(screen.getByText("Fill in the product first.")).toBeInTheDocument();
-      expect(screen.getByText("Get a price first.")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Get price" })).toHaveAttribute("aria-disabled", "true");
       expect(screen.queryByText("Unit price")).not.toBeInTheDocument();
 
       // The same product again starts with no size; the model is held and was uploaded again for Mira,

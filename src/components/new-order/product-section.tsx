@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
 import { LoadFailure } from "@/components/data/load-failure";
@@ -20,8 +20,6 @@ import { useCustomerProducts, useDeliverySpeeds, useOptionGroups } from "@/lib/n
 
 import { COPY } from "./copy";
 import { FieldRow } from "./field-row";
-import { ModelField } from "./model-field";
-import type { useModel } from "./use-model";
 
 /** The fields of the form a quote refusal can belong to (`refusalField` in `form.ts`). */
 export type RefusedField = "options" | "size" | "model" | "quantity";
@@ -32,12 +30,14 @@ export type Refusals = ReadonlyMap<RefusedField, readonly string[]>;
 const NO_REASONS: readonly string[] = [];
 
 /**
- * Section 2: the product the customer can see, its options, size, quantity, model (custom products)
- * and delivery speed. Picking a product starts its options from the defaults and clears the size;
- * the model is the order's, so it stays.
+ * The product the customer can see, its options, size, quantity and delivery speed, mounted once a
+ * customer is picked. Picking a product starts its options from the defaults and clears the size.
+ * When the product select is ready, focus moves to it once.
  */
-export function ProductSection({ refusals, model }: { refusals: Refusals; model: ReturnType<typeof useModel> }) {
+export function ProductSection({ refusals }: { refusals: Refusals }) {
   const { control, getValues, setValue, register } = useFormContext<NewOrderValues>();
+  const productSelect = useRef<HTMLSelectElement>(null);
+  const focused = useRef(false);
   const customerId = useWatch({ control, name: "customerId" });
   const productId = useWatch({ control, name: "productId" });
   const options = useWatch({ control, name: "options" });
@@ -56,6 +56,14 @@ export function ProductSection({ refusals, model }: { refusals: Refusals; model:
     const pick = speedList.find((choice) => choice.is_default) ?? (speedList.length === 1 ? speedList[0] : undefined);
     setValue("speed", pick?.key ?? "");
   }, [speedList, getValues, setValue]);
+
+  // Once a customer's products and the option groups have loaded, the select is the next thing to fill in.
+  const selectReady = (products.data?.length ?? 0) > 0 && groups.data !== undefined;
+  useEffect(() => {
+    if (!selectReady || focused.current) return;
+    focused.current = true;
+    productSelect.current?.focus();
+  }, [selectReady]);
 
   const product = products.data?.find((p) => p.id === productId);
   const fields = product && groups.data ? optionFields(product, groups.data) : [];
@@ -90,7 +98,7 @@ export function ProductSection({ refusals, model }: { refusals: Refusals; model:
       {products.data && products.data.length > 0 && (
         <FieldRow label={COPY.product.label}>
           {(props) => (
-            <NativeSelect {...props} value={productId} disabled={!groups.data} onChange={(event) => chooseProduct(event.target.value)}>
+            <NativeSelect {...props} ref={productSelect} value={productId} disabled={!groups.data} onChange={(event) => chooseProduct(event.target.value)}>
               <option value="" disabled>
                 {COPY.product.placeholder}
               </option>
@@ -143,8 +151,6 @@ export function ProductSection({ refusals, model }: { refusals: Refusals; model:
               )}
             </FieldRow>
           )}
-
-          {product.kind === "custom" && <ModelField model={model} reasons={refusals.get("model")} />}
 
           <FieldRow label={COPY.product.quantity} problems={quantityProblem ? [quantityProblem, ...quantityReasons] : quantityReasons}>
             {(props) => <Input {...props} {...register("quantity")} inputMode="numeric" autoComplete="off" />}

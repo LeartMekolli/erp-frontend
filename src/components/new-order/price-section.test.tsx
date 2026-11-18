@@ -15,7 +15,6 @@ import { until } from "../../../test/wait";
 
 import { PriceSection } from "./price-section";
 import { ProductSection } from "./product-section";
-import { useModel } from "./use-model";
 import { usePrice, useQuoteBody } from "./use-price";
 
 const NOW = Date.parse("2026-11-16T10:00:00Z");
@@ -65,14 +64,13 @@ function measuredModel(): string {
   return started.version.id;
 }
 
-/** The page's wiring of sections 2 and 3, with the form starting from `values`. */
+/** The page's wiring of the product fields and the price, with the form starting from `values`. */
 function Harness({ values, versionId }: { values: Partial<NewOrderValues>; versionId?: string }) {
   const form = useForm<NewOrderValues>({ defaultValues: { ...EMPTY_VALUES, ...values } });
-  const model = useModel({ customerId: LUNA_ID, declaredUnit: "mm" });
   const price = usePrice(useQuoteBody(form.control, versionId));
   return (
     <FormProvider {...form}>
-      <ProductSection refusals={price.fieldRefusals} model={model} />
+      <ProductSection refusals={price.fieldRefusals} />
       <PriceSection price={price} />
     </FormProvider>
   );

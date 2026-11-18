@@ -68,12 +68,12 @@ test("new order: accessible and fits the screen", async ({ page }) => {
   await openNewOrder(page);
   await expectAccessibleAndFits(page);
 
-  // Luna picked: the Product section is open.
+  // Luna picked: the product fields and the Delivery panel are open.
   await pickCustomer(page, "Luna Jewels");
   await expect(page.getByText(/^Group: Trade/)).toBeVisible();
   await expectAccessibleAndFits(page);
 
-  // Priced and shipping chosen: all four sections open, with Place order's bar.
+  // Priced and shipping chosen: the price shown, with Place order's bar.
   await pickProduct(page, "Nameplate");
   await page.getByRole("combobox", { name: "Size" }).selectOption({ label: "M" });
   await getPrice(page);

@@ -6,18 +6,8 @@ import type { AddressField, PriceBlocker } from "@/lib/new-order/form";
 export const COPY = {
   title: "New order",
   cancel: "Cancel",
-  sections: {
-    customer: "Customer",
-    product: "Product",
-    price: "Price",
-    delivery: "Delivery",
-  },
-  /** Shown under the title of a section that isn't open yet. */
-  closed: {
-    product: "Pick a customer first.",
-    price: "Fill in the product first.",
-    delivery: "Get a price first.",
-  },
+  /** The link above the title, back to the orders list. */
+  back: "Orders",
   customer: {
     label: "Customer",
     placeholder: "Search customers by name",
@@ -60,6 +50,8 @@ export const COPY = {
     upload: "Upload a model",
     replace: "Replace the model",
     noAccess: "You can't upload the model. Ask an admin for file access.",
+    /** Shown in the Model panel while the picked product (or none yet) doesn't take a model. */
+    forCustom: "A model is needed for custom products.",
   },
   price: {
     get: "Get price",
@@ -83,6 +75,7 @@ export const COPY = {
     offline: "You're offline.",
   },
   delivery: {
+    title: "Delivery",
     address: "Address",
     saved: "(saved)",
     change: "Change",
@@ -123,6 +116,8 @@ export const COPY = {
     pickMethod: "Pick a shipping method.",
   },
   ticket: {
+    /** The accessible name of the column beside the work. */
+    label: "Order",
     /** Why Get price is off, the first that applies (`priceBlocker`). */
     blocked: {
       customer: "Pick the customer first.",

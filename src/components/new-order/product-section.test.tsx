@@ -7,23 +7,21 @@ import { describe, expect, it } from "vitest";
 import type { CatalogProduct, OptionGroup } from "@/lib/api/schema-types";
 import { EMPTY_VALUES, type NewOrderValues } from "@/lib/new-order/form";
 
-import { FAKE_API_URL, LUNA_ID, MIRA_ID, ORDER_TAKER, STAFF } from "../../../test/fake-erp-api/seed";
+import { FAKE_API_URL, LUNA_ID, MIRA_ID, ORDER_TAKER } from "../../../test/fake-erp-api/seed";
 import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
 import { ProductSection, type RefusedField, type Refusals } from "./product-section";
-import { useModel } from "./use-model";
 
 const NO_REFUSALS: Refusals = new Map();
 
 /** The section inside a form, with what the form holds written out so a test can read it. */
 function Harness({ customerId, refusals = NO_REFUSALS }: { customerId: string; refusals?: Refusals }) {
   const form = useForm<NewOrderValues>({ defaultValues: { ...EMPTY_VALUES, customerId } });
-  const model = useModel({ customerId, declaredUnit: "mm" });
   const [productId, options, speed] = useWatch({ control: form.control, name: ["productId", "options", "speed"] });
   return (
     <FormProvider {...form}>
-      <ProductSection refusals={refusals} model={model} />
+      <ProductSection refusals={refusals} />
       <p data-testid="values">{JSON.stringify({ productId, options, speed })}</p>
     </FormProvider>
   );
@@ -163,15 +161,17 @@ describe("ProductSection", () => {
     expect(screen.queryByRole("radiogroup", { name: "Delivery speed" })).not.toBeInTheDocument();
   });
 
-  it("shows the model field only for a custom product", async () => {
-    renderAs(STAFF, <Harness customerId={LUNA_ID} />);
+  it("moves focus to the product select once it is ready", async () => {
+    renderAs(ORDER_TAKER, <Harness customerId={LUNA_ID} />);
+    const select = await screen.findByRole("combobox", { name: "Product" });
+    await waitFor(() => expect(select).toBeEnabled());
+    await waitFor(() => expect(select).toHaveFocus());
+  });
+
+  it("asks for a named size with a select", async () => {
+    renderAs(ORDER_TAKER, <Harness customerId={LUNA_ID} />);
     await pickProduct("Nameplate");
     expect(await screen.findByRole("combobox", { name: "Size" })).toBeInTheDocument();
-    expect(screen.queryByLabelText("Upload a model")).not.toBeInTheDocument();
-
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Product" }), "Cast ring");
-    expect(await screen.findByLabelText("Upload a model")).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Drawn in" })).toHaveValue("mm");
   });
 
   it("says why a quantity can't be used", async () => {

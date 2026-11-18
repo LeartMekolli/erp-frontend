@@ -71,7 +71,8 @@ test("shows why it can't be priced", async ({ page }) => {
   await page.getByRole("radio", { name: "Raw" }).check();
   await page.getByRole("button", { name: "Get price" }).click();
   await expect(page.getByRole("group", { name: "This can't be priced:" })).toContainText("Brass needs a finish: pick Polished");
-  await expect(page.getByRole("button", { name: "Place order" })).toHaveCount(0);
+  // Delivery is open with the customer now, so Place order is there, and off with no price.
+  await expect(page.getByRole("button", { name: "Place order" })).toBeDisabled();
 });
 
 test("changing quantity after a price hides it", async ({ page }) => {
@@ -81,7 +82,7 @@ test("changing quantity after a price hides it", async ({ page }) => {
 
   await page.getByRole("textbox", { name: "Quantity" }).fill("2");
   await expect(page.getByText("Unit price")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Place order" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Place order" })).toBeDisabled();
 
   await getPrice(page);
   await expect(page.getByRole("button", { name: "Place order" })).toBeVisible();
@@ -122,8 +123,8 @@ test("Place is sticky and full width on a phone", async ({ page }) => {
   const section = page.getByRole("region", { name: "Delivery" });
   const viewport = page.viewportSize()!;
 
-  // With the Price section at the top, Delivery's own end is below the screen: the bar holds Place in view.
-  await page.getByRole("heading", { level: 2, name: "Price", exact: true }).evaluate((heading) => heading.scrollIntoView({ block: "start" }));
+  // With Delivery's heading at the top, its own end is below the screen: the bar holds Place in view.
+  await page.getByRole("heading", { level: 2, name: "Delivery", exact: true }).evaluate((heading) => heading.scrollIntoView({ block: "start" }));
   await expect(place).toBeInViewport({ ratio: 1 });
 
   // Full width: the section's width less its own padding, and inside the screen.
