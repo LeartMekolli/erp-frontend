@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
 import { LoadFailure } from "@/components/data/load-failure";
@@ -20,7 +20,8 @@ import { useCustomerProducts, useDeliverySpeeds, useOptionGroups } from "@/lib/n
 
 import { COPY } from "./copy";
 import { FieldRow } from "./field-row";
-import { ModelField, type ModelUpload } from "./model-field";
+import { ModelField } from "./model-field";
+import type { useModel } from "./use-model";
 
 /** The fields of the form a quote refusal can belong to (`refusalField` in `form.ts`). */
 export type RefusedField = "options" | "size" | "model" | "quantity";
@@ -32,10 +33,10 @@ const NO_REASONS: readonly string[] = [];
 
 /**
  * Section 2: the product the customer can see, its options, size, quantity, model (custom products)
- * and delivery speed. Picking a product starts its options from the defaults and clears the size and
- * the model, so nothing of the last product is quoted.
+ * and delivery speed. Picking a product starts its options from the defaults and clears the size;
+ * the model is the order's, so it stays.
  */
-export function ProductSection({ refusals, upload }: { refusals: Refusals; upload: ModelUpload }) {
+export function ProductSection({ refusals, model }: { refusals: Refusals; model: ReturnType<typeof useModel> }) {
   const { control, getValues, setValue, register } = useFormContext<NewOrderValues>();
   const customerId = useWatch({ control, name: "customerId" });
   const productId = useWatch({ control, name: "productId" });
@@ -47,14 +48,6 @@ export function ProductSection({ refusals, upload }: { refusals: Refusals; uploa
   const products = useCustomerProducts(customerId || null);
   const groups = useOptionGroups();
   const speeds = useDeliverySpeeds(customerId || null);
-
-  // The upload belongs to this customer's product, so it goes when this section does (another customer
-  // closes the section first). The latest upload sits in a ref so the cleanup runs on unmount only.
-  const latestUpload = useRef(upload);
-  useEffect(() => {
-    latestUpload.current = upload;
-  });
-  useEffect(() => () => latestUpload.current.reset(), []);
 
   // Start from the plan's default speed; with exactly one speed that one, with none leave it for erp-api.
   const speedList = speeds.data;
@@ -74,7 +67,6 @@ export function ProductSection({ refusals, upload }: { refusals: Refusals; uploa
     // A whole new record: keys of the last product's groups must not stay behind, the quote would send them.
     setValue("options", defaultOptions(chosen, groups.data), { shouldDirty: true });
     setValue("size", "", { shouldDirty: true });
-    upload.reset();
   }
 
   function chooseOption(key: string, value: string) {
@@ -152,7 +144,7 @@ export function ProductSection({ refusals, upload }: { refusals: Refusals; uploa
             </FieldRow>
           )}
 
-          {product.kind === "custom" && <ModelField upload={upload} reasons={refusals.get("model")} />}
+          {product.kind === "custom" && <ModelField model={model} reasons={refusals.get("model")} />}
 
           <FieldRow label={COPY.product.quantity} problems={quantityProblem ? [quantityProblem, ...quantityReasons] : quantityReasons}>
             {(props) => <Input {...props} {...register("quantity")} inputMode="numeric" autoComplete="off" />}

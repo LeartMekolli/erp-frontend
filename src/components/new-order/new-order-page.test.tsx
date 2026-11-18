@@ -1,11 +1,11 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- the plain links here stand in for any same-site link,
    which is what the leave guard listens for; next/link would route through the mocked router instead. */
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { FAKE_API_URL, LUNA_ID, ORDER_TAKER, ORDER_WRITER, STAFF } from "../../../test/fake-erp-api/seed";
+import { FAKE_API_URL, LUNA_ID, MIRA_ID, ORDER_TAKER, ORDER_WRITER, STAFF } from "../../../test/fake-erp-api/seed";
 import { fakeState } from "../../../test/fake-erp-api/state";
 import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
@@ -360,11 +360,12 @@ describe("NewOrderPage", () => {
       expect(screen.getByText("Get a price first.")).toBeInTheDocument();
       expect(screen.queryByText("Unit price")).not.toBeInTheDocument();
 
-      // The same product again starts with no size and no model: the last one was Luna's.
+      // The same product again starts with no size; the model is held and was uploaded again for Mira,
+      // so it is her version, not Luna's, that waits to be quoted.
       await chooseProduct("Cast ring");
       expect(await screen.findByRole("textbox", { name: "Size" })).toHaveValue("");
-      expect(screen.getByLabelText("Upload a model")).toBeInTheDocument();
-      expect(screen.queryByText("Ready")).not.toBeInTheDocument();
+      // Measuring takes a few polls, a second apart at first.
+      expect(await screen.findByLabelText("Replace the model", {}, { timeout: 4_000 })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Get price" })).toHaveAttribute("aria-disabled", "true");
 
       // Priced for Mira, Delivery starts empty: her (missing) saved address, no method, no note.
@@ -387,7 +388,26 @@ describe("NewOrderPage", () => {
   );
 
   it(
-    "changing the customer during an upload drops it",
+    "keeps the model when the product changes",
+    async () => {
+      document.removeEventListener("click", recordClick);
+      renderAs(STAFF, <NewOrderPage />);
+      await pickCustomer("Luna", "Luna Jewels");
+      await chooseProduct("Cast ring");
+      await userEvent.upload(screen.getByLabelText("Upload a model"), new File(["solid ring"], "ring.stl", { type: "model/stl" }));
+      // Measuring takes a few polls, a second apart at first.
+      expect(await screen.findByText("Ready", {}, { timeout: 4_000 })).toBeInTheDocument();
+
+      await chooseProduct("Gift set");
+      await chooseProduct("Cast ring");
+      expect(await screen.findByLabelText("Replace the model")).toBeInTheDocument();
+      expect(screen.getByText("Ready")).toBeInTheDocument();
+    },
+    15_000,
+  );
+
+  it(
+    "changing the customer during an upload starts it again for the new customer",
     async () => {
       document.removeEventListener("click", recordClick);
       const requests = recordRequests();
@@ -401,21 +421,28 @@ describe("NewOrderPage", () => {
 
       await pickCustomer("Mira", "Mira Studio");
       expect(await screen.findByText("No group · Pays later, 30 days · Plan: Starter")).toBeInTheDocument();
-      // The product resets with the customer, which is also when the upload is dropped.
+      // The product resets with the customer; the model is held and goes up again for Mira.
       await waitFor(() => expect(screen.getByRole("combobox", { name: "Product" })).toHaveValue(""));
       const switchedAt = requests.length;
 
-      // Long enough for any poll of the dropped upload (the first is 1 s after it starts measuring).
-      await act(() => new Promise((resolve) => setTimeout(resolve, 2_500)));
       await chooseProduct("Cast ring");
       expect(await screen.findByRole("textbox", { name: "Size" })).toHaveValue("");
-      expect(screen.getByLabelText("Upload a model")).toBeInTheDocument();
-      expect(screen.queryByLabelText("Replace the model")).not.toBeInTheDocument();
-      expect(screen.queryByText("Ready")).not.toBeInTheDocument();
+      // Measuring takes a few polls, a second apart at first.
+      expect(await screen.findByLabelText("Replace the model", {}, { timeout: 4_000 })).toBeInTheDocument();
 
-      // Nothing since touched Luna's file (complete, polling, URL) or named her.
+      // Two uploads started, the second one for Mira.
+      const started = (await postedTo(requests, "/files")) as { customer_id?: string }[];
+      expect(started.map((body) => body.customer_id)).toEqual([LUNA_ID, MIRA_ID]);
+
+      // Since the switch only Mira's file was read: nothing touched Luna's (complete, polling, URL).
+      const fileIds = new Set(
+        requests
+          .slice(switchedAt)
+          .map((request) => new URL(request.url).pathname.match(/^\/files\/([^/]+)/)?.[1])
+          .filter((id) => id !== undefined),
+      );
+      expect(fileIds.size).toBe(1);
       for (const request of requests.slice(switchedAt)) {
-        expect(new URL(request.url).pathname).not.toMatch(/^\/files\//);
         expect(`${request.url} ${await request.body}`).not.toContain(LUNA_ID);
       }
       expect(await postedTo(requests.slice(switchedAt), "/pricing/quotes")).toEqual([]);

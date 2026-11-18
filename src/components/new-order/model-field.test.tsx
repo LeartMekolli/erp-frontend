@@ -29,18 +29,19 @@ function stub(phase: UploadPhase, upload = vi.fn()): ModelUpload {
   };
 }
 
-function Harness({ upload }: { upload: ModelUpload }) {
+/** What `useModel` hands the field: the upload, the choose callback and whether the person may upload. */
+function Harness({ upload, choose = vi.fn(), canUpload = true }: { upload: ModelUpload; choose?: (file: File) => void; canUpload?: boolean }) {
   const form = useForm<NewOrderValues>({ defaultValues: EMPTY_VALUES });
   return (
     <FormProvider {...form}>
-      <ModelField upload={upload} />
+      <ModelField model={{ upload, choose, canUpload }} />
     </FormProvider>
   );
 }
 
 describe("ModelField", () => {
   it("says why without file.write", async () => {
-    renderAs(ORDER_TAKER, <Harness upload={stub("idle")} />);
+    renderAs(ORDER_TAKER, <Harness upload={stub("idle")} canUpload={false} />);
     expect(await screen.findByText("You can't upload the model. Ask an admin for file access.")).toBeInTheDocument();
     expect(screen.queryByLabelText("Upload a model")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Drawn in")).not.toBeInTheDocument();
@@ -56,12 +57,14 @@ describe("ModelField", () => {
     expect(unit.compareDocumentPosition(screen.getByLabelText("Upload a model")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("starts the upload with the chosen file", async () => {
-    const start = vi.fn();
-    renderAs(STAFF, <Harness upload={stub("idle", start)} />);
+  it("hands the chosen file to the model, not to the upload", async () => {
+    const choose = vi.fn();
+    const idle = stub("idle");
+    renderAs(STAFF, <Harness upload={idle} choose={choose} />);
     const file = new File(["solid ring"], "ring.stl", { type: "model/stl" });
     await userEvent.upload(await screen.findByLabelText("Upload a model"), file);
-    expect(start).toHaveBeenCalledWith(file);
+    expect(choose).toHaveBeenCalledWith(file);
+    expect(idle.upload).not.toHaveBeenCalled();
   });
 
   it("offers to replace the model once it is ready", async () => {
@@ -70,18 +73,13 @@ describe("ModelField", () => {
     expect(screen.queryByLabelText("Upload a model")).not.toBeInTheDocument();
   });
 
-  it("changing the unit drops the uploaded model", async () => {
+  it("changing the unit leaves the upload to the model", async () => {
     const done = stub("done");
     renderAs(STAFF, <Harness upload={done} />);
-    await userEvent.selectOptions(await screen.findByRole("combobox", { name: "Drawn in" }), "Metres");
-    expect(done.reset).toHaveBeenCalledTimes(1);
-  });
-
-  it("changing the unit before any upload resets nothing", async () => {
-    const idle = stub("idle");
-    renderAs(STAFF, <Harness upload={idle} />);
-    await userEvent.selectOptions(await screen.findByRole("combobox", { name: "Drawn in" }), "Metres");
-    expect(idle.reset).not.toHaveBeenCalled();
+    const unit = await screen.findByRole("combobox", { name: "Drawn in" });
+    await userEvent.selectOptions(unit, "Metres");
+    expect(unit).toHaveValue("m");
+    expect(done.reset).not.toHaveBeenCalled();
   });
 
   it("hands over the version id only when the model is ready", () => {

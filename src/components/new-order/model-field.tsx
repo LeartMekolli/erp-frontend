@@ -5,12 +5,12 @@ import { useFormContext } from "react-hook-form";
 import { UploadStatus } from "@/components/data/upload-status";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
-import { useCan } from "@/lib/auth/permissions";
 import type { NewOrderValues } from "@/lib/new-order/form";
 import type { useUpload } from "@/lib/upload/use-upload";
 
 import { COPY } from "./copy";
 import { FieldRow } from "./field-row";
+import type { useModel } from "./use-model";
 
 export type ModelUpload = ReturnType<typeof useUpload>;
 
@@ -25,8 +25,8 @@ export function readyVersionId(upload: ModelUpload): string | undefined {
  * The 3D model of a custom product: the unit it is drawn in, asked before the file, then the file.
  * Without `file.write` it says why there is no input, since the quote can't be priced without a model.
  */
-export function ModelField({ upload, reasons = [] }: { upload: ModelUpload; reasons?: readonly string[] }) {
-  const canUpload = useCan("file.write");
+export function ModelField({ model, reasons = [] }: { model: Pick<ReturnType<typeof useModel>, "upload" | "choose" | "canUpload">; reasons?: readonly string[] }) {
+  const { upload, choose, canUpload } = model;
   const { register } = useFormContext<NewOrderValues>();
 
   if (!canUpload) {
@@ -43,15 +43,8 @@ export function ModelField({ upload, reasons = [] }: { upload: ModelUpload; reas
     <>
       <FieldRow label={COPY.model.unit}>
         {(props) => (
-          <NativeSelect
-            {...props}
-            {...unit}
-            onChange={(event) => {
-              void unit.onChange(event);
-              // The unit is baked into the uploaded version, so a model drawn in another unit must be uploaded again.
-              if (upload.phase !== "idle") upload.reset();
-            }}
-          >
+          // The unit is baked into the uploaded version; `useModel` uploads the held file again when it changes.
+          <NativeSelect {...props} {...unit}>
             {UNITS.map((unit) => (
               <option key={unit} value={unit}>
                 {COPY.model.units[unit]}
@@ -70,7 +63,7 @@ export function ModelField({ upload, reasons = [] }: { upload: ModelUpload; reas
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 event.target.value = "";
-                if (file) upload.upload(file);
+                if (file) choose(file);
               }}
             />
             <UploadStatus upload={upload} />

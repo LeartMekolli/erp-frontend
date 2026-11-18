@@ -6,24 +6,24 @@ import { describe, expect, it } from "vitest";
 
 import type { CatalogProduct, OptionGroup } from "@/lib/api/schema-types";
 import { EMPTY_VALUES, type NewOrderValues } from "@/lib/new-order/form";
-import { useUpload } from "@/lib/upload/use-upload";
 
 import { FAKE_API_URL, LUNA_ID, MIRA_ID, ORDER_TAKER, STAFF } from "../../../test/fake-erp-api/seed";
 import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
 import { ProductSection, type RefusedField, type Refusals } from "./product-section";
+import { useModel } from "./use-model";
 
 const NO_REFUSALS: Refusals = new Map();
 
 /** The section inside a form, with what the form holds written out so a test can read it. */
 function Harness({ customerId, refusals = NO_REFUSALS }: { customerId: string; refusals?: Refusals }) {
   const form = useForm<NewOrderValues>({ defaultValues: { ...EMPTY_VALUES, customerId } });
-  const upload = useUpload({ area: "staff", kind: "design", customerId });
+  const model = useModel({ customerId, declaredUnit: "mm" });
   const [productId, options, speed] = useWatch({ control: form.control, name: ["productId", "options", "speed"] });
   return (
     <FormProvider {...form}>
-      <ProductSection refusals={refusals} upload={upload} />
+      <ProductSection refusals={refusals} model={model} />
       <p data-testid="values">{JSON.stringify({ productId, options, speed })}</p>
     </FormProvider>
   );

@@ -1,14 +1,12 @@
 "use client";
 
 import { notFound } from "next/navigation";
-import { useEffect, useRef } from "react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 
 import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
 import { canPlaceOrders } from "@/lib/auth/permissions";
 import { EMPTY_VALUES, bodyKey, type NewOrderValues } from "@/lib/new-order/form";
-import { useUpload } from "@/lib/upload/use-upload";
 
 import { COPY } from "./copy";
 import { CustomerSection } from "./customer-section";
@@ -19,6 +17,7 @@ import { PriceSection } from "./price-section";
 import { ProductSection } from "./product-section";
 import { Section } from "./section";
 import { useLeaveGuard } from "./use-leave-guard";
+import { useModel } from "./use-model";
 import { usePlace } from "./use-place";
 import { usePrice, useQuoteBody } from "./use-price";
 
@@ -35,19 +34,11 @@ function NewOrder() {
   const customerId = useWatch({ control: form.control, name: "customerId" });
   const productId = useWatch({ control: form.control, name: "productId" });
   const declaredUnit = useWatch({ control: form.control, name: "declaredUnit" });
-  // The model's upload lives here so the price can wait for it: `readyVersionId(upload)` is what to quote.
-  // The product section resets it when the product changes and when it closes; another customer resets
-  // it here too, since the model is the last customer's file even if the section stayed open.
-  const upload = useUpload({ area: "staff", kind: "design", customerId: customerId || undefined, declaredUnit });
-  const resetUpload = useRef(upload.reset);
-  useEffect(() => {
-    resetUpload.current = upload.reset;
-  });
-  useEffect(() => {
-    resetUpload.current();
-  }, [customerId]);
+  // The model lives here so the price can wait for it: `readyVersionId(model.upload)` is what to quote.
+  // It uploads again for another customer or unit, so that version is never the last customer's.
+  const model = useModel({ customerId, declaredUnit });
   // A price shows only while the body it was asked for is the one on screen.
-  const body = useQuoteBody(form.control, readyVersionId(upload));
+  const body = useQuoteBody(form.control, readyVersionId(model.upload));
   const price = usePrice(body);
   const guard = useLeaveGuard(form.formState.isDirty);
   const placing = usePlace({
@@ -74,7 +65,7 @@ function NewOrder() {
             <CustomerSection />
           </Section>
           <Section number={2} title={COPY.sections.product} open={customerId !== ""} closedHint={COPY.closed.product}>
-            <ProductSection refusals={price.fieldRefusals} upload={upload} />
+            <ProductSection refusals={price.fieldRefusals} model={model} />
           </Section>
           {/* Opens with the product while staff still fill it in, so focus stays in the product section. */}
           <Section

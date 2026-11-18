@@ -5,7 +5,6 @@ import { FormProvider, useForm } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EMPTY_VALUES, type NewOrderValues } from "@/lib/new-order/form";
-import { useUpload } from "@/lib/upload/use-upload";
 
 import { CAST_RING_ID, GIFT_SET_ID } from "../../../test/fake-erp-api/catalog";
 import { FAKE_API_URL, LUNA_ID, ORDER_TAKER } from "../../../test/fake-erp-api/seed";
@@ -16,6 +15,7 @@ import { until } from "../../../test/wait";
 
 import { PriceSection } from "./price-section";
 import { ProductSection } from "./product-section";
+import { useModel } from "./use-model";
 import { usePrice, useQuoteBody } from "./use-price";
 
 const NOW = Date.parse("2026-11-16T10:00:00Z");
@@ -68,11 +68,11 @@ function measuredModel(): string {
 /** The page's wiring of sections 2 and 3, with the form starting from `values`. */
 function Harness({ values, versionId }: { values: Partial<NewOrderValues>; versionId?: string }) {
   const form = useForm<NewOrderValues>({ defaultValues: { ...EMPTY_VALUES, ...values } });
-  const upload = useUpload({ area: "staff", kind: "design", customerId: LUNA_ID });
+  const model = useModel({ customerId: LUNA_ID, declaredUnit: "mm" });
   const price = usePrice(useQuoteBody(form.control, versionId));
   return (
     <FormProvider {...form}>
-      <ProductSection refusals={price.fieldRefusals} upload={upload} />
+      <ProductSection refusals={price.fieldRefusals} model={model} />
       <PriceSection price={price} />
     </FormProvider>
   );
