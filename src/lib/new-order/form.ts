@@ -141,6 +141,31 @@ export function quoteBody(
   return body;
 }
 
+/** What staff must do before the form can be priced; its words are `COPY.ticket.blocked`. */
+export type PriceBlocker = "customer" | "product" | "model" | "measuring" | "size";
+
+/**
+ * The first thing, in the order staff fill them in, that keeps the form from being priced, or null
+ * when none does. A picked product still loading has nothing to say yet. Only a custom product needs
+ * the model: none held is "model", held but not measured yet is "measuring". Only an empty size counts;
+ * a size that is out of range is the size field's own message.
+ */
+export function priceBlocker(
+  values: Pick<NewOrderValues, "customerId" | "productId" | "size">,
+  product: CatalogProduct | undefined,
+  model: { held: boolean; ready: boolean },
+): PriceBlocker | null {
+  if (!values.customerId) return "customer";
+  if (!values.productId) return "product";
+  if (!product) return null;
+  if (product.kind === "custom") {
+    if (!model.held) return "model";
+    if (!model.ready) return "measuring";
+  }
+  if (product.sizing.mode !== "none" && values.size.trim() === "") return "size";
+  return null;
+}
+
 /** The same body is the same key, whatever order its fields were written in. */
 export function bodyKey(body: QuoteBody): string {
   return JSON.stringify(canonical(body));

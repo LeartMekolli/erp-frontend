@@ -1,6 +1,6 @@
 import type { SummaryLabel } from "@/lib/api/schema-types";
 import { LOCALE } from "@/lib/format/money";
-import type { AddressField } from "@/lib/new-order/form";
+import type { AddressField, PriceBlocker } from "@/lib/new-order/form";
 
 /** Fixed words on the New order page. */
 export const COPY = {
@@ -121,6 +121,19 @@ export const COPY = {
     /** Why Place order is off, when it is neither offline, loading nor placing. */
     fillAddress: "Fill in the address first.",
     pickMethod: "Pick a shipping method.",
+  },
+  ticket: {
+    /** Why Get price is off, the first that applies (`priceBlocker`). */
+    blocked: {
+      customer: "Pick the customer first.",
+      product: "Pick a product.",
+      model: "Add the model first.",
+      measuring: "Wait for the model to be measured.",
+      size: "Pick a size.",
+    } satisfies Record<PriceBlocker, string>,
+    getNewPrice: "Get new price",
+    /** The total's label while no shipping method is picked. */
+    beforeShipping: "Before shipping and tax",
   },
   leave: {
     title: "Leave this order?",

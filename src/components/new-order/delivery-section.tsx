@@ -1,30 +1,22 @@
 "use client";
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
-import { useFormContext, useFormState, useWatch, type Path } from "react-hook-form";
+import { useFormContext, useFormState, useWatch } from "react-hook-form";
 
 import { LoadFailure } from "@/components/data/load-failure";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { Address, ShippingRate } from "@/lib/api/schema-types";
-import { addMoney, formatMoney } from "@/lib/format/money";
+import { formatMoney } from "@/lib/format/money";
 import { useFormat } from "@/lib/format/use-format";
-import { ADDRESS_FIELDS, EMPTY_ADDRESS, MAX_NOTE, orderAddress, placeBody, type AddressField, type NewOrderValues } from "@/lib/new-order/form";
-import { useCustomerAddresses, useShippingRates } from "@/lib/new-order/queries";
-import { useOnline } from "@/lib/query/use-online";
-import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { ADDRESS_FIELDS, EMPTY_ADDRESS, MAX_NOTE, type AddressField, type NewOrderValues } from "@/lib/new-order/form";
 import { cn } from "@/lib/utils";
 
 import { AddressForm } from "./address-form";
 import { COPY } from "./copy";
 import { FieldRow } from "./field-row";
+import type { Checkout } from "./use-checkout";
 import type { Placing } from "./use-place";
-import type { Price } from "./use-price";
-
-/** How long a typed address stands still before its shipping methods are asked for. */
-const RATES_DELAY_MS = 400;
-
-const addressPath = (field: AddressField) => `address.${field}` as const;
 
 /** The saved address on one line: "Luna Jewels, 12 rue des Orfèvres, 69002 Lyon, FR". */
 export function addressLine(address: Address): string {
@@ -36,51 +28,24 @@ export function addressLine(address: Address): string {
 /**
  * Section 4: where the order goes, how it ships, a note, the total before tax, and Place order. The
  * customer's saved address is used unless staff change it for this order; with none saved, the form is
- * open and must be filled in. Shipping is asked for once the address is the saved one or complete.
+ * open and must be filled in. Shipping is asked for once the address is the saved one or complete. The
+ * address, its methods, the total and Place's reason come from `checkout`, worked out once by the page.
  */
-export function DeliverySection({ price, placing }: { price: Price; placing: Placing }) {
+export function DeliverySection({ checkout, placing }: { checkout: Checkout; placing: Placing }) {
   const { control, setValue, clearErrors } = useFormContext<NewOrderValues>();
-  const [customerId, address, shippingMethod, note] = useWatch({ control, name: ["customerId", "address", "shippingMethod", "note"] });
+  const [shippingMethod, note] = useWatch({ control, name: ["shippingMethod", "note"] });
   const { errors } = useFormState({ control });
   const format = useFormat();
-  const online = useOnline();
   const reasonId = useId();
   const addressLabelId = useId();
 
-  const addresses = useCustomerAddresses(customerId || null);
+  const { addresses, draft, setAddress, waiting, rates, ratesFor, rateList, rate, total, main } = checkout;
   const saved = addresses.data?.shipping_address ?? null;
-  // `address` null is the saved one; with none saved, an empty form stands in for it.
-  const draft = address ?? (addresses.data && saved === null ? EMPTY_ADDRESS : null);
-  const typed = draft === null ? null : orderAddress(draft);
-  // A typed address is asked about once it stops changing, not on every keystroke. Compared by content,
-  // since `typed` is a new object each render. The saved address is erp-api's own and isn't delayed.
-  const typedKey = typed === null ? null : JSON.stringify(typed);
-  const settledKey = useDebouncedValue(typedKey, RATES_DELAY_MS);
-  const waiting = draft !== null && typedKey !== null && settledKey !== typedKey;
-  // While the typed address and its settled one differ, no rates apply: not the last address's, and not Place.
-  const ratesFor = draft === null ? saved !== null : typedKey !== null && !waiting;
-  const rates = useShippingRates(customerId || null, typed, ratesFor);
-  // A disabled query can still hold another address's rates under the same key: only these count.
-  const rateList = ratesFor ? rates.data : undefined;
-
-  const quote = price.shown?.quote ?? null;
-  const rate = rateList?.find((candidate) => candidate.key === shippingMethod && candidate.available && candidate.price !== null);
-  const total = quote && rate?.price ? formatMoney(addMoney(quote.total, rate.price), quote.currency) : null;
-  const body = quote && rate ? placeBody({ customerId, address: draft, shippingMethod, note }, quote.id) : null;
-  const blocked = body === null || placing.pending || !online;
-
-  // One reason Place is off, in the order staff would fix them. Nothing is said while something is still
-  // loading (the section says so itself), while placing, or when a load failure or an empty list already
-  // explains it. Offline wins over all.
-  const addressKnown = addresses.data !== undefined;
-  const addressComplete = draft === null ? saved !== null : typed !== null;
-  const methodsListed = ratesFor && !waiting && rateList !== undefined && rateList.length > 0;
-  let reason: string | null = null;
-  if (!online) reason = COPY.delivery.offline;
-  else if (!placing.pending && addressKnown) {
-    if (!addressComplete) reason = COPY.delivery.fillAddress;
-    else if (methodsListed && !rate) reason = COPY.delivery.pickMethod;
-  }
+  // Place is pressed here only while the main action is placing; before a price it stays off, unexplained,
+  // as the price section says what to do next.
+  const place = main.kind === "place" ? main : null;
+  const blocked = place === null || place.off;
+  const reason = place?.reason ?? null;
 
   // Focus follows Change and Use the saved address to what replaced the button pressed.
   const formBox = useRef<HTMLDivElement>(null);
@@ -100,21 +65,6 @@ export function DeliverySection({ price, placing }: { price: Price; placing: Pla
   useEffect(() => {
     if (failure) failureBox.current?.focus();
   }, [failure]);
-
-  function setAddress(next: Address | null) {
-    const before = draft;
-    setValue("address", next, { shouldDirty: true });
-    for (const field of ADDRESS_FIELDS) {
-      if (next === null || before === null || next[field] !== before[field]) clearErrors(addressPath(field));
-    }
-  }
-
-  function place() {
-    if (body === null || blocked) return;
-    // erp-api's errors on the address belong on the form only while it is shown.
-    const fields: Path<NewOrderValues>[] = ["shippingMethod", "note", ...(draft === null ? [] : ADDRESS_FIELDS.map(addressPath))];
-    placing.place(body, fields);
-  }
 
   const addressErrors = errors.address as Partial<Record<AddressField, { message?: string }>> | undefined;
   const typedErrors: Partial<Record<AddressField, string>> = {};
@@ -232,10 +182,11 @@ export function DeliverySection({ price, placing }: { price: Price; placing: Pla
 
       {/* On a phone the total and Place order stay in view at the bottom while staff scroll the section. */}
       <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-3 border-t border-line bg-card px-4 py-3 sm:-mx-6 sm:px-6 md:static md:mx-0 md:flex-row md:items-start md:justify-between md:border-0 md:p-0">
-        {total !== null ? (
+        {/* Only the total with shipping shows here; the one before shipping is the ticket's. */}
+        {total !== null && rate !== undefined ? (
           <p className="flex items-baseline justify-between gap-4 text-sm md:justify-start md:pt-3">
-            <span className="text-ink-2">{COPY.delivery.total}</span>
-            <span className="text-base font-semibold text-ink tabular-nums">{total}</span>
+            <span className="text-ink-2">{total.label}</span>
+            <span className="text-base font-semibold text-ink tabular-nums">{total.amount}</span>
           </p>
         ) : (
           <span aria-hidden className="hidden md:block" />
@@ -247,9 +198,9 @@ export function DeliverySection({ price, placing }: { price: Price; placing: Pla
             aria-disabled={blocked}
             aria-describedby={reason === null ? undefined : reasonId}
             className="min-h-11 w-full rounded-full md:w-auto aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-ink"
-            onClick={place}
+            onClick={() => place?.run()}
           >
-            {placing.pending ? COPY.delivery.placing : COPY.delivery.place}
+            {place?.label ?? COPY.delivery.place}
           </Button>
           {reason !== null && (
             <p id={reasonId} className="text-sm text-ink-2">

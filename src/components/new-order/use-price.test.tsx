@@ -105,6 +105,43 @@ describe("usePrice", () => {
     setBody({ ...GIFT_SET, quantity: 3 });
     expect(result.current.refusals).toEqual([]);
   });
+
+  it("keeps the last price as stale after a change", async () => {
+    const { result, setBody } = renderPrice(GIFT_SET);
+    expect(result.current.stale).toBeNull();
+    act(() => result.current.getPrice());
+    await waitFor(() => expect(result.current.shown).not.toBeNull());
+    const quote = result.current.shown!.quote;
+    // Shown for its own body, it isn't stale.
+    expect(result.current.stale).toBeNull();
+
+    setBody({ ...GIFT_SET, quantity: 2 });
+    expect(result.current.shown).toBeNull();
+    expect(result.current.stale).toEqual(quote);
+    // Still stale with nothing to price at all.
+    setBody(null);
+    expect(result.current.stale).toEqual(quote);
+
+    // Back to the priced body, it is shown again and no longer stale.
+    setBody(GIFT_SET);
+    expect(result.current.shown?.quote).toEqual(quote);
+    expect(result.current.stale).toBeNull();
+  });
+
+  it("clear drops the stale price", async () => {
+    const { result, setBody } = renderPrice(GIFT_SET);
+    act(() => result.current.getPrice());
+    await waitFor(() => expect(result.current.shown).not.toBeNull());
+    setBody({ ...GIFT_SET, quantity: 2 });
+    expect(result.current.stale).not.toBeNull();
+
+    act(() => result.current.clear());
+    expect(result.current.stale).toBeNull();
+    // Nor does the cleared price come back with its body.
+    setBody(GIFT_SET);
+    expect(result.current.shown).toBeNull();
+    expect(result.current.stale).toBeNull();
+  });
 });
 
 describe("refusalsByField", () => {

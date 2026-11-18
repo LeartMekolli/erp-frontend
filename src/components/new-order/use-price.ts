@@ -67,6 +67,8 @@ export function usePrice(body: QuoteBody | null) {
   const quote = useGetQuote();
   const [answer, setAnswer] = useState<Answer | null>(null);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
+  // The last price erp-api gave, whatever came after it, so a change can say "Get new price".
+  const [lastPriced, setLastPriced] = useState<{ key: string; quote: QuoteSummary } | null>(null);
 
   const key = body === null ? null : bodyKey(body);
   const current = key !== null && answer?.key === key ? answer : null;
@@ -78,11 +80,12 @@ export function usePrice(body: QuoteBody | null) {
     setFailure(null);
     try {
       const result = await quote.mutateAsync(asked);
-      setAnswer(
-        result.accepted
-          ? { key: askedKey, kind: "priced", quote: result.quote, changed: false }
-          : { key: askedKey, kind: "refused", reasons: result.reasons },
-      );
+      if (result.accepted) {
+        setAnswer({ key: askedKey, kind: "priced", quote: result.quote, changed: false });
+        setLastPriced({ key: askedKey, quote: result.quote });
+      } else {
+        setAnswer({ key: askedKey, kind: "refused", reasons: result.reasons });
+      }
     } catch (error) {
       // Nothing entered is touched: staff press Get price again, and the same body reuses its key.
       setFailure({ key: askedKey, message: failureMessage(error) });
@@ -93,6 +96,8 @@ export function usePrice(body: QuoteBody | null) {
     /** Whether there is a body to price. */
     ready: body !== null,
     shown: current?.kind === "priced" ? { quote: current.quote, changed: current.changed } : null,
+    /** The last price given for another body than the current one (or for none): the form changed since. */
+    stale: lastPriced !== null && lastPriced.key !== key ? lastPriced.quote : null,
     refusals,
     /** The refusals' messages under the field each belongs to, for the product section. */
     fieldRefusals,
@@ -110,6 +115,7 @@ export function usePrice(body: QuoteBody | null) {
       if (key === null) return;
       setFailure(null);
       setAnswer({ key, kind: "priced", quote: changed, changed: true });
+      setLastPriced({ key, quote: changed });
     },
     /** Like `adopt`, for why that body can't be priced now (`price_changed` with no quote). */
     adoptRefusals(reasons: QuoteRefusal[]): void {
@@ -117,10 +123,11 @@ export function usePrice(body: QuoteBody | null) {
       setFailure(null);
       setAnswer({ key, kind: "refused", reasons });
     },
-    /** Forgets every answer, so staff get a fresh price. */
+    /** Forgets every answer and the stale price, so staff get a fresh price. */
     clear(): void {
       setAnswer(null);
       setFailure(null);
+      setLastPriced(null);
     },
     pending: quote.isPending,
     error: failure !== null && failure.key === key ? failure.message : null,

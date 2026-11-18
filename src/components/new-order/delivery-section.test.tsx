@@ -15,6 +15,7 @@ import { WithMe, renderAs } from "../../../test/render";
 
 import { DeliverySection } from "./delivery-section";
 import type { RefusedField } from "./product-section";
+import { useCheckout } from "./use-checkout";
 import { usePlace } from "./use-place";
 import type { Price } from "./use-price";
 
@@ -43,6 +44,7 @@ function shownPrice(quote: QuoteSummary): Price {
   return {
     ready: true,
     shown: { quote, changed: false },
+    stale: null,
     refusals: [],
     fieldRefusals: new Map<RefusedField, readonly string[]>(),
     refusedFields: new Set<RefusedField>(),
@@ -55,13 +57,17 @@ function shownPrice(quote: QuoteSummary): Price {
   };
 }
 
+const NO_MODEL = { held: false, ready: false };
+
 function Harness({ customerId, quote, onPlaced }: { customerId: string; quote: QuoteSummary; onPlaced: (id: string) => void }) {
   const form = useForm<NewOrderValues>({ defaultValues: { ...EMPTY_VALUES, customerId } });
   const price = shownPrice(quote);
   const placing = usePlace({ form, price, quoteKey: "shown", onPlaced });
+  // A shown price makes the main action Place, so the product and model don't matter here.
+  const checkout = useCheckout({ form, price, placing, model: NO_MODEL, product: undefined });
   return (
     <FormProvider {...form}>
-      <DeliverySection price={price} placing={placing} />
+      <DeliverySection checkout={checkout} placing={placing} />
     </FormProvider>
   );
 }
@@ -210,23 +216,6 @@ describe("DeliverySection", () => {
     expect(screen.getByRole("radio", { name: "Collect · €0.00" })).toBeEnabled();
   });
 
-  it("adds shipping to the total", async () => {
-    renderDelivery(LUNA_ID, SHOWN_ONLY);
-    await userEvent.click(await screen.findByRole("radio", { name: "Courier · €12.00" }));
-    expect(screen.getByText("Total before tax")).toBeInTheDocument();
-    expect(screen.getByText("€422.00")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("radio", { name: "Collect · €0.00" }));
-    expect(screen.getByText("€410.00")).toBeInTheDocument();
-    expect(screen.queryByText("€422.00")).not.toBeInTheDocument();
-  });
-
-  it("shows no total before a method is chosen", async () => {
-    renderDelivery(LUNA_ID, SHOWN_ONLY);
-    await screen.findByRole("radio", { name: "Courier · €12.00" });
-    expect(screen.queryByText("Total before tax")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Place order" })).toHaveAttribute("aria-disabled", "true");
-  });
-
   it("puts erp-api's field errors on the address and shipping", async () => {
     server.use(
       http.post(`${FAKE_API_URL}/orders`, () =>
@@ -263,46 +252,6 @@ describe("DeliverySection", () => {
     expect(postal).toHaveAttribute("aria-invalid", "false");
     // The new address asks for shipping again; once listed, the methods still carry erp-api's reason.
     expect(await screen.findByRole("radiogroup", { name: "Shipping" })).toHaveAccessibleDescription("Courier doesn't go there");
-  });
-
-  it("says why Place is off, one reason at a time", async () => {
-    renderDelivery(MIRA_ID, giftSetQuote(MIRA_ID));
-    const place = await screen.findByRole("button", { name: "Place order" });
-
-    // No address yet.
-    expect(await screen.findByText("Fill in the address first.")).toBeInTheDocument();
-    expect(place).toHaveAttribute("aria-disabled", "true");
-    expect(place).toHaveAccessibleDescription("Fill in the address first.");
-
-    // A complete address: while its methods load, the section says so and Place adds nothing.
-    await typeMiraAddress();
-    expect(screen.getByText("Loading the shipping methods…")).toBeInTheDocument();
-    expect(screen.queryByText("Fill in the address first.")).not.toBeInTheDocument();
-    expect(screen.queryByText("Pick a shipping method.")).not.toBeInTheDocument();
-    expect(place).toHaveAccessibleDescription("");
-
-    // Listed, none picked.
-    await screen.findByRole("radio", { name: "Courier · €12.00" });
-    expect(await screen.findByText("Pick a shipping method.")).toBeInTheDocument();
-    expect(place).toHaveAttribute("aria-disabled", "true");
-    expect(place).toHaveAccessibleDescription("Pick a shipping method.");
-
-    // Offline wins, and the other reason comes back with the connection.
-    act(() => setOnline(false));
-    expect(place).toHaveAccessibleDescription("You're offline.");
-    expect(screen.queryByText("Pick a shipping method.")).not.toBeInTheDocument();
-    act(() => setOnline(true));
-    expect(place).toHaveAccessibleDescription("Pick a shipping method.");
-
-    // Picked: nothing to say, and Place can be pressed.
-    await userEvent.click(screen.getByRole("radio", { name: "Courier · €12.00" }));
-    expect(screen.queryByText("Pick a shipping method.")).not.toBeInTheDocument();
-    expect(place).toHaveAttribute("aria-disabled", "false");
-    expect(place).toHaveAccessibleDescription("");
-
-    // Taking the address apart again.
-    await userEvent.clear(screen.getByRole("textbox", { name: "City" }));
-    expect(place).toHaveAccessibleDescription("Fill in the address first.");
   });
 
   it("asks for a method again when a new address no longer offers the chosen one", async () => {

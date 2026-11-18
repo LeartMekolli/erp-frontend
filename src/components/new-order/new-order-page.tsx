@@ -7,6 +7,7 @@ import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
 import { canPlaceOrders } from "@/lib/auth/permissions";
 import { EMPTY_VALUES, bodyKey, type NewOrderValues } from "@/lib/new-order/form";
+import { useCustomerProducts } from "@/lib/new-order/queries";
 
 import { COPY } from "./copy";
 import { CustomerSection } from "./customer-section";
@@ -16,6 +17,7 @@ import { readyVersionId } from "./model-field";
 import { PriceSection } from "./price-section";
 import { ProductSection } from "./product-section";
 import { Section } from "./section";
+import { useCheckout } from "./use-checkout";
 import { useLeaveGuard } from "./use-leave-guard";
 import { useModel } from "./use-model";
 import { usePlace } from "./use-place";
@@ -46,6 +48,17 @@ function NewOrder() {
     price,
     quoteKey: body === null ? null : bodyKey(body),
     onPlaced: (orderId) => guard.leaveNow(`/orders/${orderId}`),
+  });
+  // The same cached list `useQuoteBody` reads, so the picked product is the one being priced.
+  const products = useCustomerProducts(customerId || null);
+  const product = products.data?.find((candidate) => candidate.id === productId);
+  // The total, the address and its methods, and the one next action, worked out once for the page.
+  const checkout = useCheckout({
+    form,
+    price,
+    placing,
+    model: { held: model.held !== null, ready: readyVersionId(model.upload) !== undefined },
+    product,
   });
 
   return (
@@ -87,7 +100,7 @@ function NewOrder() {
           closedHint={COPY.closed.delivery}
           focusOnOpen={false}
         >
-          <DeliverySection price={price} placing={placing} />
+          <DeliverySection checkout={checkout} placing={placing} />
         </Section>
       </div>
       <LeaveDialog {...guard.dialog} />

@@ -13,6 +13,7 @@ import {
   orderAddress,
   placeBody,
   placeRefusal,
+  priceBlocker,
   quantityError,
   quoteBody,
   refusalField,
@@ -227,5 +228,41 @@ describe("new order form", () => {
     });
     expect(placeBody({ customerId: CUSTOMER, address: null, shippingMethod: "", note: "" }, VERSION)).toBeNull();
     expect(placeBody({ customerId: CUSTOMER, address: EMPTY_ADDRESS, shippingMethod: "courier", note: "" }, VERSION)).toBeNull();
+  });
+});
+
+describe("priceBlocker", () => {
+  const filled = { customerId: CUSTOMER, productId: PRODUCT, size: "" };
+  const noModel = { held: false, ready: false };
+  const ready = { held: true, ready: true };
+
+  it("is customer with no customer", () => {
+    expect(priceBlocker({ ...filled, customerId: "" }, product(), noModel)).toBe("customer");
+  });
+
+  it("is product with no product", () => {
+    expect(priceBlocker({ ...filled, productId: "" }, undefined, noModel)).toBe("product");
+  });
+
+  it("is model for a custom product with no file", () => {
+    expect(priceBlocker(filled, product({ kind: "custom" }), noModel)).toBe("model");
+  });
+
+  it("is measuring for a custom product whose file isn't measured yet", () => {
+    expect(priceBlocker(filled, product({ kind: "custom" }), { held: true, ready: false })).toBe("measuring");
+  });
+
+  it("is size for an empty named or range size", () => {
+    const named = product({ sizing: { mode: "named", sizes: [{ key: "small", scale: "0.8" }] } });
+    const ranged = product({ kind: "custom", sizing: { mode: "range", min: "0.5", max: "3" } });
+    expect(priceBlocker(filled, named, noModel)).toBe("size");
+    expect(priceBlocker({ ...filled, size: "  " }, ranged, ready)).toBe("size");
+    expect(priceBlocker({ ...filled, size: "small" }, named, noModel)).toBeNull();
+  });
+
+  it("is null for a ready-made product with a size", () => {
+    expect(priceBlocker({ ...filled, size: "1.5" }, product({ sizing: { mode: "range", min: "0.5", max: "3" } }), noModel)).toBeNull();
+    // A product that needs no model or size has nothing to wait for.
+    expect(priceBlocker(filled, product(), noModel)).toBeNull();
   });
 });
