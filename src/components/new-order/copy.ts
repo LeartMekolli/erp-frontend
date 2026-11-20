@@ -67,8 +67,8 @@ export const COPY = {
       delivery_speed: "Delivery speed",
     } satisfies Record<SummaryLabel, string>,
     unitPrice: "Unit price",
-    times: (quantity: string) => `${quantity} ×`,
-    holdsUntil: (dateTime: string) => `Holds until ${dateTime}`,
+    /** "2 × €75.00": the quantity times the unit price, beside the quote's total. */
+    times: (quantity: string, unitPrice: string) => `${quantity} × ${unitPrice}`,
     expired: "Price expired. Placing gets a new price.",
     changed: "The price changed since it was quoted. Check the new price, then place the order.",
     refused: "This can't be priced:",
@@ -129,6 +129,19 @@ export const COPY = {
     getNewPrice: "Get new price",
     /** The total's label while no shipping method is picked. */
     beforeShipping: "Before shipping and tax",
+    noPrice: "No price yet",
+    /** Under the struck-through total of a price the form no longer matches. */
+    changed: "Changed: get a new price",
+    /** Opens the whole ticket from the bar at the bottom of a narrow screen. */
+    details: "See details",
+    /** "2 × Cast ring". */
+    what: (quantity: string, product: string) => `${quantity} × ${product}`,
+    /** A size picked from a range, in the line of chosen values. */
+    size: (scale: string) => `Size ${scale}`,
+    holds: (time: string) => `Price holds until ${time}`,
+    paysFirst: (name: string) => `Pays first. The order waits for ${name}'s payment before production starts.`,
+    paysLater: (days: number) =>
+      `Pays later, ${days} ${days === 1 ? "day" : "days"}. Production starts when it's placed, unless they're over their credit limit.`,
   },
   leave: {
     title: "Leave this order?",

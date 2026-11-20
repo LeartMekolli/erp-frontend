@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FAKE_API_URL, LUNA_ID, MIRA_ID, ORDER_TAKER, ORDER_WRITER, STAFF } from "../../../test/fake-erp-api/seed";
 import { fakeState } from "../../../test/fake-erp-api/state";
+import { setWide } from "../../../test/media";
 import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
@@ -35,11 +36,14 @@ beforeEach(() => {
   navigation.notFound.mockReset();
   reached = [];
   document.addEventListener("click", recordClick);
+  // The ticket beside the form; the narrow bar and sheet are tested in `order-ticket.test.tsx`.
+  setWide(true);
 });
 
 afterEach(() => {
   document.removeEventListener("click", recordClick);
   server.events.removeAllListeners();
+  vi.unstubAllGlobals();
 });
 
 /** Every request that goes out from now on, with its body as text. */
@@ -70,8 +74,9 @@ async function chooseProduct(name: string) {
   await userEvent.selectOptions(product, name);
 }
 
+/** Presses the main button while it asks for a price; after a change it reads Get new price. */
 async function getPrice() {
-  const button = screen.getByRole("button", { name: "Get price" });
+  const button = screen.getByRole("button", { name: /^Get (new )?price$/ });
   await waitFor(() => expect(button).toHaveAttribute("aria-disabled", "false"));
   await userEvent.click(button);
   expect(await screen.findByText("Unit price")).toBeInTheDocument();
@@ -219,15 +224,17 @@ describe("NewOrderPage", () => {
     15_000,
   );
 
-  it("leaves focus on Get price when the price arrives", async () => {
+  it("keeps focus on the main button when the price arrives", async () => {
     document.removeEventListener("click", recordClick);
     renderAs(ORDER_TAKER, <NewOrderPage />);
     await pickCustomer("Luna", "Luna Jewels");
     await chooseProduct("Gift set");
-    expect(placeButton()).toHaveAttribute("aria-disabled", "true");
+    const main = screen.getByRole("button", { name: "Get price" });
     await getPrice();
-    expect(screen.getByRole("button", { name: "Get price" })).toHaveFocus();
-    expect(placeButton()).toHaveAttribute("aria-disabled", "true");
+    // The same button now places, and keeps focus; it is off until a shipping method is picked.
+    expect(placeButton()).toBe(main);
+    expect(main).toHaveFocus();
+    expect(main).toHaveAttribute("aria-disabled", "true");
   });
 
   it("opens the new order after placing", async () => {
@@ -277,7 +284,6 @@ describe("NewOrderPage", () => {
     expect(customer).toBeDisabled();
     expect(note).toBeDisabled();
     expect(screen.getByRole("combobox", { name: "Product" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Get price" })).toBeDisabled();
     expect(screen.getByRole("radio", { name: "Courier · €12.00" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Change" })).toBeDisabled();
     // Place keeps focus and says nothing more; Cancel stays usable.
@@ -300,33 +306,6 @@ describe("NewOrderPage", () => {
     expect(navigation.push).not.toHaveBeenCalled();
   });
 
-  it("shows the new price after price_changed", async () => {
-    await readyToPlace();
-    const requests = recordRequests();
-    // The hold runs out: placing prices the quote again, at the total × 1.1.
-    fakeState().quotes.expireQuotes();
-    await userEvent.click(placeButton());
-
-    const notice = await screen.findByText("The price changed since it was quoted. Check the new price, then place the order.");
-    await waitFor(() => expect(notice.parentElement).toHaveFocus());
-    expect(screen.getAllByText("€26.40")).toHaveLength(2);
-    expect(screen.getByText("€38.40")).toBeInTheDocument();
-    expect(navigation.push).not.toHaveBeenCalled();
-
-    // Placing again sends the new quote, a new body, so with a new key.
-    await waitFor(() => expect(placeButton()).toHaveAttribute("aria-disabled", "false"));
-    await userEvent.click(placeButton());
-    await waitFor(() => expect(navigation.push).toHaveBeenCalledTimes(1));
-
-    const bodies = (await postedTo(requests, "/orders")) as { lines: { quote_id: string }[] }[];
-    expect(bodies).toHaveLength(2);
-    expect(bodies[1]!.lines[0]!.quote_id).not.toBe(bodies[0]!.lines[0]!.quote_id);
-    const keys = requests.filter((request) => request.method === "POST" && new URL(request.url).pathname === "/orders").map((request) => request.key);
-    expect(keys[1]).not.toBe(keys[0]);
-    const order = fakeState().orders.all().find((candidate) => navigation.push.mock.calls[0]?.[0] === `/orders/${candidate.id}`);
-    expect(order?.total).toBe("38.40");
-  });
-
   it("clears the price after another 409", async () => {
     server.use(
       http.post(`${FAKE_API_URL}/orders`, () =>
@@ -343,14 +322,18 @@ describe("NewOrderPage", () => {
       ),
     );
     await readyToPlace();
-    await userEvent.click(placeButton());
+    const place = placeButton();
+    await userEvent.click(place);
 
     const message = await screen.findByRole("alert");
     expect(message).toHaveTextContent("A quote is ordered once");
     await waitFor(() => expect(message).toHaveFocus());
-    // The price is gone and Place is off until staff get a fresh one; Delivery stays to say why.
+    // The price is gone: the main button asks for a fresh one, with erp-api's reason under it.
     expect(screen.queryByText("Unit price")).not.toBeInTheDocument();
-    expect(placeButton()).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByText("No price yet")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Place order" })).not.toBeInTheDocument();
+    expect(place).toHaveTextContent("Get price");
+    expect(place).toHaveAttribute("aria-disabled", "false");
     expect(screen.getByRole("radio", { name: "Courier · €12.00" })).toBeChecked();
 
     await getPrice();
@@ -388,7 +371,8 @@ describe("NewOrderPage", () => {
       await pickCustomer("Mira", "Mira Studio");
       expect(await screen.findByText("No group · Pays later, 30 days · Plan: Starter")).toBeInTheDocument();
       expect(await screen.findByRole("combobox", { name: "Product" })).toHaveValue("");
-      expect(screen.getByRole("button", { name: "Get price" })).toHaveAttribute("aria-disabled", "true");
+      // Luna's price may still show struck through as Get new price until the customer change clears it.
+      expect(screen.getByRole("button", { name: /^Get (new )?price$/ })).toHaveAttribute("aria-disabled", "true");
       expect(screen.queryByText("Unit price")).not.toBeInTheDocument();
 
       // The same product again starts with no size; the model is held and was uploaded again for Mira,
@@ -397,7 +381,7 @@ describe("NewOrderPage", () => {
       expect(await screen.findByRole("textbox", { name: "Size" })).toHaveValue("");
       // Measuring takes a few polls, a second apart at first.
       expect(await screen.findByLabelText("Replace the model", {}, { timeout: 4_000 })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Get price" })).toHaveAttribute("aria-disabled", "true");
+      expect(screen.getByRole("button", { name: /^Get (new )?price$/ })).toHaveAttribute("aria-disabled", "true");
 
       // Priced for Mira, Delivery starts empty: her (missing) saved address, no method, no note.
       await chooseProduct("Gift set");

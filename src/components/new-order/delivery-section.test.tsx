@@ -14,6 +14,7 @@ import { server } from "../../../test/msw";
 import { WithMe, renderAs } from "../../../test/render";
 
 import { DeliverySection } from "./delivery-section";
+import { OrderTicket } from "./order-ticket";
 import type { RefusedField } from "./product-section";
 import { useCheckout } from "./use-checkout";
 import { usePlace } from "./use-place";
@@ -58,7 +59,9 @@ function shownPrice(quote: QuoteSummary): Price {
 }
 
 const NO_MODEL = { held: false, ready: false };
+const NO_FILE = { held: null, upload: { measures: [] } };
 
+/** The Delivery panel beside the ticket, whose main button places the order and shows why it can't. */
 function Harness({ customerId, quote, onPlaced }: { customerId: string; quote: QuoteSummary; onPlaced: (id: string) => void }) {
   const form = useForm<NewOrderValues>({ defaultValues: { ...EMPTY_VALUES, customerId } });
   const price = shownPrice(quote);
@@ -68,6 +71,7 @@ function Harness({ customerId, quote, onPlaced }: { customerId: string; quote: Q
   return (
     <FormProvider {...form}>
       <DeliverySection checkout={checkout} placing={placing} />
+      <OrderTicket checkout={checkout} price={price} placing={placing} model={NO_FILE} />
     </FormProvider>
   );
 }
