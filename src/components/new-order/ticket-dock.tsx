@@ -29,7 +29,7 @@ export function TicketDock({
   checkout: Checkout;
   price: Price;
   onDetails: () => void;
-  ref?: Ref<HTMLDivElement>;
+  ref?: Ref<HTMLElement>;
   mainRef?: Ref<HTMLButtonElement>;
   detailsRef?: Ref<HTMLButtonElement>;
 }) {
@@ -38,9 +38,11 @@ export function TicketDock({
   const { total } = checkout;
   const quote = price.shown?.quote ?? null;
 
+  // A landmark named as the wide layout's aside is, so the ticket is found the same way at every size.
   return (
-    <div
+    <section
       ref={ref}
+      aria-label={COPY.ticket.label}
       className="fixed inset-x-0 bottom-0 z-40 flex flex-col gap-3 border-t border-line bg-card px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_-12px_rgb(22_20_28/0.12)] sm:px-5"
     >
       <div className="flex items-end justify-between gap-3">
@@ -68,6 +70,6 @@ export function TicketDock({
       </div>
       {online && price.error && <FormMessage tone="error">{price.error}</FormMessage>}
       <MainButton main={checkout.main} className="w-full" buttonRef={mainRef} />
-    </div>
+    </section>
   );
 }

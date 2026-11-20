@@ -88,7 +88,7 @@ function NewOrder() {
   // The dock is fixed over the bottom of the page, and its height changes with a reason or an error, so
   // the page is padded by its measured height: the last panel is never hidden behind it.
   const [dockHeight, setDockHeight] = useState(0);
-  const measureDock = useCallback((node: HTMLDivElement | null) => {
+  const measureDock = useCallback((node: HTMLElement | null) => {
     if (node === null) return;
     setDockHeight(node.getBoundingClientRect().height);
     const observer = new ResizeObserver(() => setDockHeight(node.getBoundingClientRect().height));
