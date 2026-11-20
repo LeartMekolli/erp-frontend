@@ -5,7 +5,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 import { COPY } from "./copy";
 
-/** Asks before staff walk away from an order they have started. Closing it any other way is Stay. */
+/**
+ * Asks before staff walk away from an order they have started. Stay is the main (black) button and comes
+ * first, since it's the safe choice; closing the dialog any other way is Stay too.
+ */
 export function LeaveDialog({ open, leave, stay }: { open: boolean; leave: () => void; stay: () => void }) {
   return (
     <Dialog open={open} onOpenChange={(next) => !next && stay()}>
@@ -15,10 +18,10 @@ export function LeaveDialog({ open, leave, stay }: { open: boolean; leave: () =>
           <DialogDescription>{COPY.leave.text}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button type="button" variant="outline" className="min-h-11" onClick={stay}>
+          <Button type="button" className="min-h-11" onClick={stay}>
             {COPY.leave.stay}
           </Button>
-          <Button type="button" className="min-h-11" onClick={leave}>
+          <Button type="button" variant="outline" className="min-h-11" onClick={leave}>
             {COPY.leave.leave}
           </Button>
         </DialogFooter>

@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { notFound, useParams, useRouter, useSearchParams } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { noAnswer } from "@/components/auth/copy";
+import { FormMessage } from "@/components/auth/form-message";
 import { Freshness } from "@/components/data/freshness";
 import { RecordPaymentDialog } from "@/components/orders/record-payment-dialog";
 import { ShipDialog } from "@/components/orders/ship-dialog";
@@ -61,13 +62,32 @@ function Loading() {
 function OrderDetail({ id }: { id: string }) {
   const query = useOrder(id);
   const router = useRouter();
+  const params = useSearchParams();
   // The open piece lives in the address, so its panel can be sent to someone.
-  const pieceId = useSearchParams().get("piece");
+  const pieceId = params.get("piece");
   const [shipping, setShipping] = useState(false);
   const [paying, setPaying] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   // What the last action did, announced politely.
   const [notice, setNotice] = useState<string | null>(null);
+
+  // Just placed from New order (`?placed=1`): the number is kept once the order has loaded, then `placed`
+  // leaves the address, so a reload or a shared link doesn't say it again. The notice stays until the page
+  // is left. Set while rendering, so it shows in the same commit as the order.
+  // Kept with the order's id, so another order opened on this same page never says it.
+  const searchText = params.toString();
+  const justPlaced = params.get("placed") === "1";
+  const [placed, setPlaced] = useState<{ id: string; number: number } | null>(null);
+  if (justPlaced && query.data && placed?.id !== query.data.id) setPlaced({ id: query.data.id, number: query.data.number });
+  const placedNumber = placed !== null && placed.id === id ? placed.number : null;
+  useEffect(() => {
+    if (!justPlaced || placedNumber === null) return;
+    // Everything else in the address stays, such as an open piece.
+    const rest = new URLSearchParams(searchText);
+    rest.delete("placed");
+    const kept = rest.toString();
+    router.replace(`/orders/${id}${kept ? `?${kept}` : ""}`, { scroll: false });
+  }, [justPlaced, placedNumber, searchText, router, id]);
 
   if (query.isPending) return <Loading />;
 
@@ -98,6 +118,7 @@ function OrderDetail({ id }: { id: string }) {
   const order = query.data;
   return (
     <StaffSelectionProvider>
+      {placedNumber !== null && <FormMessage tone="info">{`Order #${placedNumber} placed.`}</FormMessage>}
       <OrderHeader
         order={order}
         onShip={() => {

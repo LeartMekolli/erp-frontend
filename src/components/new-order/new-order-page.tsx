@@ -59,7 +59,8 @@ function NewOrder() {
     form,
     price,
     quoteKey: body === null ? null : bodyKey(body),
-    onPlaced: (orderId) => guard.leaveNow(`/orders/${orderId}`),
+    // `placed=1` asks the order page to say it was just placed.
+    onPlaced: (orderId) => guard.leaveNow(`/orders/${orderId}?placed=1`),
   });
   // The same cached list `useQuoteBody` reads, so the picked product is the one being priced.
   const products = useCustomerProducts(customerId || null);

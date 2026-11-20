@@ -19,11 +19,12 @@ export function ChangeCustomerDialog({ open, keep, change }: { open: boolean; ke
           <DialogDescription>{COPY.changeCustomer.text}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button type="button" variant="outline" className="min-h-11" onClick={change}>
-            {COPY.changeCustomer.change}
-          </Button>
+          {/* Keep first, as Stay is in the leave dialog: the safe choice is the first one reached. */}
           <Button type="button" className="min-h-11" onClick={keep}>
             {COPY.changeCustomer.keep}
+          </Button>
+          <Button type="button" variant="outline" className="min-h-11" onClick={change}>
+            {COPY.changeCustomer.change}
           </Button>
         </DialogFooter>
       </DialogContent>

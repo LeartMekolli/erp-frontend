@@ -271,7 +271,7 @@ describe("NewOrderPage", () => {
     expect(main).toHaveAttribute("aria-disabled", "true");
   });
 
-  it("opens the new order after placing", async () => {
+  it("opens the new order saying it was placed", async () => {
     await readyToPlace();
     const before = new Set(fakeState().orders.all().map((order) => order.id));
     await userEvent.click(placeButton());
@@ -280,7 +280,7 @@ describe("NewOrderPage", () => {
     const placed = fakeState().orders.all().filter((order) => !before.has(order.id));
     expect(placed).toHaveLength(1);
     expect(placed[0]).toMatchObject({ customer: { id: LUNA_ID }, channel: "staff", state: "awaiting_payment", total: "36.00" });
-    expect(navigation.push).toHaveBeenCalledWith(`/orders/${placed[0]!.id}`);
+    expect(navigation.push).toHaveBeenCalledWith(`/orders/${placed[0]!.id}?placed=1`);
 
     // The guard is off, though the form is still filled in: the order is placed, nothing is lost.
     const closing = new Event("beforeunload", { cancelable: true });
@@ -541,6 +541,16 @@ describe("useLeaveGuard", () => {
     expect(navigation.push).toHaveBeenCalledWith("/orders");
     expect(navigation.push).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("Stay is the main button", async () => {
+    render(<Harness dirty />);
+    await userEvent.click(screen.getByRole("link", { name: "Orders" }));
+    const dialog = await screen.findByRole("dialog", { name: "Leave this order?" });
+    const buttons = within(dialog).getAllByRole("button");
+    expect(buttons.map((button) => button.textContent)).toEqual(["Stay", "Leave"]);
+    expect(buttons[0]).toHaveAttribute("data-variant", "primary");
+    expect(buttons[1]).toHaveAttribute("data-variant", "outline");
   });
 
   it("sends Cancel through the same dialog", async () => {
