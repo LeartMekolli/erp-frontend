@@ -116,6 +116,29 @@ describe("CustomerSection", () => {
     expect(await screen.findByText("No group · Starter")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId("values")).toHaveTextContent(`customer:${MIRA_ID} product: quantity:1`));
     expect(onCustomerChange).toHaveBeenCalledTimes(1);
+    // Focus lands on Mira's chip, never on the page body (the page's product select takes it after).
+    await waitFor(() => expect(changeButton()).toHaveFocus());
+  });
+
+  it("won't clear the order for a disabled customer", async () => {
+    const onCustomerChange = vi.fn();
+    renderAs(ORDER_TAKER, <Harness onCustomerChange={onCustomerChange} />);
+    await pickLuna();
+    await userEvent.click(screen.getByRole("button", { name: "Enter a product" }));
+    await userEvent.click(changeButton());
+    await pick("Old Works", "Old Works");
+
+    // Their record is read before asking: disabled, so no question and nothing cleared.
+    expect(await screen.findByText("Old Works is disabled. Pick another customer.")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByTestId("values")).toHaveTextContent(`customer:${LUNA_ID} product:ring`);
+    expect(onCustomerChange).not.toHaveBeenCalled();
+
+    // Escape in the search goes back to Luna, and the message goes with it.
+    await userEvent.click(screen.getByRole("combobox", { name: "Customer" }));
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(changeButton()).toHaveFocus());
+    expect(screen.queryByText("Old Works is disabled. Pick another customer.")).not.toBeInTheDocument();
   });
 
   it("Keep leaves everything as it was", async () => {

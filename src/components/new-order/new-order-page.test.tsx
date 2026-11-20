@@ -10,6 +10,7 @@ import { fakeState } from "../../../test/fake-erp-api/state";
 import { setWide } from "../../../test/media";
 import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
+import { settle } from "../../../test/wait";
 
 import { LeaveDialog } from "./leave-dialog";
 import { NewOrderPage } from "./new-order-page";
@@ -136,6 +137,47 @@ describe("NewOrderPage", () => {
     expect(await within(delivery).findByText("12 rue des Orfèvres, 69002 Lyon, FR")).toBeInTheDocument();
     await userEvent.click(await within(delivery).findByRole("radio", { name: "Courier · €12.00" }));
     expect(screen.getByText("No price yet")).toBeInTheDocument();
+  });
+
+  it("drops a price still on its way when the customer changes", async () => {
+    // Luna's quote is held until the customer has changed.
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      // Returning nothing hands the request on to the fake's own handler.
+      http.post(`${FAKE_API_URL}/pricing/quotes`, async () => {
+        await held;
+      }),
+    );
+    const answered = new Promise<void>((resolve) => {
+      server.events.on("response:mocked", ({ request }) => {
+        if (new URL(request.url).pathname === "/pricing/quotes") resolve();
+      });
+    });
+    document.removeEventListener("click", recordClick);
+    renderAs(ORDER_TAKER, <NewOrderPage />);
+    await pickCustomer("Luna", "Luna Jewels");
+    await chooseProduct("Gift set");
+    const main = screen.getByRole("button", { name: "Get price" });
+    await waitFor(() => expect(main).toHaveAttribute("aria-disabled", "false"));
+    await userEvent.click(main);
+    expect(await screen.findByRole("button", { name: "Getting a price…" })).toBeInTheDocument();
+
+    await changeCustomer("Mira", "Mira Studio");
+    expect(await screen.findByText("No group · Starter")).toBeInTheDocument();
+    // Mira's order isn't waiting on Luna's question.
+    expect(screen.queryByRole("button", { name: "Getting a price…" })).not.toBeInTheDocument();
+
+    release();
+    await answered;
+    await settle();
+    // Luna's answer landed and was dropped: no stale price, nothing to get "again".
+    expect(screen.queryByText("Changed: get a new price")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Get new price" })).not.toBeInTheDocument();
+    expect(screen.getByText("No price yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Get price" })).toHaveAccessibleDescription("Pick a product.");
   });
 
   it("keeps delivery open after a change", async () => {
@@ -421,6 +463,14 @@ describe("NewOrderPage", () => {
       // Measuring takes a few polls, a second apart at first.
       expect(await screen.findByText("Ready", {}, { timeout: 4_000 })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Get price" })).toHaveAttribute("aria-disabled", "true");
+
+      // Priced for Mira with the model: the quote carries a version, and it's hers, not Luna's.
+      await userEvent.type(screen.getByRole("textbox", { name: "Size" }), "1");
+      await getPrice();
+      const miraQuotes = (await postedTo(requests.slice(switchedAt), "/pricing/quotes")) as { file_version_id?: string }[];
+      expect(miraQuotes).toHaveLength(1);
+      expect(miraQuotes[0]?.file_version_id).toBeTruthy();
+      expect(miraQuotes[0]?.file_version_id).not.toBe(lunaVersion);
 
       // Priced for Mira, Delivery starts empty: her (missing) saved address, no method, no note.
       await chooseProduct("Gift set");

@@ -38,8 +38,12 @@ describe("OrderDetailPage", () => {
   it("says the order was placed once", async () => {
     navigation.search = "placed=1&ref=email";
     const { rerender } = open(1048);
+    // The live region is there, empty, while the order loads, and the notice fills that same region, so
+    // screen readers announce it.
+    const region = (await screen.findAllByRole("status")).find((element) => element.textContent === "" && !element.hasAttribute("aria-label"));
+    expect(region).toBeDefined();
     const notice = await screen.findByText("Order #1048 placed.");
-    expect(notice).toHaveAttribute("role", "status");
+    expect(notice.closest("[role=status]")).toBe(region);
     // `placed` leaves the address, the rest of it stays (an open piece would), and the page isn't scrolled.
     expect(navigation.router.replace).toHaveBeenCalledTimes(1);
     expect(navigation.router.replace).toHaveBeenCalledWith(`/orders/${orderId(1048)}?ref=email`, { scroll: false });

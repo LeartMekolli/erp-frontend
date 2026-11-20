@@ -74,6 +74,8 @@ describe("ProductSection", () => {
     await pickProduct("Gift set");
     const quantity = await screen.findByRole("textbox", { name: "Quantity" });
     expect(quantity).toHaveValue("1");
+    // Screen readers are told about the keys, which sighted users learn from − and +.
+    expect(quantity).toHaveAccessibleDescription("The up and down arrow keys change it by one.");
 
     await userEvent.click(screen.getByRole("button", { name: "More" }));
     expect(quantity).toHaveValue("2");

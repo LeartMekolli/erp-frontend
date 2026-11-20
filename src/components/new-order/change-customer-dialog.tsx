@@ -18,7 +18,8 @@ export function ChangeCustomerDialog({ open, keep, change }: { open: boolean; ke
           <DialogTitle>{COPY.changeCustomer.title}</DialogTitle>
           <DialogDescription>{COPY.changeCustomer.text}</DialogDescription>
         </DialogHeader>
-        <DialogFooter>
+        {/* Top to bottom on a phone (not the footer's reverse), so Keep is first both on screen and by Tab. */}
+        <DialogFooter className="flex-col sm:flex-row">
           {/* Keep first, as Stay is in the leave dialog: the safe choice is the first one reached. */}
           <Button type="button" className="min-h-11" onClick={keep}>
             {COPY.changeCustomer.keep}

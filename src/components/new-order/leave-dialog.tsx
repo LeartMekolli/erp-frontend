@@ -17,7 +17,8 @@ export function LeaveDialog({ open, leave, stay }: { open: boolean; leave: () =>
           <DialogTitle>{COPY.leave.title}</DialogTitle>
           <DialogDescription>{COPY.leave.text}</DialogDescription>
         </DialogHeader>
-        <DialogFooter>
+        {/* Top to bottom on a phone (not the footer's reverse), so Stay is first both on screen and by Tab. */}
+        <DialogFooter className="flex-col sm:flex-row">
           <Button type="button" className="min-h-11" onClick={stay}>
             {COPY.leave.stay}
           </Button>

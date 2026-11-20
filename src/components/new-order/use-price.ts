@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useWatch, type Control } from "react-hook-form";
 
 import { UNKNOWN, noAnswer } from "@/components/auth/copy";
@@ -69,6 +69,13 @@ export function usePrice(body: QuoteBody | null) {
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   // The last price erp-api gave, whatever came after it, so a change can say "Get new price".
   const [lastPriced, setLastPriced] = useState<{ key: string; quote: QuoteSummary } | null>(null);
+  // `clear()` starts a new round. An answer to a question asked in an earlier round (one still on its way
+  // when the customer changed) is dropped, so the last customer's price never comes back as stale. The ref
+  // is what the answer checks; the state is what rendering reads.
+  const latestRound = useRef(0);
+  const [round, setRound] = useState(0);
+  const [askedIn, setAskedIn] = useState<number | null>(null);
+  const pending = quote.isPending && askedIn === round;
 
   const key = body === null ? null : bodyKey(body);
   const current = key !== null && answer?.key === key ? answer : null;
@@ -77,9 +84,12 @@ export function usePrice(body: QuoteBody | null) {
 
   async function ask(asked: QuoteBody) {
     const askedKey = bodyKey(asked);
+    const mine = latestRound.current;
+    setAskedIn(mine);
     setFailure(null);
     try {
       const result = await quote.mutateAsync(asked);
+      if (latestRound.current !== mine) return;
       if (result.accepted) {
         setAnswer({ key: askedKey, kind: "priced", quote: result.quote, changed: false });
         setLastPriced({ key: askedKey, quote: result.quote });
@@ -87,6 +97,7 @@ export function usePrice(body: QuoteBody | null) {
         setAnswer({ key: askedKey, kind: "refused", reasons: result.reasons });
       }
     } catch (error) {
+      if (latestRound.current !== mine) return;
       // Nothing entered is touched: staff press Get price again, and the same body reuses its key.
       setFailure({ key: askedKey, message: failureMessage(error) });
     }
@@ -104,7 +115,7 @@ export function usePrice(body: QuoteBody | null) {
     refusedFields: new Set<RefusedField>(fieldRefusals.keys()),
     /** Asks erp-api for a fresh quote of the current body; does nothing without one or while asking. */
     getPrice(): void {
-      if (body !== null && !quote.isPending) void ask(body);
+      if (body !== null && !pending) void ask(body);
     },
     /**
      * Stores a quote erp-api priced again at placing (`price_changed`) as the price of the body this
@@ -123,13 +134,19 @@ export function usePrice(body: QuoteBody | null) {
       setFailure(null);
       setAnswer({ key, kind: "refused", reasons });
     },
-    /** Forgets every answer and the stale price, so staff get a fresh price. */
+    /**
+     * Forgets every answer and the stale price, so staff get a fresh price. A question still on its way
+     * is forgotten too: its answer is dropped, and Get price works again at once.
+     */
     clear(): void {
+      latestRound.current += 1;
+      setRound(latestRound.current);
       setAnswer(null);
       setFailure(null);
       setLastPriced(null);
     },
-    pending: quote.isPending,
+    /** Asking erp-api for this round's price (an older round's question doesn't count). */
+    pending,
     error: failure !== null && failure.key === key ? failure.message : null,
   };
 }

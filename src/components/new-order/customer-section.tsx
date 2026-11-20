@@ -22,6 +22,16 @@ export function customerChip(customer: Customer): string {
   return [customer.customer_group?.name ?? COPY.customer.noGroup, customer.plan.name].join(" · ");
 }
 
+/** A customer who can't be picked, named. */
+function Disabled({ name }: { name: string }) {
+  return (
+    <p className="flex items-center gap-2 text-sm font-medium text-ink">
+      <Ban aria-hidden className="size-4 shrink-0" />
+      {COPY.customer.disabled(name)}
+    </p>
+  );
+}
+
 /** Fields that stay when the customer changes, so having set them isn't worth asking about. */
 const KEPT: ReadonlySet<string> = new Set<keyof NewOrderValues>(["customerId", "declaredUnit"]);
 
@@ -43,11 +53,14 @@ export function CustomerSection({ onCustomerChange }: { onCustomerChange?: () =>
   const [open, setOpen] = useState(false);
   // Change pressed: the search shows again under the chip's place until a customer is picked or Escape.
   const [changing, setChanging] = useState(false);
-  // Another customer picked while something is entered: the dialog asks before switching to them.
+  // Another customer picked while something is entered. Their record loads first, and the dialog asks only
+  // once they're active: a disabled one is named and never clears the order started for this one.
   const [asking, setAsking] = useState<string | null>(null);
   const search = useSearch(text);
   const customer = useCustomer(pickedId);
   const loaded = customer.data;
+  const candidate = useCustomer(asking);
+  const candidateActive = asking !== null && candidate.data?.id === asking && candidate.data.status === "active";
   const input = useRef<HTMLInputElement>(null);
   const changeButton = useRef<HTMLButtonElement>(null);
   // Where focus goes after the next commit: the search or the chip appear only then.
@@ -62,12 +75,17 @@ export function CustomerSection({ onCustomerChange }: { onCustomerChange?: () =>
   useEffect(() => {
     const target = focusNext.current;
     if (target === null) return;
+    // Waits for a commit where the target is on screen: after a change, the chip shows once the new
+    // customer is set, a render after the switch.
+    const node = (target === "search" ? input : changeButton).current;
+    if (node === null) return;
     focusNext.current = null;
-    (target === "search" ? input : changeButton).current?.focus();
+    node.focus();
   });
 
   /** Back to the chip of the customer already set, with focus on its Change. */
   function stay() {
+    setAsking(null);
     setChanging(false);
     setText("");
     focusNext.current = "change";
@@ -91,7 +109,10 @@ export function CustomerSection({ onCustomerChange }: { onCustomerChange?: () =>
     }
     const entered = Object.keys(dirtyFields).some((field) => !KEPT.has(field));
     if (getValues("customerId") !== "" && entered) setAsking(id);
-    else switchTo(id);
+    else {
+      setAsking(null);
+      switchTo(id);
+    }
   }
 
   function onKeyDown(event: KeyboardEvent) {
@@ -172,23 +193,24 @@ export function CustomerSection({ onCustomerChange }: { onCustomerChange?: () =>
         {pickedId !== null && customer.isError && (
           <LoadFailure error={customer.error} fallback={COPY.customer.loadFailed} onRetry={() => void customer.refetch()} />
         )}
-        {loaded?.status === "disabled" && (
-          <p className="flex items-center gap-2 text-sm font-medium text-ink">
-            <Ban aria-hidden className="size-4 shrink-0" />
-            {COPY.customer.disabled(loaded.name)}
-          </p>
+        {loaded?.status === "disabled" && <Disabled name={loaded.name} />}
+        {/* The customer picked to replace the one set, before the dialog asks. */}
+        {asking !== null && candidate.isPending && <p className="text-sm text-ink-2">{COPY.customer.loading}</p>}
+        {asking !== null && candidate.isError && (
+          <LoadFailure error={candidate.error} fallback={COPY.customer.loadFailed} onRetry={() => void candidate.refetch()} />
         )}
+        {asking !== null && candidate.data?.id === asking && candidate.data.status === "disabled" && <Disabled name={candidate.data.name} />}
       </div>
 
       <ChangeCustomerDialog
-        open={asking !== null}
-        keep={() => {
-          setAsking(null);
-          stay();
-        }}
+        open={candidateActive}
+        keep={stay}
         change={() => {
           if (asking !== null) switchTo(asking);
           setAsking(null);
+          // Their record is loaded, so their chip shows next: focus goes to its Change, then to the product
+          // select once the products load. Never left on the page body if they have none.
+          focusNext.current = "change";
         }}
       />
     </div>

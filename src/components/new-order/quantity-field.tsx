@@ -1,7 +1,7 @@
 "use client";
 
 import { Minus, Plus } from "lucide-react";
-import type { KeyboardEvent } from "react";
+import { useId, type KeyboardEvent } from "react";
 import { useFormContext } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { FieldRow } from "./field-row";
  */
 export function QuantityField({ problems }: { problems: readonly string[] }) {
   const { register, getValues, setValue } = useFormContext<NewOrderValues>();
+  const keysId = useId();
 
   function step(by: number) {
     const now = Number.parseInt(getValues("quantity"), 10);
@@ -41,6 +42,8 @@ export function QuantityField({ problems }: { problems: readonly string[] }) {
           <Input
             {...props}
             {...register("quantity")}
+            // Its reasons first, then how to step it, which sighted users learn from − and +.
+            aria-describedby={[props["aria-describedby"], keysId].filter(Boolean).join(" ")}
             inputMode="numeric"
             autoComplete="off"
             onKeyDown={onKeyDown}
@@ -49,6 +52,9 @@ export function QuantityField({ problems }: { problems: readonly string[] }) {
           <Button type="button" variant="outline" size="icon" tabIndex={-1} aria-label={COPY.product.more} className="rounded-l-none" onClick={() => step(1)}>
             <Plus aria-hidden />
           </Button>
+          <span id={keysId} className="sr-only">
+            {COPY.product.quantityKeys}
+          </span>
         </div>
       )}
     </FieldRow>

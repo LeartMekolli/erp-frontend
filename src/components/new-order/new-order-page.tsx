@@ -108,14 +108,17 @@ function NewOrder() {
   const newRefusals = price.refusals.length > 0 && price.refusals !== opened.refusals;
   const newChange = changedQuote !== null && changedQuote !== opened.changed;
   const newFailure = placing.failure !== null && placing.failure !== opened.failure;
-  if (!wide && (newRefusals || newChange || newFailure)) {
+  // Kept up to date while wide too, so a message that arrived then doesn't open the sheet after narrowing.
+  if (newRefusals || newChange || newFailure) {
     setOpened({
       refusals: newRefusals ? price.refusals : opened.refusals,
       changed: newChange ? changedQuote : opened.changed,
       failure: newFailure ? placing.failure : opened.failure,
     });
-    setOpenedBy("message");
-    setDetails(true);
+    if (!wide) {
+      setOpenedBy("message");
+      setDetails(true);
+    }
   }
 
   return (

@@ -48,6 +48,8 @@ export const COPY = {
     quantityError: "Enter a whole number from 1 to 1,000,000.",
     less: "Less",
     more: "More",
+    /** Read with the quantity field by screen readers. */
+    quantityKeys: "The up and down arrow keys change it by one.",
     speed: "Speed",
     /** Shown only while no speed is set: the plan has no default and more than one to pick from. */
     speedPlaceholder: "Pick a speed",

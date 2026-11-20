@@ -465,6 +465,22 @@ describe("⌘Enter", () => {
     await waitFor(() => expect(navigation.push).toHaveBeenCalledTimes(1));
     expect(orders).toBe(1);
   });
+
+  it("⌘Enter does nothing while the change-customer dialog is open", async () => {
+    await readyToPlace();
+    await userEvent.click(screen.getByRole("button", { name: "Change the customer" }));
+    await pickCustomer("Mira", "Mira Studio");
+    const dialog = await screen.findByRole("dialog", { name: "Change the customer?" });
+    act(() => dialog.focus());
+    const quotesBefore = quotes;
+
+    await userEvent.keyboard(COMMAND_ENTER);
+    await settle();
+    expect(quotes).toBe(quotesBefore);
+    expect(orders).toBe(0);
+    expect(navigation.push).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "Change the customer?" })).toBeInTheDocument();
+  });
 });
 
 describe("narrow", () => {
