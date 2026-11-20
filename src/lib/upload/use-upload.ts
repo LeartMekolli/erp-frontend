@@ -30,6 +30,8 @@ interface Run {
   file?: { name: string; size: number };
   fileId?: string;
   versionId?: string;
+  /** The customer and unit of the target this run started with (staff files only). */
+  startedFor?: { customerId?: string; declaredUnit?: string };
   message: string | null;
 }
 
@@ -71,7 +73,8 @@ export function useUpload(target: UploadTarget, options: { clients?: UploadClien
     const controller = new AbortController();
     running.current = controller;
     lastFile.current = file;
-    setRun({ step: "uploading", progress: 0, file: { name: file.name, size: file.size }, message: null });
+    const startedFor = target.area === "staff" ? { customerId: target.customerId, declaredUnit: target.declaredUnit } : undefined;
+    setRun({ step: "uploading", progress: 0, file: { name: file.name, size: file.size }, startedFor, message: null });
 
     // A run that was replaced or stopped no longer updates the state.
     const update = (next: Partial<Run>) => {
@@ -131,6 +134,7 @@ export function useUpload(target: UploadTarget, options: { clients?: UploadClien
     fileId,
     versionId,
     file: run.file ?? null,
+    startedFor: run.startedFor,
     measures,
     slow: phase === "measuring" && job.slow,
     offline: job.offline,

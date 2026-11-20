@@ -75,7 +75,7 @@ export function useCheckout({
   price: Price;
   placing: Placing;
   /** `held`: a file is chosen; `ready`: it is measured for the current customer. */
-  model: { held: boolean; ready: boolean };
+  model: { held: boolean; ready: boolean; failed?: boolean };
   /** The picked product, once the customer's products have loaded. */
   product: CatalogProduct | undefined;
 }): Checkout {

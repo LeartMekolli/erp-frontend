@@ -9,7 +9,6 @@ import { fakeState } from "../../../test/fake-erp-api/state";
 import { server } from "../../../test/msw";
 import { renderHookAs } from "../../../test/render";
 
-import { readyVersionId } from "./model-field";
 import { useModel } from "./use-model";
 
 const stl = () => new File(["solid ring"], "ring.stl", { type: "model/stl" });
@@ -71,18 +70,18 @@ describe("useModel", () => {
       const { result, change } = await renderModel(STAFF, { customerId: LUNA_ID, declaredUnit: "mm" });
       act(() => result.current.model.choose(stl()));
       await waitFor(() => expect(result.current.model.upload.phase).toBe("done"), done);
-      const lunas = readyVersionId(result.current.model.upload);
+      const lunas = result.current.model.readyVersionId;
       expect(lunas).toBeTruthy();
 
       change({ customerId: MIRA_ID });
       // Nothing is ready to quote while the new customer's file goes up: the old version is gone at once.
-      expect(readyVersionId(result.current.model.upload)).toBeUndefined();
+      expect(result.current.model.readyVersionId).toBeUndefined();
       await waitFor(() => expect(started).toHaveLength(2));
       expect((await Promise.all(started)).map((body) => body.customer_id)).toEqual([LUNA_ID, MIRA_ID]);
 
       await waitFor(() => expect(result.current.model.upload.phase).toBe("done"), done);
-      expect(readyVersionId(result.current.model.upload)).toBeTruthy();
-      expect(readyVersionId(result.current.model.upload)).not.toBe(lunas);
+      expect(result.current.model.readyVersionId).toBeTruthy();
+      expect(result.current.model.readyVersionId).not.toBe(lunas);
     },
     SLOW,
   );
@@ -95,9 +94,50 @@ describe("useModel", () => {
       await waitFor(() => expect(result.current.model.upload.phase).toBe("done"), done);
 
       change({ declaredUnit: "cm" });
-      expect(readyVersionId(result.current.model.upload)).toBeUndefined();
+      expect(result.current.model.readyVersionId).toBeUndefined();
       await waitFor(() => expect(started).toHaveLength(2));
       expect((await Promise.all(started)).map((body) => body.declared_unit)).toEqual(["mm", "cm"]);
+    },
+    SLOW,
+  );
+
+  it(
+    "reports no ready version in the render where the unit or customer changed",
+    async () => {
+      // Every render's answer, so the one before the effect has restarted the upload can be read.
+      const seen: (string | undefined)[] = [];
+      let args: Args = { customerId: LUNA_ID, declaredUnit: "mm" };
+      const view = renderHookAs(STAFF, () => {
+        const model = useModel(args);
+        seen.push(model.readyVersionId);
+        return { model, me: useMe().data };
+      });
+      await waitFor(() => expect(view.result.current.me).toBeDefined());
+      act(() => view.result.current.model.choose(stl()));
+      await waitFor(() => expect(view.result.current.model.upload.phase).toBe("done"), done);
+      expect(seen.at(-1)).toBeTruthy();
+
+      for (const next of [{ declaredUnit: "cm" as const }, { customerId: MIRA_ID }]) {
+        await waitFor(() => expect(view.result.current.model.upload.phase).toBe("done"), done);
+        const before = seen.length;
+        args = { ...args, ...next };
+        view.rerender();
+        // The first render with the new value is before any effect has run: it must not carry the old version.
+        expect(seen[before]).toBeUndefined();
+      }
+    },
+    SLOW,
+  );
+
+  it(
+    "says the upload failed",
+    async () => {
+      server.use(http.post(`${FAKE_API_URL}/files`, () => HttpResponse.json({ type: "about:blank", title: "Server error", status: 500 }, { status: 500, headers: { "content-type": "application/problem+json" } })));
+      const { result } = await renderModel(STAFF, { customerId: LUNA_ID, declaredUnit: "mm" });
+      expect(result.current.model.failed).toBe(false);
+      act(() => result.current.model.choose(stl()));
+      await waitFor(() => expect(result.current.model.failed).toBe(true), done);
+      expect(result.current.model.readyVersionId).toBeUndefined();
     },
     SLOW,
   );
@@ -171,7 +211,7 @@ describe("useModel", () => {
       act(() => result.current.model.remove());
       expect(result.current.model.held).toBeNull();
       expect(result.current.model.upload.phase).toBe("idle");
-      expect(readyVersionId(result.current.model.upload)).toBeUndefined();
+      expect(result.current.model.readyVersionId).toBeUndefined();
     },
     SLOW,
   );

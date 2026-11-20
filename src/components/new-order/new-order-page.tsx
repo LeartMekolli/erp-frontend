@@ -19,7 +19,7 @@ import { COPY } from "./copy";
 import { CustomerSection } from "./customer-section";
 import { DeliverySection } from "./delivery-section";
 import { LeaveDialog } from "./leave-dialog";
-import { ModelField, readyVersionId } from "./model-field";
+import { ModelCard } from "./model-field";
 import { OrderTicket } from "./order-ticket";
 import { Panel } from "./panel";
 import { ProductSection } from "./product-section";
@@ -47,11 +47,11 @@ function NewOrder() {
   const customerId = useWatch({ control: form.control, name: "customerId" });
   const productId = useWatch({ control: form.control, name: "productId" });
   const declaredUnit = useWatch({ control: form.control, name: "declaredUnit" });
-  // The model lives here so the price can wait for it: `readyVersionId(model.upload)` is what to quote.
+  // The model lives here so the price can wait for it: `model.readyVersionId` is what to quote.
   // It uploads again for another customer or unit, so that version is never the last customer's.
   const model = useModel({ customerId, declaredUnit });
   // A price shows only while the body it was asked for is the one on screen.
-  const body = useQuoteBody(form.control, readyVersionId(model.upload));
+  const body = useQuoteBody(form.control, model.readyVersionId);
   const price = usePrice(body);
   const guard = useLeaveGuard(form.formState.isDirty);
   const placing = usePlace({
@@ -68,7 +68,7 @@ function NewOrder() {
     form,
     price,
     placing,
-    model: { held: model.held !== null, ready: readyVersionId(model.upload) !== undefined },
+    model: { held: model.held !== null, ready: model.readyVersionId !== undefined, failed: model.failed },
     product,
   });
   useMainShortcut(checkout.main);
@@ -142,13 +142,7 @@ function NewOrder() {
                 changed. The Delivery panel locks its own fields. The ticket's main button stays outside
                 every fieldset, so it keeps focus while placing. */}
             <fieldset disabled={placing.pending} className="m-0 flex min-w-0 flex-col gap-3.5 border-0 p-0">
-              <Panel title={COPY.model.label}>
-                {product?.kind === "custom" ? (
-                  <ModelField model={model} reasons={price.fieldRefusals.get("model")} />
-                ) : (
-                  <p className="text-sm text-ink-2">{COPY.model.forCustom}</p>
-                )}
-              </Panel>
+              <ModelCard model={model} product={product} reasons={price.fieldRefusals.get("model")} />
               <Panel>
                 <CustomerSection />
                 {customerId !== "" && <ProductSection refusals={price.fieldRefusals} />}

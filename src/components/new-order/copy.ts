@@ -46,12 +46,16 @@ export const COPY = {
   model: {
     label: "Model",
     unit: "Drawn in",
-    units: { mm: "Millimetres", cm: "Centimetres", m: "Metres", in: "Inches" },
+    units: { mm: "mm", cm: "cm", m: "m", in: "in" },
+    /** The drop zone's input name for screen readers; its visible words are `drop`. */
     upload: "Upload a model",
-    replace: "Replace the model",
+    drop: "Drop the model here, or choose a file",
+    waiting: "Uploads when you pick the customer.",
+    notUsed: "This product doesn't use a model.",
+    remove: "Remove",
+    replace: "Replace file",
+    measures: { volume: "Volume", size: "Size (W × D × H)", surface: "Surface" },
     noAccess: "You can't upload the model. Ask an admin for file access.",
-    /** Shown in the Model panel while the picked product (or none yet) doesn't take a model. */
-    forCustom: "A model is needed for custom products.",
   },
   price: {
     get: "Get price",

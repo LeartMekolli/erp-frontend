@@ -1,75 +1,166 @@
 "use client";
 
+import { Box } from "lucide-react";
+import { useId, type DragEvent } from "react";
 import { useFormContext } from "react-hook-form";
 
 import { UploadStatus } from "@/components/data/upload-status";
-import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
+import { Button } from "@/components/ui/button";
+import type { CatalogProduct } from "@/lib/api/schema-types";
 import type { NewOrderValues } from "@/lib/new-order/form";
-import type { useUpload } from "@/lib/upload/use-upload";
+import { fileSize, modelMeasures } from "@/lib/new-order/model";
 
 import { COPY } from "./copy";
-import { FieldRow } from "./field-row";
+import { Panel } from "./panel";
 import type { useModel } from "./use-model";
-
-export type ModelUpload = ReturnType<typeof useUpload>;
 
 const UNITS = ["mm", "cm", "m", "in"] as const;
 
-/** The version id of the model once it is measured; undefined while uploading, measuring or failed. */
-export function readyVersionId(upload: ModelUpload): string | undefined {
-  return upload.phase === "done" ? upload.versionId : undefined;
-}
+type Model = Pick<ReturnType<typeof useModel>, "held" | "upload" | "readyVersionId" | "waitingForCustomer" | "canUpload" | "choose" | "remove">;
 
 /**
- * The 3D model of a custom product: the unit it is drawn in, asked before the file, then the file.
- * Without `file.write` it says why there is no input, since the quote can't be priced without a model.
+ * The Model panel: the 3D model of the order. A drop zone until a file is held (any product: the file is
+ * taken before the product is picked), then a card with the file, where it is, the unit it is drawn in
+ * and, once measured, what the server measured. Without `file.write` it says why there is no input.
+ * A product that isn't custom says it doesn't use a model instead of the status and measures.
  */
-export function ModelField({ model, reasons = [] }: { model: Pick<ReturnType<typeof useModel>, "upload" | "choose" | "canUpload">; reasons?: readonly string[] }) {
-  const { upload, choose, canUpload } = model;
+export function ModelCard({ model, product, reasons = [] }: { model: Model; product?: Pick<CatalogProduct, "kind">; reasons?: readonly string[] }) {
+  const { held, upload, canUpload, choose } = model;
   const { register } = useFormContext<NewOrderValues>();
+  const unitLabelId = useId();
+  const unit = register("declaredUnit");
+  const unused = product !== undefined && product.kind !== "custom";
+
+  const pick = (file: File | undefined) => {
+    if (file) choose(file);
+  };
 
   if (!canUpload) {
     return (
-      <FieldRow label={COPY.model.label} problems={reasons}>
-        {() => <p className="py-3 text-sm text-ink">{COPY.model.noAccess}</p>}
-      </FieldRow>
+      <Panel title={COPY.model.label}>
+        <p className="text-sm text-ink">{COPY.model.noAccess}</p>
+        <Reasons reasons={reasons} />
+      </Panel>
     );
   }
 
-  const done = upload.phase === "done";
-  const unit = register("declaredUnit");
+  if (!held) {
+    return (
+      <Panel title={COPY.model.label}>
+        <label
+          onDragOver={(event: DragEvent) => event.preventDefault()}
+          onDrop={(event: DragEvent) => {
+            event.preventDefault();
+            pick(event.dataTransfer.files[0]);
+          }}
+          className="flex min-h-28 cursor-pointer items-center justify-center gap-3 rounded-2xl border border-dashed border-line px-4 py-6 text-center text-sm font-medium text-ink-2 hover:text-ink has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-violet"
+        >
+          <Box aria-hidden className="size-5 shrink-0" />
+          <span>{COPY.model.drop}</span>
+          <input
+            type="file"
+            aria-label={COPY.model.upload}
+            className="sr-only"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              pick(file);
+            }}
+          />
+        </label>
+        {unused && <p className="text-sm text-ink-2">{COPY.model.notUsed}</p>}
+        <Reasons reasons={reasons} />
+      </Panel>
+    );
+  }
+
+  const measures = modelMeasures(model.readyVersionId === undefined ? [] : upload.measures);
+  const shown = [
+    { key: "volume", label: COPY.model.measures.volume, value: measures.volume },
+    { key: "size", label: COPY.model.measures.size, value: measures.size },
+    { key: "surface", label: COPY.model.measures.surface, value: measures.surface },
+  ].filter((measure) => measure.value !== null);
+
   return (
-    <>
-      <FieldRow label={COPY.model.unit}>
-        {(props) => (
-          // The unit is baked into the uploaded version; `useModel` uploads the held file again when it changes.
-          <NativeSelect {...props} {...unit}>
-            {UNITS.map((unit) => (
-              <option key={unit} value={unit}>
-                {COPY.model.units[unit]}
-              </option>
-            ))}
-          </NativeSelect>
-        )}
-      </FieldRow>
-      <FieldRow label={done ? COPY.model.replace : COPY.model.upload} problems={reasons}>
-        {(props) => (
-          <>
-            <Input
-              {...props}
-              type="file"
-              className="py-2.5"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (file) choose(file);
-              }}
-            />
+    <Panel
+      title={COPY.model.label}
+      action={
+        // A label around a hidden input: the whole pill opens the file picker, and the input keeps focus and the name.
+        <label className="inline-flex min-h-11 cursor-pointer items-center rounded-full border border-line px-4 text-sm font-medium text-ink hover:bg-ink/5 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-violet has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+          {COPY.model.replace}
+          <input
+            type="file"
+            className="sr-only"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              pick(file);
+            }}
+          />
+        </label>
+      }
+    >
+      <div className="flex items-start gap-3.5">
+        <div aria-hidden className="grid size-[76px] shrink-0 place-items-center rounded-2xl bg-lilac text-violet-ink">
+          <Box className="size-8" />
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <div className="flex flex-col gap-0.5">
+            <p className="font-semibold break-all text-ink">{held.name}</p>
+            <p className="text-sm text-ink-2 tabular-nums">{fileSize(held.size)}</p>
+          </div>
+          {unused ? (
+            <p className="text-sm text-ink-2">{COPY.model.notUsed}</p>
+          ) : model.waitingForCustomer ? (
+            <p className="text-sm text-ink-2">{COPY.model.waiting}</p>
+          ) : (
             <UploadStatus upload={upload} />
-          </>
-        )}
-      </FieldRow>
-    </>
+          )}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <span id={unitLabelId} className="text-caption font-medium text-ink">
+              {COPY.model.unit}
+            </span>
+            {/* Native radios, so the arrow keys move between units. The unit is baked into the uploaded
+                version; `useModel` uploads the held file again when it changes. */}
+            <div role="radiogroup" aria-labelledby={unitLabelId} className="inline-flex rounded-full border border-line p-0.5">
+              {UNITS.map((value) => (
+                <label key={value} className="relative">
+                  <input type="radio" value={value} {...unit} className="peer sr-only" />
+                  <span className="flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-full px-3 text-sm font-medium text-ink-2 peer-checked:bg-ink peer-checked:text-white peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-violet peer-disabled:cursor-not-allowed peer-disabled:opacity-50">
+                    {COPY.model.units[value]}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <Button type="button" variant="outline" className="min-h-11 rounded-full" onClick={model.remove}>
+              {COPY.model.remove}
+            </Button>
+          </div>
+        </div>
+      </div>
+      {!unused && shown.length > 0 && (
+        <dl className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-3">
+          {shown.map((measure) => (
+            <div key={measure.key} className="flex min-w-0 flex-col gap-0.5">
+              <dt className="text-caption text-ink-2">{measure.label}</dt>
+              <dd className="text-xl font-semibold break-words text-ink tabular-nums">{measure.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <Reasons reasons={reasons} />
+    </Panel>
+  );
+}
+
+/** erp-api's reasons for refusing the model, in words. */
+function Reasons({ reasons }: { reasons: readonly string[] }) {
+  if (reasons.length === 0) return null;
+  return (
+    <ul className="flex flex-col gap-0.5 text-caption text-late">
+      {reasons.map((reason, index) => (
+        <li key={index}>{reason}</li>
+      ))}
+    </ul>
   );
 }

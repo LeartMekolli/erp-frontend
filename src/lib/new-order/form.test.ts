@@ -252,6 +252,10 @@ describe("priceBlocker", () => {
     expect(priceBlocker(filled, product({ kind: "custom" }), { held: true, ready: false })).toBe("measuring");
   });
 
+  it("is model, not measuring, when the held file's upload failed", () => {
+    expect(priceBlocker(filled, product({ kind: "custom" }), { held: true, ready: false, failed: true })).toBe("model");
+  });
+
   it("is size for an empty named or range size", () => {
     const named = product({ sizing: { mode: "named", sizes: [{ key: "small", scale: "0.8" }] } });
     const ranged = product({ kind: "custom", sizing: { mode: "range", min: "0.5", max: "3" } });

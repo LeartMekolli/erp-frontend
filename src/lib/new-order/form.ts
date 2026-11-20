@@ -147,19 +147,20 @@ export type PriceBlocker = "customer" | "product" | "model" | "measuring" | "siz
 /**
  * The first thing, in the order staff fill them in, that keeps the form from being priced, or null
  * when none does. A picked product still loading has nothing to say yet. Only a custom product needs
- * the model: none held is "model", held but not measured yet is "measuring". Only an empty size counts;
- * a size that is out of range is the size field's own message.
+ * the model: none held is "model", held but not measured yet is "measuring". A held file whose upload
+ * failed is "model" too: it will never be measured, and the card beside it shows the failure and Try
+ * again. Only an empty size counts; a size that is out of range is the size field's own message.
  */
 export function priceBlocker(
   values: Pick<NewOrderValues, "customerId" | "productId" | "size">,
   product: CatalogProduct | undefined,
-  model: { held: boolean; ready: boolean },
+  model: { held: boolean; ready: boolean; failed?: boolean },
 ): PriceBlocker | null {
   if (!values.customerId) return "customer";
   if (!values.productId) return "product";
   if (!product) return null;
   if (product.kind === "custom") {
-    if (!model.held) return "model";
+    if (!model.held || model.failed) return "model";
     if (!model.ready) return "measuring";
   }
   if (product.sizing.mode !== "none" && values.size.trim() === "") return "size";

@@ -129,18 +129,20 @@ describe("NewOrderPage", () => {
     }
   });
 
-  it("shows the model field only for a custom product", async () => {
+  it("takes a model for any product, and says a ready-made one doesn't use it", async () => {
     document.removeEventListener("click", recordClick);
     renderAs(STAFF, <NewOrderPage />);
+    // The model comes first: the drop zone is there before a customer or product.
+    expect(await screen.findByLabelText("Upload a model")).toBeInTheDocument();
+    expect(screen.queryByText("This product doesn't use a model.")).not.toBeInTheDocument();
     await pickCustomer("Luna", "Luna Jewels");
     await chooseProduct("Nameplate");
-    expect(await screen.findByText("A model is needed for custom products.")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Upload a model")).not.toBeInTheDocument();
+    expect(await screen.findByText("This product doesn't use a model.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Upload a model")).toBeInTheDocument();
 
     await chooseProduct("Cast ring");
-    expect(await screen.findByLabelText("Upload a model")).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Drawn in" })).toHaveValue("mm");
-    expect(screen.queryByText("A model is needed for custom products.")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("This product doesn't use a model.")).not.toBeInTheDocument());
+    expect(screen.getByLabelText("Upload a model")).toBeInTheDocument();
   });
 
   it("moves focus to the product select when a customer is picked", async () => {
@@ -212,7 +214,7 @@ describe("NewOrderPage", () => {
       await userEvent.click(getPrice);
       expect(await screen.findByText("Unit price")).toBeInTheDocument();
 
-      await userEvent.upload(screen.getByLabelText("Replace the model"), stl());
+      await userEvent.upload(screen.getByLabelText("Replace file"), stl());
       expect(screen.queryByText("Unit price")).not.toBeInTheDocument();
       expect(getPrice).toHaveAttribute("aria-disabled", "true");
 
@@ -380,7 +382,7 @@ describe("NewOrderPage", () => {
       await chooseProduct("Cast ring");
       expect(await screen.findByRole("textbox", { name: "Size" })).toHaveValue("");
       // Measuring takes a few polls, a second apart at first.
-      expect(await screen.findByLabelText("Replace the model", {}, { timeout: 4_000 })).toBeInTheDocument();
+      expect(await screen.findByText("Ready", {}, { timeout: 4_000 })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /^Get (new )?price$/ })).toHaveAttribute("aria-disabled", "true");
 
       // Priced for Mira, Delivery starts empty: her (missing) saved address, no method, no note.
@@ -415,7 +417,7 @@ describe("NewOrderPage", () => {
 
       await chooseProduct("Gift set");
       await chooseProduct("Cast ring");
-      expect(await screen.findByLabelText("Replace the model")).toBeInTheDocument();
+      expect(await screen.findByLabelText("Replace file")).toBeInTheDocument();
       expect(screen.getByText("Ready")).toBeInTheDocument();
     },
     15_000,
@@ -443,7 +445,7 @@ describe("NewOrderPage", () => {
       await chooseProduct("Cast ring");
       expect(await screen.findByRole("textbox", { name: "Size" })).toHaveValue("");
       // Measuring takes a few polls, a second apart at first.
-      expect(await screen.findByLabelText("Replace the model", {}, { timeout: 4_000 })).toBeInTheDocument();
+      expect(await screen.findByText("Ready", {}, { timeout: 4_000 })).toBeInTheDocument();
 
       // Two uploads started, the second one for Mira.
       const started = (await postedTo(requests, "/files")) as { customer_id?: string }[];

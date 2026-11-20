@@ -67,6 +67,15 @@ describe("useUpload", () => {
     expect(result.current.measures).toContainEqual({ type: "bounding_box_z", value: "4", unit: "mm" });
   });
 
+  it("records the customer and unit a run started with", () => {
+    const { result } = renderUpload({ ...DESIGN, customerId: "customer-1" }, STAFF);
+    expect(result.current.startedFor).toBeUndefined();
+    act(() => result.current.upload(stl()));
+    expect(result.current.startedFor).toEqual({ customerId: "customer-1", declaredUnit: "mm" });
+    act(() => result.current.reset());
+    expect(result.current.startedFor).toBeUndefined();
+  });
+
   it("shows the mismatch message when complete answers 409", async () => {
     server.use(
       http.post(`${FAKE_API_URL}/files/:id/versions/:versionId/complete`, () =>

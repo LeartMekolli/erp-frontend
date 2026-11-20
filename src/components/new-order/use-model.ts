@@ -6,7 +6,7 @@ import { useCan } from "@/lib/auth/permissions";
 import type { NewOrderValues } from "@/lib/new-order/form";
 import { useUpload } from "@/lib/upload/use-upload";
 
-import type { ModelUpload } from "./model-field";
+export type ModelUpload = ReturnType<typeof useUpload>;
 
 /**
  * The order's 3D model: it holds the dropped file and uploads it once there is a customer, since a
@@ -14,8 +14,10 @@ import type { ModelUpload } from "./model-field";
  * uploaded version); removing the file or clearing the customer drops the upload. A product change
  * leaves it alone.
  *
- * `upload` is the one the page quotes from: `readyVersionId(upload)` is undefined until the current
- * customer's upload is measured, because a new run replaces the old one's state at once.
+ * `readyVersionId` is what the page quotes from: the version once measured, undefined until then. It is
+ * also undefined when the run that made it started for another customer or unit than the current ones.
+ * That holds in the very render where the customer or unit changed, before the effect below has started
+ * the new run, so no quote can go out with the old customer's or unit's version.
  */
 export function useModel({ customerId, declaredUnit }: { customerId: string; declaredUnit: NewOrderValues["declaredUnit"] }) {
   const canUpload = useCan("file.write");
@@ -41,8 +43,13 @@ export function useModel({ customerId, declaredUnit }: { customerId: string; dec
     if (canUpload) current.upload(held);
   }, [held, customerId, declaredUnit, canUpload]);
 
+  const forCurrent = upload.startedFor?.customerId === (customerId || undefined) && upload.startedFor?.declaredUnit === declaredUnit;
+
   return {
     held,
+    readyVersionId: upload.phase === "done" && forCurrent ? upload.versionId : undefined,
+    /** The upload failed or its link ran out: the file is held but there is nothing to quote with. */
+    failed: upload.phase === "failed" || upload.phase === "expired",
     choose: (file: File) => setHeld(file),
     remove: () => setHeld(null),
     upload,
