@@ -5,7 +5,7 @@ import type { MeResponse } from "@/lib/api/schema-types";
 import { STAFF } from "../../../test/fake-erp-api/seed";
 import { createFakeState } from "../../../test/fake-erp-api/state";
 
-import { can, partnerRoleAtLeast } from "./permissions";
+import { can, canPlaceOrders, partnerRoleAtLeast } from "./permissions";
 
 const staffMe = (permissions: MeResponse["permissions"]): MeResponse => ({
   ...createFakeState().me(STAFF),
@@ -25,6 +25,18 @@ describe("can", () => {
 
   it("says no while /me loads", () => {
     expect(can(undefined, "order.read")).toBe(false);
+  });
+});
+
+describe("canPlaceOrders", () => {
+  const all = ["order.read", "order.write", "quote.create", "customer.read", "catalog.read"] as const;
+
+  it("needs all five permissions", () => {
+    expect(canPlaceOrders(staffMe([...all]))).toBe(true);
+    for (const missing of all) {
+      expect(canPlaceOrders(staffMe(all.filter((permission) => permission !== missing)))).toBe(false);
+    }
+    expect(canPlaceOrders(undefined)).toBe(false);
   });
 });
 

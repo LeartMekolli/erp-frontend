@@ -1,6 +1,45 @@
 import { describe, expect, it } from "vitest";
 
-import { formatMoney } from "./money";
+import { addMoney, formatMoney } from "./money";
+
+describe("addMoney", () => {
+  it("adds two-decimal amounts", () => {
+    expect(addMoney("410.00", "12.00")).toBe("422.00");
+  });
+
+  it("is exact where floats are not", () => {
+    expect(addMoney("0.10", "0.20")).toBe("0.30");
+  });
+
+  it("keeps the decimals of an amount with a whole number", () => {
+    expect(addMoney("19.99", "0")).toBe("19.99");
+  });
+
+  it("adds a negative amount", () => {
+    expect(addMoney("-5.50", "10.25")).toBe("4.75");
+  });
+
+  it("uses as many decimals as the longer amount", () => {
+    expect(addMoney("1.5", "0.25")).toBe("1.75");
+  });
+
+  it("keeps large amounts exact", () => {
+    expect(addMoney("999999999999.99", "0.01")).toBe("1000000000000.00");
+  });
+
+  it("reads a zero sum as 0, never -0", () => {
+    expect(addMoney("-1.00", "1.00")).toBe("0.00");
+  });
+
+  it("keeps the sign of a negative sum under one unit", () => {
+    expect(addMoney("-0.50", "0.25")).toBe("-0.25");
+  });
+
+  it("refuses a value that is not an amount", () => {
+    expect(() => addMoney("1e3", "1")).toThrow("Not a money amount");
+    expect(() => addMoney("1", "")).toThrow("Not a money amount");
+  });
+});
 
 describe("formatMoney", () => {
   it("formats a two-decimal amount", () => {

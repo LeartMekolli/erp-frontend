@@ -16,6 +16,9 @@ export const FAKE_PASSWORD = "fake-password-1";
 export const NORTHCAST_ID = "2f1c5d7e-0a9b-4e3c-8d2f-6a5b4c3d2e10";
 export const LAYERLINE_ID = "7b6a5c4d-3e2f-4a1b-9c8d-0e1f2a3b4c20";
 export const LUNA_ID = "c4d5e6f7-a8b9-4c0d-8e1f-2a3b4c5d6e30";
+export const MIRA_ID = "11111111-0000-4000-8000-000000000004";
+/** Not in erp-api's seed: a disabled customer. */
+export const OLD_WORKS_ID = "11111111-0000-4000-8000-000000000010";
 
 export interface FakeUser {
   id: string;
@@ -38,7 +41,9 @@ export const STAFF: FakeUser = {
     "order.read",
     "order.write",
     "order.ship",
+    "quote.create",
     "customer.read",
+    "catalog.read",
     "partner.read",
     "partner.write",
     "payment.read",
@@ -84,6 +89,16 @@ export const ORDER_WRITER: FakeUser = {
   name: "Noor",
   kind: "staff",
   permissions: ["order.read", "order.write"],
+  organisations: [],
+};
+
+/** Not in erp-api's seed: places orders but can't upload a model. */
+export const ORDER_TAKER: FakeUser = {
+  id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c24",
+  email: "taker@demo.example.test",
+  name: "Omar",
+  kind: "staff",
+  permissions: ["order.read", "order.write", "quote.create", "customer.read", "catalog.read"],
   organisations: [],
 };
 
@@ -176,7 +191,7 @@ export const PAYER: FakeUser = {
   organisations: [],
 };
 
-export const USERS: readonly FakeUser[] = [STAFF, CLERK, STAFF_MEMBER, PAYER, WORKFLOW_READER, ORDER_WRITER, PARTNER, LAYERLINE_OWNER, NORTHCAST_ADMIN, NORTHCAST_MEMBER, PARTNER_TWO_SHOPS, CUSTOMER, NO_ACCESS];
+export const USERS: readonly FakeUser[] = [STAFF, CLERK, STAFF_MEMBER, PAYER, WORKFLOW_READER, ORDER_WRITER, ORDER_TAKER, PARTNER, LAYERLINE_OWNER, NORTHCAST_ADMIN, NORTHCAST_MEMBER, PARTNER_TWO_SHOPS, CUSTOMER, NO_ACCESS];
 
 export const PARTNER_NAMES: Record<string, string> = {
   [NORTHCAST_ID]: "Northcast Foundry",

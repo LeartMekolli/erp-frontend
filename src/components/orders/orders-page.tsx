@@ -9,7 +9,7 @@ import { Freshness } from "@/components/data/freshness";
 import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
 import type { Order } from "@/lib/api/schema-types";
-import { can } from "@/lib/auth/permissions";
+import { can, canPlaceOrders } from "@/lib/auth/permissions";
 import { useFormat } from "@/lib/format/use-format";
 import { useOrdersList } from "@/lib/orders/queries";
 import { viewKey } from "@/lib/orders/view";
@@ -29,7 +29,7 @@ export function OrdersPage() {
   const { data: me } = useMe();
   if (!me) return null;
   if (!can(me, "order.read")) notFound();
-  return <Orders canCreate={can(me, "order.write")} canShipOrders={can(me, "order.ship")} />;
+  return <Orders canCreate={canPlaceOrders(me)} canShipOrders={can(me, "order.ship")} />;
 }
 
 function Orders({ canCreate, canShipOrders }: { canCreate: boolean; canShipOrders: boolean }) {

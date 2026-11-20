@@ -55,6 +55,27 @@ describe("useUpload", () => {
     expect(result.current.fileId).toBeTruthy();
   });
 
+  it("exposes the file and its measures once ready", async () => {
+    const { result } = renderUpload(DESIGN, STAFF);
+    expect(result.current.file).toBeNull();
+    expect(result.current.measures).toEqual([]);
+    act(() => result.current.upload(stl()));
+    expect(result.current.file).toEqual({ name: "part.stl", size: "solid part".length });
+    expect(result.current.measures).toEqual([]);
+    await waitFor(() => expect(result.current.phase).toBe("done"), done);
+    expect(result.current.measures).toContainEqual({ type: "volume", value: "1240", unit: "mm3" });
+    expect(result.current.measures).toContainEqual({ type: "bounding_box_z", value: "4", unit: "mm" });
+  });
+
+  it("records the customer and unit a run started with", () => {
+    const { result } = renderUpload({ ...DESIGN, customerId: "customer-1" }, STAFF);
+    expect(result.current.startedFor).toBeUndefined();
+    act(() => result.current.upload(stl()));
+    expect(result.current.startedFor).toEqual({ customerId: "customer-1", declaredUnit: "mm" });
+    act(() => result.current.reset());
+    expect(result.current.startedFor).toBeUndefined();
+  });
+
   it("shows the mismatch message when complete answers 409", async () => {
     server.use(
       http.post(`${FAKE_API_URL}/files/:id/versions/:versionId/complete`, () =>

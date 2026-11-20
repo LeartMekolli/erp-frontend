@@ -15,6 +15,7 @@ import {
   type FakeUser,
 } from "./seed";
 import { createAiStore } from "./ai";
+import { createCatalogStore } from "./catalog";
 import { createCommentsStore } from "./comments";
 import { createJobsStore } from "./jobs";
 import { createEarningsStore } from "./earnings";
@@ -23,6 +24,7 @@ import { createOrdersStore } from "./orders";
 import { createPartnerJobsStore } from "./partner-jobs";
 import { createPartnersStore } from "./partners";
 import { createProductionStore } from "./production";
+import { createQuotesStore, type QuoteFile } from "./quotes";
 
 /** What erp-api's login and refresh answer (`session.service.ts:22-26`). */
 export interface SessionTokens {
@@ -64,6 +66,15 @@ const UPLOAD_LINK_MS = 15 * 60 * 1000;
 /** A version's next status on each read once its bytes are in: erp-api's measuring job, one step per poll. */
 const MEASURING: Partial<Record<VersionResponse["status"], VersionResponse["status"]>> = { uploaded: "measuring", measuring: "measured" };
 
+/** The measures the fake finds in every design: a 22 × 18 × 4 mm part. */
+const DESIGN_MEASURES: FakeVersion["measures"] = [
+  { type: "volume", value: "1240", unit: "mm3" },
+  { type: "surface_area", value: "1860", unit: "mm2" },
+  { type: "bounding_box_x", value: "22", unit: "mm" },
+  { type: "bounding_box_y", value: "18", unit: "mm" },
+  { type: "bounding_box_z", value: "4", unit: "mm" },
+];
+
 /**
  * An in-memory erp-api that keeps the rules AMI's session depends on:
  * refresh tokens work once and reuse revokes the session, logout revokes and
@@ -89,6 +100,18 @@ export function createFakeState(now: () => number = Date.now) {
   const earnings = createEarningsStore(now);
   const suspended = new Set<string>();
   const partners = createPartnersStore((id) => earnings.account(id).state, (id) => suspended.has(id));
+  const catalog = createCatalogStore();
+
+  /** A file version for quoting: its file's owner and name, and its status as it is (reading it here measures nothing). */
+  function fileVersion(versionId: string): QuoteFile | null {
+    for (const file of files.values()) {
+      const version = file.versions.find((v) => v.view.id === versionId);
+      if (version) return { fileId: file.view.id, name: file.view.name, owner: file.view.owner, status: version.view.status };
+    }
+    return null;
+  }
+
+  const quotes = createQuotesStore(now, catalog, fileVersion, orders);
 
   /** The file, if the caller may see it: a partner route only sees that workshop's files. */
   function ownFile(fileId: string, partnerId?: string): FakeFile | null {
@@ -130,6 +153,8 @@ export function createFakeState(now: () => number = Date.now) {
     partnerJobs,
     earnings,
     partners,
+    catalog,
+    quotes,
 
     /** Suspends a workshop: `/partner-portal/me` says so, and its accept and decline routes answer 403. */
     suspendPartner(id: string): void {
@@ -319,13 +344,16 @@ export function createFakeState(now: () => number = Date.now) {
 
     /** 409 when nothing, or not what was declared, reached storage; completing again answers the version as it is (`files.service.ts:302-321`). */
     completeFile(fileId: string, versionId: string, partnerId?: string): VersionResponse | Status<404 | 409> {
-      const version = ownFile(fileId, partnerId)?.versions.find((v) => v.view.id === versionId);
-      if (!version) return { status: 404 };
+      const file = ownFile(fileId, partnerId);
+      const version = file?.versions.find((v) => v.view.id === versionId);
+      if (!file || !version) return { status: 404 };
       if (version.view.status !== "pending") return version.view;
       const { stored } = version;
       if (!stored || stored.size !== version.view.size || stored.contentType !== version.view.content_type)
         return { status: 409 };
       version.view = { ...version.view, status: "uploaded", completed_at: new Date(now()).toISOString() };
+      // What the measuring job finds in a design (`measurers.ts`); the version reads as measured two polls on.
+      if (file.view.kind === "design") version.measures = DESIGN_MEASURES;
       return version.view;
     },
 

@@ -22,6 +22,8 @@ import { fakeState, resetFakeState } from "./state";
  *   settle that workshop's pending payout; a failed one gives its jobs back.
  * - `POST /__payout-account/<partnerId>/<state>` sets that workshop's payout
  *   account (`not_connected`, `onboarding`, `ready` or `restricted`).
+ * - `POST /__expire-quotes` runs out the hold of every saved quote: placing
+ *   one next answers 409 `price_changed` with a new quote at the total × 1.1.
  * - `GET /fake-provider/onboarding?partner=<partnerId>` stands in for the
  *   payment provider's setup page: the payout account turns ready and the
  *   browser goes back to AMI's `/payout-account?onboarding=done`.
@@ -93,6 +95,12 @@ createServer(async (req, res) => {
   const account = /^\/__payout-account\/([^/]+)\/(not_connected|onboarding|ready|restricted)$/.exec(url.pathname);
   if (req.method === "POST" && account) {
     fakeState().earnings.setAccount(decodeURIComponent(account[1]!), account[2] as PayoutAccountState);
+    res.writeHead(204).end();
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/__expire-quotes") {
+    fakeState().quotes.expireQuotes();
     res.writeHead(204).end();
     return;
   }

@@ -32,11 +32,14 @@ export interface FieldError {
   message: string;
 }
 
-/** What a route answers: a body, field errors (400), or a problem with its detail and, with a `code`, its extension members. */
+/**
+ * What a route answers: a body, field errors (400), or a problem with its detail, the things it
+ * refuses by path (`errors`) and, with a `code`, its extension members.
+ */
 export type Answer<T> =
   | { ok: true; body: T }
   | { ok: false; status: 400; errors: FieldError[] }
-  | { ok: false; status: 403 | 404 | 409 | 503; detail: string; code?: string; extensions?: Record<string, unknown> };
+  | { ok: false; status: 403 | 404 | 409 | 503; detail: string; code?: string; extensions?: Record<string, unknown>; errors?: FieldError[] };
 
 const ORDER_STATES = ["awaiting_payment", "in_production", "ready", "shipped", "delivered", "cancelled"] as const satisfies readonly OrderState[];
 const PAYMENT_STATES = [
@@ -395,6 +398,14 @@ export function createOrdersStore(now: () => number) {
         if (line) return { order, line };
       }
       return null;
+    },
+
+    /** Stores a newly placed order under the next order number, so the list and `/orders/{id}` show it. */
+    insert(make: (number: number) => StoredOrder): Order {
+      const number = Math.max(0, ...[...orders.values()].map((order) => order.number)) + 1;
+      const order = make(number);
+      orders.set(order.id, order);
+      return view(order);
     },
 
     /** Every order as staff see it, for search. */

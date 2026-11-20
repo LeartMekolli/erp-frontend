@@ -2,7 +2,7 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CLERK, NO_ACCESS, STAFF } from "../../../test/fake-erp-api/seed";
+import { CLERK, NO_ACCESS, ORDER_TAKER, ORDER_WRITER, STAFF } from "../../../test/fake-erp-api/seed";
 import { renderAs } from "../../../test/render";
 
 import { OrdersPage } from "./orders-page";
@@ -45,6 +45,15 @@ describe("OrdersPage", () => {
     renderAs(CLERK, <OrdersPage />);
     await screen.findByRole("heading", { level: 1, name: "Orders" });
     expect(screen.queryByRole("link", { name: "New order" })).not.toBeInTheDocument();
+  });
+
+  it("Orders shows New order only to who can place orders", async () => {
+    const { unmount } = renderAs(ORDER_WRITER, <OrdersPage />);
+    await screen.findByRole("heading", { level: 1, name: "Orders" });
+    expect(screen.queryByRole("link", { name: "New order" })).not.toBeInTheDocument();
+    unmount();
+    renderAs(ORDER_TAKER, <OrdersPage />);
+    expect(await screen.findByRole("link", { name: "New order" })).toHaveAttribute("href", "/orders/new");
   });
 
   it("is not found without order.read", async () => {

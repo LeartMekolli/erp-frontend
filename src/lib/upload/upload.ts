@@ -7,6 +7,9 @@ import type { JobState } from "@/lib/query/use-polled-job";
 type StartFileBody = paths["/files"]["post"]["requestBody"]["content"]["application/json"];
 type FileResponse = paths["/files/{id}"]["get"]["responses"][200]["content"]["application/json"];
 
+/** One thing the server measured on a file version (`type`, a decimal string `value`, its `unit`). */
+export type FileMeasure = FileResponse["versions"][number]["measures"][number];
+
 /** Where a file goes: a staff file of some kind, or a photo a workshop owns. */
 export type UploadTarget =
   | {

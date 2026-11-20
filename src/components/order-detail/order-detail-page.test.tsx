@@ -14,11 +14,12 @@ import { OrderDetailPage } from "./order-detail-page";
 
 const orderId = (number: number) => `22222222-0000-4000-8000-${String(number).padStart(12, "0")}`;
 
-const navigation = vi.hoisted(() => ({ id: "", notFound: vi.fn() }));
+// One router for every render, as Next's is; the address's query is `navigation.search`.
+const navigation = vi.hoisted(() => ({ id: "", search: "", notFound: vi.fn(), router: { push: vi.fn(), replace: vi.fn() } }));
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: navigation.id }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => navigation.router,
+  useSearchParams: () => new URLSearchParams(navigation.search),
   notFound: navigation.notFound,
 }));
 
@@ -27,9 +28,40 @@ function open(number: number, user = STAFF) {
   return renderAs(user, <OrderDetailPage />);
 }
 
-beforeEach(() => navigation.notFound.mockReset());
+beforeEach(() => {
+  navigation.notFound.mockReset();
+  navigation.router.replace.mockReset();
+  navigation.search = "";
+});
 
 describe("OrderDetailPage", () => {
+  it("says the order was placed once", async () => {
+    navigation.search = "placed=1&ref=email";
+    const { rerender } = open(1048);
+    // The live region is there, empty, while the order loads, and the notice fills that same region, so
+    // screen readers announce it.
+    const region = (await screen.findAllByRole("status")).find((element) => element.textContent === "" && !element.hasAttribute("aria-label"));
+    expect(region).toBeDefined();
+    const notice = await screen.findByText("Order #1048 placed.");
+    expect(notice.closest("[role=status]")).toBe(region);
+    // `placed` leaves the address, the rest of it stays (an open piece would), and the page isn't scrolled.
+    expect(navigation.router.replace).toHaveBeenCalledTimes(1);
+    expect(navigation.router.replace).toHaveBeenCalledWith(`/orders/${orderId(1048)}?ref=email`, { scroll: false });
+
+    // With `placed` gone, the notice stays on this visit and nothing is replaced again.
+    navigation.search = "ref=email";
+    rerender(<OrderDetailPage />);
+    expect(screen.getByText("Order #1048 placed.")).toBeInTheDocument();
+    expect(navigation.router.replace).toHaveBeenCalledTimes(1);
+  });
+
+  it("says nothing about placing without placed=1", async () => {
+    open(1048);
+    await screen.findByRole("heading", { level: 1, name: "#1048" });
+    expect(screen.queryByText(/placed\.$/)).not.toBeInTheDocument();
+    expect(navigation.router.replace).not.toHaveBeenCalled();
+  });
+
   it("shows the order's number, state, customer and who placed it", async () => {
     open(1048);
     expect(await screen.findByRole("heading", { level: 1, name: "#1048" })).toBeInTheDocument();

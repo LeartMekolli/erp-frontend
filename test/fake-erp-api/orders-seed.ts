@@ -6,21 +6,24 @@
 
 import type { LinePartner, Order, OrderLine, OrderState, PaymentState } from "../../src/lib/api/schema-types";
 
-import { LAYERLINE_ID, NORTHCAST_ID } from "./seed";
+import { LAYERLINE_ID, LUNA_ID, MIRA_ID, NORTHCAST_ID, OLD_WORKS_ID } from "./seed";
 
 export type StoredOrder = Omit<Order, "needs">;
 
 export const CUSTOMERS = {
   fieldnote: { id: "11111111-0000-4000-8000-000000000001", name: "Fieldnote Studio" },
-  luna: { id: "11111111-0000-4000-8000-000000000002", name: "Luna Jewels" },
+  // The same Luna that the customer person and the catalog belong to.
+  luna: { id: LUNA_ID, name: "Luna Jewels" },
   orbit: { id: "11111111-0000-4000-8000-000000000003", name: "Orbit Dental" },
-  mira: { id: "11111111-0000-4000-8000-000000000004", name: "Mira Studio" },
+  mira: { id: MIRA_ID, name: "Mira Studio" },
   kestrel: { id: "11111111-0000-4000-8000-000000000005", name: "Kestrel Labs" },
   halden: { id: "11111111-0000-4000-8000-000000000006", name: "Halden Audio" },
   pinewood: { id: "11111111-0000-4000-8000-000000000007", name: "Pinewood Instruments" },
   // 40 characters: the longest name the brief plans for.
   northside: { id: "11111111-0000-4000-8000-000000000008", name: "Northside Architecture Models and Protos" },
   brightline: { id: "11111111-0000-4000-8000-000000000009", name: "Brightline Optics" },
+  // Disabled, with no orders.
+  oldWorks: { id: OLD_WORKS_ID, name: "Old Works" },
 } as const;
 
 type Customer = (typeof CUSTOMERS)[keyof typeof CUSTOMERS];

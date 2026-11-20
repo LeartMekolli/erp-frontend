@@ -4,7 +4,7 @@ import { Menu, Plus } from "lucide-react";
 import Link from "next/link";
 
 import { useMe } from "@/components/session/session-gate";
-import { useCan } from "@/lib/auth/permissions";
+import { useCanPlaceOrders } from "@/lib/auth/permissions";
 
 import { CommandBox } from "./command/command-box";
 import { Bell } from "./notifications/bell";
@@ -16,7 +16,7 @@ const iconButton =
 
 /** Above every staff page: the menu (below 1024 px), search, notifications and the user menu. */
 export function TopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
-  const canCreate = useCan("order.write");
+  const canCreate = useCanPlaceOrders();
   const { data: me } = useMe();
   return (
     <header className="sticky top-0 z-30 flex items-center gap-2 bg-ground/90 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2 backdrop-blur sm:px-5">
