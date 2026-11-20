@@ -273,7 +273,7 @@ describe("OrderTicket", () => {
     await userEvent.click(main);
     expect(await screen.findByText("3 × €24.00")).toBeInTheDocument();
     expect(screen.queryByText("Changed: get a new price")).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("radio", { name: "Express · 2 working days" }));
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Speed" }), "Express · 2 working days");
     expect(screen.queryByText("3 × €24.00")).not.toBeInTheDocument();
     expect(screen.getByText("€72.00")).toHaveClass("line-through");
     expect(screen.getByRole("button", { name: "Get new price" })).toHaveAttribute("aria-disabled", "false");

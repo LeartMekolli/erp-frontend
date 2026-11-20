@@ -62,11 +62,11 @@ function modelIn(phase: UploadPhase, over: Partial<CardModel> = {}): CardModel {
   };
 }
 
-function Harness({ model, product }: { model: CardModel; product?: Pick<CatalogProduct, "kind"> }) {
+function Harness({ model, product, reasons }: { model: CardModel; product?: Pick<CatalogProduct, "kind">; reasons?: readonly string[] }) {
   const form = useForm<NewOrderValues>({ defaultValues: EMPTY_VALUES });
   return (
     <FormProvider {...form}>
-      <ModelCard model={model} product={product} />
+      <ModelCard model={model} product={product} reasons={reasons} />
     </FormProvider>
   );
 }
@@ -83,6 +83,14 @@ describe("ModelCard", () => {
     expect(await screen.findByText("You can't upload the model. Ask an admin for file access.")).toBeInTheDocument();
     expect(screen.queryByLabelText("Upload a model")).not.toBeInTheDocument();
     expect(screen.queryByRole("radiogroup", { name: "Drawn in" })).not.toBeInTheDocument();
+  });
+
+  it("reads erp-api's refusals with the file input", async () => {
+    renderAs(STAFF, <Harness model={modelIn("idle")} reasons={["The model is too big to cast."]} />);
+    const input = await screen.findByLabelText("Upload a model");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAccessibleDescription("The model is too big to cast.");
+    expect(screen.getByText("The model is too big to cast.").closest("ul")).toHaveClass("text-late-ink");
   });
 
   it("takes a dropped file before the customer", async () => {

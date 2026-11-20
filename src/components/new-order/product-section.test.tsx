@@ -53,9 +53,83 @@ describe("ProductSection", () => {
     expect(screen.getByText("Between 0.5 and 3")).toBeInTheDocument();
     expect(screen.getByTestId("values")).toHaveTextContent('"options":{"metal":"silver_925","finish":"polished"}');
 
-    // Luna's plan offers two speeds; the default is checked.
-    expect(await screen.findByRole("radio", { name: "Standard · 5 working days" })).toBeChecked();
-    expect(screen.getByRole("radio", { name: "Express · 2 working days" })).not.toBeChecked();
+    // Luna's plan offers two speeds; the default is picked.
+    const speed = await screen.findByRole("combobox", { name: "Speed" });
+    await waitFor(() => expect(speed).toHaveValue("standard"));
+    expect(within(speed).getByRole("option", { name: "Standard · 5 working days" })).toBeInTheDocument();
+    expect(within(speed).getByRole("option", { name: "Express · 2 working days" })).toBeInTheDocument();
+  });
+
+  it("picks the speed from a select", async () => {
+    renderAs(ORDER_TAKER, <Harness customerId={LUNA_ID} />);
+    await pickProduct("Gift set");
+    const speed = await screen.findByRole("combobox", { name: "Speed" });
+    await waitFor(() => expect(speed).toHaveValue("standard"));
+    await userEvent.selectOptions(speed, "Express · 2 working days");
+    expect(screen.getByTestId("values")).toHaveTextContent('"speed":"express"');
+  });
+
+  it("steps the quantity with the buttons and arrow keys", async () => {
+    renderAs(ORDER_TAKER, <Harness customerId={LUNA_ID} />);
+    await pickProduct("Gift set");
+    const quantity = await screen.findByRole("textbox", { name: "Quantity" });
+    expect(quantity).toHaveValue("1");
+
+    await userEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(quantity).toHaveValue("2");
+    await userEvent.click(quantity);
+    await userEvent.keyboard("{ArrowUp}");
+    expect(quantity).toHaveValue("3");
+    await userEvent.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}");
+    // It stops at 1, by key and by button.
+    expect(quantity).toHaveValue("1");
+    await userEvent.click(screen.getByRole("button", { name: "Less" }));
+    expect(quantity).toHaveValue("1");
+    expect(quantity).toHaveAttribute("aria-invalid", "false");
+  });
+
+  it("shows the material as tiles", async () => {
+    // erp-api's seed keys its material group `material`; the fake's groups are `metal` and `print_material`.
+    const values = [
+      ["resin", "Standard resin"],
+      ["nylon", "Nylon PA12"],
+      ["pla", "PLA"],
+    ].map(([key, name]) => ({ id: `value-${key}`, group_id: "group-material", key: key!, name: name!, material_id: null }));
+    const group: OptionGroup = { id: "group-material", key: "material", name: "Material", values };
+    const product: CatalogProduct = {
+      id: "product-bracket",
+      category_id: "category-printed",
+      key: "bracket",
+      name: "Bracket",
+      kind: "ready_made",
+      status: "active",
+      material_id: null,
+      sizing: { mode: "none" },
+      design_file: null,
+      options: [{ group_id: group.id, required: true, default_value_id: "value-resin", value_ids: values.map((value) => value.id) }],
+      published: true,
+      customer_id: null,
+      parts: [],
+    };
+    server.use(
+      http.get(`${FAKE_API_URL}/catalog/option-groups`, () => HttpResponse.json({ data: [group] })),
+      http.get(`${FAKE_API_URL}/catalog/products`, () => HttpResponse.json({ data: [product], next_cursor: null })),
+    );
+
+    renderAs(ORDER_TAKER, <Harness customerId={LUNA_ID} />);
+    await pickProduct("Bracket");
+
+    const material = await screen.findByRole("radiogroup", { name: "Material" });
+    expect(material).toHaveClass("sm:grid-cols-3");
+    const tiles = within(material).getAllByRole("radio");
+    expect(tiles.map((tile) => tile.closest("label")?.textContent)).toEqual(["Standard resin", "Nylon PA12", "PLA"]);
+    expect(within(material).getByRole("radio", { name: "Standard resin" })).toBeChecked();
+
+    await userEvent.click(within(material).getByRole("radio", { name: "Nylon PA12" }));
+    expect(within(material).getByRole("radio", { name: "Nylon PA12" })).toBeChecked();
+    // The checked tile says so by its border too, not by colour alone: the radio dot is there as well.
+    expect(within(material).getByRole("radio", { name: "Nylon PA12" }).closest("label")).toHaveClass("border-ink");
+    expect(screen.getByTestId("values")).toHaveTextContent('"options":{"material":"nylon"}');
   });
 
   it("drops the last product's options when the product changes", async () => {
@@ -151,14 +225,14 @@ describe("ProductSection", () => {
     expect(within(screen.getByRole("combobox", { name: "wide_default" })).queryByRole("option", { name: "None" })).not.toBeInTheDocument();
   });
 
-  it("hides Delivery with one speed", async () => {
+  it("hides Speed with one speed", async () => {
     renderAs(ORDER_TAKER, <Harness customerId={MIRA_ID} />);
     await pickProduct("Nameplate");
 
     // Mira's plan offers only Standard: nothing to choose, but the form holds it.
     await waitFor(() => expect(screen.getByTestId("values")).toHaveTextContent('"speed":"standard"'));
     expect(screen.getByRole("radiogroup", { name: "Material" })).toBeInTheDocument();
-    expect(screen.queryByRole("radiogroup", { name: "Delivery speed" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Speed" })).not.toBeInTheDocument();
   });
 
   it("moves focus to the product select once it is ready", async () => {

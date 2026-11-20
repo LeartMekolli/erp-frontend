@@ -46,7 +46,11 @@ export const COPY = {
     sizeRange: (min: string, max: string) => `Enter a size between ${min} and ${max}.`,
     quantity: "Quantity",
     quantityError: "Enter a whole number from 1 to 1,000,000.",
-    speed: "Delivery speed",
+    less: "Less",
+    more: "More",
+    speed: "Speed",
+    /** Shown only while no speed is set: the plan has no default and more than one to pick from. */
+    speedPlaceholder: "Pick a speed",
     speedsLoading: "Loading the delivery speeds…",
     speedsFailed: "Couldn't load the delivery speeds.",
     workingDays: (days: number) => `${days} working ${days === 1 ? "day" : "days"}`,

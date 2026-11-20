@@ -28,6 +28,9 @@ export function ModelCard({ model, product, reasons = [] }: { model: Model; prod
   const { held, upload, canUpload, choose } = model;
   const { register } = useFormContext<NewOrderValues>();
   const unitLabelId = useId();
+  const reasonsId = useId();
+  // erp-api's reasons for refusing the model are read with the file input, which is marked invalid.
+  const refused = reasons.length > 0 ? { "aria-invalid": true, "aria-describedby": reasonsId } : {};
   const unit = register("declaredUnit");
   const unused = product !== undefined && product.kind !== "custom";
 
@@ -39,7 +42,7 @@ export function ModelCard({ model, product, reasons = [] }: { model: Model; prod
     return (
       <Panel title={COPY.model.label}>
         <p className="text-sm text-ink">{COPY.model.noAccess}</p>
-        <Reasons reasons={reasons} />
+        <Reasons id={reasonsId} reasons={reasons} />
       </Panel>
     );
   }
@@ -60,6 +63,7 @@ export function ModelCard({ model, product, reasons = [] }: { model: Model; prod
           <input
             type="file"
             aria-label={COPY.model.upload}
+            {...refused}
             className="sr-only"
             onChange={(event) => {
               const file = event.target.files?.[0];
@@ -69,7 +73,7 @@ export function ModelCard({ model, product, reasons = [] }: { model: Model; prod
           />
         </label>
         {unused && <p className="text-sm text-ink-2">{COPY.model.notUsed}</p>}
-        <Reasons reasons={reasons} />
+        <Reasons id={reasonsId} reasons={reasons} />
       </Panel>
     );
   }
@@ -90,6 +94,7 @@ export function ModelCard({ model, product, reasons = [] }: { model: Model; prod
           {COPY.model.replace}
           <input
             type="file"
+            {...refused}
             className="sr-only"
             onChange={(event) => {
               const file = event.target.files?.[0];
@@ -148,16 +153,16 @@ export function ModelCard({ model, product, reasons = [] }: { model: Model; prod
           ))}
         </dl>
       )}
-      <Reasons reasons={reasons} />
+      <Reasons id={reasonsId} reasons={reasons} />
     </Panel>
   );
 }
 
-/** erp-api's reasons for refusing the model, in words. */
-function Reasons({ reasons }: { reasons: readonly string[] }) {
+/** erp-api's reasons for refusing the model, in words, in the red that's readable as text. */
+function Reasons({ id, reasons }: { id: string; reasons: readonly string[] }) {
   if (reasons.length === 0) return null;
   return (
-    <ul className="flex flex-col gap-0.5 text-caption text-late">
+    <ul id={id} className="flex flex-col gap-0.5 text-caption text-late-ink">
       {reasons.map((reason, index) => (
         <li key={index}>{reason}</li>
       ))}

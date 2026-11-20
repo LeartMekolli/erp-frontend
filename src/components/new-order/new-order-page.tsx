@@ -14,6 +14,7 @@ import { canPlaceOrders } from "@/lib/auth/permissions";
 import { EMPTY_VALUES, bodyKey, type NewOrderValues } from "@/lib/new-order/form";
 import { useCustomerProducts } from "@/lib/new-order/queries";
 import { useMediaQuery } from "@/lib/use-media-query";
+import { cn } from "@/lib/utils";
 
 import { COPY } from "./copy";
 import { CustomerSection } from "./customer-section";
@@ -144,9 +145,13 @@ function NewOrder() {
             <fieldset disabled={placing.pending} className="m-0 flex min-w-0 flex-col gap-3.5 border-0 p-0">
               <ModelCard model={model} product={product} reasons={price.fieldRefusals.get("model")} />
               <Panel>
-                {/* Another customer's prices are their own: the last one's price, shown or stale, goes. */}
-                <CustomerSection onCustomerChange={() => price.clear()} />
-                {customerId !== "" && <ProductSection refusals={price.fieldRefusals} />}
+                {/* Customer and product side by side from `sm:`, the product's other fields under both. The
+                    customer stays the grid's first child, so it keeps its state as the product comes and goes. */}
+                <div className={cn("grid items-start gap-3.5", customerId !== "" && "sm:grid-cols-[1.4fr_1fr]")}>
+                  {/* Another customer's prices are their own: the last one's price, shown or stale, goes. */}
+                  <CustomerSection onCustomerChange={() => price.clear()} />
+                  {customerId !== "" && <ProductSection refusals={price.fieldRefusals} />}
+                </div>
               </Panel>
             </fieldset>
             {customerId !== "" && (

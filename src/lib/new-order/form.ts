@@ -15,7 +15,8 @@ import { canonical } from "@/lib/query/use-api-mutation";
 /** Up to this many values an option shows as radios; above it, a select. */
 export const RADIO_LIMIT = 6;
 
-const MAX_QUANTITY = 1_000_000;
+/** The most pieces one line takes. */
+export const MAX_QUANTITY = 1_000_000;
 
 /** The longest note erp-api takes. */
 export const MAX_NOTE = 2000;

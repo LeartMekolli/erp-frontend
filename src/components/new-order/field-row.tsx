@@ -20,6 +20,7 @@ export function FieldRow({
   hint,
   problems = [],
   invalid = false,
+  groupClassName = "flex flex-wrap gap-2",
   children,
 }: {
   label: string;
@@ -28,6 +29,8 @@ export function FieldRow({
   problems?: readonly string[];
   /** Marks the field invalid when the reasons are shown under another field. */
   invalid?: boolean;
+  /** How the radio group lays out its radios: pills that wrap, unless given (tiles in a grid). */
+  groupClassName?: string;
   children: ReactNode | ((props: ControlProps) => ReactNode);
 }) {
   const id = useId();
@@ -53,12 +56,12 @@ export function FieldRow({
         {typeof children === "function" ? (
           children(props)
         ) : (
-          <div role="radiogroup" aria-labelledby={labelId} aria-invalid={props["aria-invalid"]} aria-describedby={props["aria-describedby"]} className="flex flex-wrap gap-2">
+          <div role="radiogroup" aria-labelledby={labelId} aria-invalid={props["aria-invalid"]} aria-describedby={props["aria-describedby"]} className={groupClassName}>
             {children}
           </div>
         )}
         {problemsId && (
-          <ul id={problemsId} className="flex flex-col gap-0.5 text-caption text-late">
+          <ul id={problemsId} className="flex flex-col gap-0.5 text-caption text-late-ink">
             {problems.map((problem, index) => (
               <li key={index}>{problem}</li>
             ))}
