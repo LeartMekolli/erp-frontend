@@ -59,7 +59,7 @@ function shownPrice(quote: QuoteSummary): Price {
 }
 
 const NO_MODEL = { held: false, ready: false };
-const NO_FILE = { held: null, upload: { measures: [] } };
+const NO_FILE = { held: null, measures: [] };
 
 /** The Delivery panel beside the ticket, whose main button places the order and shows why it can't. */
 function Harness({ customerId, quote, onPlaced }: { customerId: string; quote: QuoteSummary; onPlaced: (id: string) => void }) {

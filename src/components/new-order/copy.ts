@@ -17,9 +17,17 @@ export const COPY = {
     loadFailed: "Couldn't load the customer.",
     noMatch: (text: string) => `No customer matches “${text}”.`,
     disabled: (name: string) => `${name} is disabled. Pick another customer.`,
-    paysFirst: "Pays first",
     noGroup: "No group",
-    plan: (name: string) => `Plan: ${name}`,
+    change: "Change",
+    /** Change's accessible name: it starts with the visible word, and isn't confused with the address's Change. */
+    changeLabel: "Change the customer",
+  },
+  /** Asked before another customer clears what was entered for this one. */
+  changeCustomer: {
+    title: "Change the customer?",
+    text: "The product, options, price and delivery will be cleared. The model stays and uploads again for the new customer.",
+    keep: "Keep",
+    change: "Change customer",
   },
   product: {
     label: "Product",

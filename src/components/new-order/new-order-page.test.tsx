@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- the plain links here stand in for any same-site link,
    which is what the leave guard listens for; next/link would route through the mocked router instead. */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -66,6 +66,14 @@ async function pickCustomer(search: string, name: string) {
   await userEvent.clear(box);
   await userEvent.type(box, search);
   await userEvent.click(await screen.findByRole("option", { name }));
+}
+
+/** Changes the picked customer through the chip's Change, saying yes when asked to clear the order. */
+async function changeCustomer(search: string, name: string) {
+  await userEvent.click(screen.getByRole("button", { name: "Change the customer" }));
+  await pickCustomer(search, name);
+  await userEvent.click(await screen.findByRole("button", { name: "Change customer" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 }
 
 async function chooseProduct(name: string) {
@@ -177,7 +185,7 @@ describe("NewOrderPage", () => {
     await userEvent.type(await screen.findByRole("combobox", { name: "Customer" }), "Luna");
     await userEvent.click(await screen.findByRole("option", { name: "Luna Jewels" }));
     // The customer is set once loaded, which also opens the product select.
-    await screen.findByText("Group: Trade · Pays first · Plan: Free");
+    await screen.findByText("Trade · Free");
 
     // Only the link's click counts; picking the customer clicked too.
     reached = [];
@@ -189,7 +197,7 @@ describe("NewOrderPage", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(navigation.push).not.toHaveBeenCalled();
     expect(screen.getByRole("heading", { level: 1, name: "New order" })).toBeInTheDocument();
-    expect(screen.getByText("Group: Trade · Pays first · Plan: Free")).toBeInTheDocument();
+    expect(screen.getByText("Trade · Free")).toBeInTheDocument();
   });
 
   it(
@@ -271,8 +279,8 @@ describe("NewOrderPage", () => {
       }),
     );
     await readyToPlace();
-    const customer = screen.getByRole("combobox", { name: "Customer" });
-    const customerText = (customer as HTMLInputElement).value;
+    // Picked, the customer is a chip whose one control is Change.
+    const customer = screen.getByRole("button", { name: "Change the customer" });
     const quantity = screen.getByRole("textbox", { name: "Quantity" });
     const note = screen.getByRole("textbox", { name: "Note" });
     await userEvent.type(note, "Leave it at reception.");
@@ -300,7 +308,7 @@ describe("NewOrderPage", () => {
     await waitFor(() => expect(quantity).toBeEnabled());
     expect(customer).toBeEnabled();
     expect(note).toBeEnabled();
-    expect(customer).toHaveValue(customerText);
+    expect(within(screen.getByRole("group", { name: "Customer" })).getByText("Luna Jewels")).toBeInTheDocument();
     expect(quantity).toHaveValue("1");
     expect(note).toHaveValue("Leave it at reception.");
     expect(screen.getByRole("radio", { name: "Courier · €12.00" })).toBeChecked();
@@ -370,11 +378,16 @@ describe("NewOrderPage", () => {
       expect(lunaVersion).toBeTruthy();
       const switchedAt = requests.length;
 
-      await pickCustomer("Mira", "Mira Studio");
-      expect(await screen.findByText("No group · Pays later, 30 days · Plan: Starter")).toBeInTheDocument();
-      expect(await screen.findByRole("combobox", { name: "Product" })).toHaveValue("");
-      // Luna's price may still show struck through as Get new price until the customer change clears it.
-      expect(screen.getByRole("button", { name: /^Get (new )?price$/ })).toHaveAttribute("aria-disabled", "true");
+      await changeCustomer("Mira", "Mira Studio");
+      expect(await screen.findByText("No group · Starter")).toBeInTheDocument();
+      const product = await screen.findByRole("combobox", { name: "Product" });
+      expect(product).toHaveValue("");
+      // Focus comes back to the product select for the new customer.
+      await waitFor(() => expect(product).toHaveFocus());
+      // Luna's price is gone, not kept struck through: Mira's order asks for its first price.
+      expect(screen.getByRole("button", { name: "Get price" })).toHaveAttribute("aria-disabled", "true");
+      expect(screen.queryByText("Changed: get a new price")).not.toBeInTheDocument();
+      expect(screen.getByText("No price yet")).toBeInTheDocument();
       expect(screen.queryByText("Unit price")).not.toBeInTheDocument();
 
       // The same product again starts with no size; the model is held and was uploaded again for Mira,
@@ -383,7 +396,7 @@ describe("NewOrderPage", () => {
       expect(await screen.findByRole("textbox", { name: "Size" })).toHaveValue("");
       // Measuring takes a few polls, a second apart at first.
       expect(await screen.findByText("Ready", {}, { timeout: 4_000 })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /^Get (new )?price$/ })).toHaveAttribute("aria-disabled", "true");
+      expect(screen.getByRole("button", { name: "Get price" })).toHaveAttribute("aria-disabled", "true");
 
       // Priced for Mira, Delivery starts empty: her (missing) saved address, no method, no note.
       await chooseProduct("Gift set");
@@ -436,8 +449,8 @@ describe("NewOrderPage", () => {
       // Measuring takes a few polls, a second apart at first: the upload is still running here.
       expect(screen.queryByText("Ready")).not.toBeInTheDocument();
 
-      await pickCustomer("Mira", "Mira Studio");
-      expect(await screen.findByText("No group · Pays later, 30 days · Plan: Starter")).toBeInTheDocument();
+      await changeCustomer("Mira", "Mira Studio");
+      expect(await screen.findByText("No group · Starter")).toBeInTheDocument();
       // The product resets with the customer; the model is held and goes up again for Mira.
       await waitFor(() => expect(screen.getByRole("combobox", { name: "Product" })).toHaveValue(""));
       const switchedAt = requests.length;

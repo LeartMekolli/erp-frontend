@@ -53,6 +53,7 @@ function modelIn(phase: UploadPhase, over: Partial<CardModel> = {}): CardModel {
     held: phase === "idle" ? null : ring(),
     upload: stub(phase),
     readyVersionId: phase === "done" ? "version-1" : undefined,
+    measures: phase === "done" ? MEASURES : [],
     waitingForCustomer: false,
     canUpload: true,
     choose: vi.fn(),

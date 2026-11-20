@@ -8,6 +8,8 @@ import { useUpload } from "@/lib/upload/use-upload";
 
 export type ModelUpload = ReturnType<typeof useUpload>;
 
+const NO_MEASURES: ModelUpload["measures"] = [];
+
 /**
  * The order's 3D model: it holds the dropped file and uploads it once there is a customer, since a
  * design belongs to one. Another customer or another unit uploads it again (both are baked into the
@@ -45,11 +47,15 @@ export function useModel({ customerId, declaredUnit }: { customerId: string; dec
 
   const forCurrent = upload.startedFor?.customerId === (customerId || undefined) && upload.startedFor?.declaredUnit === declaredUnit;
 
+  const current = upload.phase === "done" && forCurrent;
+
   return {
     held,
-    readyVersionId: upload.phase === "done" && forCurrent ? upload.versionId : undefined,
-    /** The upload failed or its link ran out: the file is held but there is nothing to quote with. */
-    failed: upload.phase === "failed" || upload.phase === "expired",
+    readyVersionId: current ? upload.versionId : undefined,
+    /** What the server measured, gated like `readyVersionId`: never the last customer's or unit's run. */
+    measures: current ? upload.measures : NO_MEASURES,
+    /** The upload failed or its link ran out: the file is held but there is nothing to quote with. Only for the current run. */
+    failed: forCurrent && (upload.phase === "failed" || upload.phase === "expired"),
     choose: (file: File) => setHeld(file),
     remove: () => setHeld(null),
     upload,

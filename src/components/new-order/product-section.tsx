@@ -32,12 +32,12 @@ const NO_REASONS: readonly string[] = [];
 /**
  * The product the customer can see, its options, size, quantity and delivery speed, mounted once a
  * customer is picked. Picking a product starts its options from the defaults and clears the size.
- * When the product select is ready, focus moves to it once.
+ * When the product select is ready, focus moves to it once for each customer.
  */
 export function ProductSection({ refusals }: { refusals: Refusals }) {
   const { control, getValues, setValue, register } = useFormContext<NewOrderValues>();
   const productSelect = useRef<HTMLSelectElement>(null);
-  const focused = useRef(false);
+  const focusedFor = useRef<string | null>(null);
   const customerId = useWatch({ control, name: "customerId" });
   const productId = useWatch({ control, name: "productId" });
   const options = useWatch({ control, name: "options" });
@@ -57,13 +57,14 @@ export function ProductSection({ refusals }: { refusals: Refusals }) {
     setValue("speed", pick?.key ?? "");
   }, [speedList, getValues, setValue]);
 
-  // Once a customer's products and the option groups have loaded, the select is the next thing to fill in.
+  // Once a customer's products and the option groups have loaded, the select is the next thing to fill in:
+  // once for each customer, so another one picked brings focus back even if this section stayed mounted.
   const selectReady = (products.data?.length ?? 0) > 0 && groups.data !== undefined;
   useEffect(() => {
-    if (!selectReady || focused.current) return;
-    focused.current = true;
+    if (!selectReady || focusedFor.current === customerId) return;
+    focusedFor.current = customerId;
     productSelect.current?.focus();
-  }, [selectReady]);
+  }, [selectReady, customerId]);
 
   const product = products.data?.find((p) => p.id === productId);
   const fields = product && groups.data ? optionFields(product, groups.data) : [];

@@ -46,7 +46,7 @@ const CAST_RING: Partial<NewOrderValues> = {
 /** A Gift set for Luna: no options, no size, no model. €24.00 each. */
 const GIFT_SET: Partial<NewOrderValues> = { customerId: LUNA_ID, productId: GIFT_SET_ID, quantity: "1", speed: "standard" };
 
-const NO_FILE = { held: null, upload: { measures: [] } };
+const NO_FILE = { held: null, measures: [] };
 
 /** Freezes the clock and starts the fake over on it, so the fake's hold and AMI's clock agree. */
 function freezeAt(now: number, toFake: ("Date" | "setInterval" | "clearInterval")[] = ["Date"]) {

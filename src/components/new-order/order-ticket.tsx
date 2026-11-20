@@ -28,7 +28,8 @@ const EXPIRY_TICK_MS = 30_000;
 /** What the ticket needs of the held model: its file and, once measured, what the server measured. */
 export interface TicketModel {
   held: File | null;
-  upload: { measures: readonly FileMeasure[] };
+  /** `useModel`'s measures: empty until the current customer's and unit's run is measured. */
+  measures: readonly FileMeasure[];
 }
 
 /**
@@ -193,7 +194,7 @@ function TicketWhat({ model }: { model: TicketModel }) {
   const speeds = useDeliverySpeeds(customerId || null);
   const product = products.data?.find((candidate) => candidate.id === productId);
   const line = product && groups.data ? ticketLine({ options, size, speed }, product, groups.data, speeds.data) : "";
-  const volume = modelMeasures(model.upload.measures).volume;
+  const volume = modelMeasures(model.measures).volume;
 
   const who = customer?.status === "active" && customer.id === customerId ? customer : null;
   if (who === null && !product && model.held === null) return null;

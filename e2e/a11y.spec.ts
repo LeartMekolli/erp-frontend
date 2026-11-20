@@ -70,7 +70,7 @@ test("new order: accessible and fits the screen", async ({ page }) => {
 
   // Luna picked: the product fields and the Delivery panel are open.
   await pickCustomer(page, "Luna Jewels");
-  await expect(page.getByText(/^Group: Trade/)).toBeVisible();
+  await expect(page.getByText(/^Trade · /)).toBeVisible();
   await expectAccessibleAndFits(page);
 
   // Priced and shipping chosen: the price shown, with Place order's bar.

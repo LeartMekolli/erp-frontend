@@ -144,7 +144,8 @@ function NewOrder() {
             <fieldset disabled={placing.pending} className="m-0 flex min-w-0 flex-col gap-3.5 border-0 p-0">
               <ModelCard model={model} product={product} reasons={price.fieldRefusals.get("model")} />
               <Panel>
-                <CustomerSection />
+                {/* Another customer's prices are their own: the last one's price, shown or stale, goes. */}
+                <CustomerSection onCustomerChange={() => price.clear()} />
                 {customerId !== "" && <ProductSection refusals={price.fieldRefusals} />}
               </Panel>
             </fieldset>

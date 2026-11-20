@@ -16,7 +16,7 @@ import type { useModel } from "./use-model";
 
 const UNITS = ["mm", "cm", "m", "in"] as const;
 
-type Model = Pick<ReturnType<typeof useModel>, "held" | "upload" | "readyVersionId" | "waitingForCustomer" | "canUpload" | "choose" | "remove">;
+type Model = Pick<ReturnType<typeof useModel>, "held" | "upload" | "readyVersionId" | "measures" | "waitingForCustomer" | "canUpload" | "choose" | "remove">;
 
 /**
  * The Model panel: the 3D model of the order. A drop zone until a file is held (any product: the file is
@@ -74,7 +74,7 @@ export function ModelCard({ model, product, reasons = [] }: { model: Model; prod
     );
   }
 
-  const measures = modelMeasures(model.readyVersionId === undefined ? [] : upload.measures);
+  const measures = modelMeasures(model.measures);
   const shown = [
     { key: "volume", label: COPY.model.measures.volume, value: measures.volume },
     { key: "size", label: COPY.model.measures.size, value: measures.size },
