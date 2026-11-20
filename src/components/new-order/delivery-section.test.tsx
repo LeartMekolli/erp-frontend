@@ -130,22 +130,28 @@ describe("DeliverySection", () => {
     const quote = giftSetQuote(LUNA_ID);
     const onPlaced = renderDelivery(LUNA_ID, quote);
 
-    const address = await screen.findByRole("group", { name: "Address" });
-    expect(await within(address).findByText("Luna Jewels, 12 rue des Orfèvres, 69002 Lyon, FR")).toBeInTheDocument();
-    expect(within(address).getByText("(saved)")).toBeInTheDocument();
+    // The saved address on two lines, its label saying it's the saved one.
+    const address = await screen.findByRole("group", { name: "Ship to (saved address)" });
+    expect(await within(address).findByText("Luna Jewels")).toBeInTheDocument();
+    expect(within(address).getByText("12 rue des Orfèvres, 69002 Lyon, FR")).toBeInTheDocument();
+    // Change address sits in the Delivery panel's title bar.
+    const panel = screen.getByRole("region", { name: "Delivery" });
+    expect(within(panel).getByRole("button", { name: "Change address" })).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Name" })).not.toBeInTheDocument();
     // Shipping is asked for the saved address, which erp-api reads itself.
     await screen.findByRole("radio", { name: "Courier · €12.00" });
     expect(await sentTo("/orders/shipping-rates")).toEqual([{ customer_id: LUNA_ID }]);
 
     // Change opens the form for this order, starting from the saved address; staff can go back.
-    await userEvent.click(screen.getByRole("button", { name: "Change" }));
+    await userEvent.click(screen.getByRole("button", { name: "Change address" }));
     const name = screen.getByRole("textbox", { name: "Name" });
     expect(name).toHaveValue("Luna Jewels");
     expect(name).toHaveFocus();
+    expect(screen.getByRole("group", { name: "Ship to" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Change address" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Use the saved address" }));
     expect(screen.queryByRole("textbox", { name: "Name" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Change" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Change address" })).toHaveFocus();
 
     await userEvent.click(await screen.findByRole("radio", { name: "Courier · €12.00" }));
     const place = screen.getByRole("button", { name: "Place order" });
@@ -164,7 +170,7 @@ describe("DeliverySection", () => {
 
     // No saved address: the form is open from the start, with no way back to one.
     expect(await screen.findByRole("textbox", { name: "Name" })).toHaveValue("");
-    expect(screen.queryByRole("button", { name: "Change" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Change address" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Use the saved address" })).not.toBeInTheDocument();
     expect(screen.getByText("Fill in the address to see the shipping methods.")).toBeInTheDocument();
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
@@ -209,6 +215,18 @@ describe("DeliverySection", () => {
       { customer_id: MIRA_ID, address: MIRA_ADDRESS },
       { customer_id: MIRA_ID, address: { ...MIRA_ADDRESS, phone: "0123456" } },
     ]);
+  });
+
+  it("shows the note count only once typing", async () => {
+    renderDelivery(LUNA_ID, giftSetQuote(LUNA_ID));
+    const note = await screen.findByRole("textbox", { name: "Note" });
+    expect(note).toHaveAccessibleDescription("");
+    expect(screen.queryByText(/\/ 2,000$/)).not.toBeInTheDocument();
+
+    await userEvent.type(note, "Hi");
+    expect(note).toHaveAccessibleDescription("2 / 2,000");
+    await userEvent.clear(note);
+    expect(note).toHaveAccessibleDescription("");
   });
 
   it("greys an unavailable method with its reason", async () => {
@@ -274,7 +292,7 @@ describe("DeliverySection", () => {
     expect(place).toHaveAttribute("aria-disabled", "false");
     expect(place).toHaveAccessibleDescription("");
 
-    await userEvent.click(screen.getByRole("button", { name: "Change" }));
+    await userEvent.click(screen.getByRole("button", { name: "Change address" }));
     // Once the new address's methods are listed, Courier is not among them.
     expect(await screen.findByText("Pick a shipping method.")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Collect · €0.00" })).toBeInTheDocument();

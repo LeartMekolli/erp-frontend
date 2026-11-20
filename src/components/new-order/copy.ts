@@ -92,9 +92,9 @@ export const COPY = {
   },
   delivery: {
     title: "Delivery",
-    address: "Address",
-    saved: "(saved)",
-    change: "Change",
+    shipTo: "Ship to",
+    shipToSaved: "Ship to (saved address)",
+    change: "Change address",
     useSaved: "Use the saved address",
     addressLoading: "Loading the saved address…",
     addressFailed: "Couldn't load the saved address.",

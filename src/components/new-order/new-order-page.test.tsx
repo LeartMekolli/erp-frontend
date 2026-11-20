@@ -127,6 +127,30 @@ describe("NewOrderPage", () => {
     expect(titles()).toEqual(["Model", "Delivery"]);
   });
 
+  it("shows delivery before any price", async () => {
+    document.removeEventListener("click", recordClick);
+    renderAs(ORDER_TAKER, <NewOrderPage />);
+    await pickCustomer("Luna", "Luna Jewels");
+    // No product yet, so no price: the address and the methods are there already.
+    const delivery = await screen.findByRole("region", { name: "Delivery" });
+    expect(await within(delivery).findByText("12 rue des Orfèvres, 69002 Lyon, FR")).toBeInTheDocument();
+    await userEvent.click(await within(delivery).findByRole("radio", { name: "Courier · €12.00" }));
+    expect(screen.getByText("No price yet")).toBeInTheDocument();
+  });
+
+  it("keeps delivery open after a change", async () => {
+    await readyToPlace();
+    await userEvent.type(screen.getByRole("textbox", { name: "Note" }), "Leave it at reception.");
+
+    // Another quantity makes the price stale; what was entered in Delivery stays, in view.
+    await userEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(await screen.findByRole("button", { name: "Get new price" })).toBeInTheDocument();
+    const delivery = screen.getByRole("region", { name: "Delivery" });
+    expect(within(delivery).getByRole("radio", { name: "Courier · €12.00" })).toBeChecked();
+    expect(within(delivery).getByRole("textbox", { name: "Note" })).toHaveValue("Leave it at reception.");
+    expect(within(delivery).getByRole("group", { name: "Ship to (saved address)" })).toBeInTheDocument();
+  });
+
   it("has no section numbers", async () => {
     renderAs(ORDER_TAKER, <NewOrderPage />);
     await screen.findByRole("heading", { level: 1, name: "New order" });
@@ -295,7 +319,7 @@ describe("NewOrderPage", () => {
     expect(note).toBeDisabled();
     expect(screen.getByRole("combobox", { name: "Product" })).toBeDisabled();
     expect(screen.getByRole("radio", { name: "Courier · €12.00" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Change" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Change address" })).toBeDisabled();
     // Place keeps focus and says nothing more; Cancel stays usable.
     expect(place).toHaveFocus();
     expect(place).toHaveTextContent("Placing…");
@@ -366,7 +390,7 @@ describe("NewOrderPage", () => {
       expect(await screen.findByText("Ready", {}, { timeout: 4_000 })).toBeInTheDocument();
       await getPrice();
 
-      await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Change address" }));
       const name = screen.getByRole("textbox", { name: "Name" });
       await userEvent.clear(name);
       await userEvent.type(name, "Luna Jewels Atelier");

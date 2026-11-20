@@ -154,11 +154,8 @@ function NewOrder() {
                 </div>
               </Panel>
             </fieldset>
-            {customerId !== "" && (
-              <Panel title={COPY.delivery.title}>
-                <DeliverySection checkout={checkout} placing={placing} />
-              </Panel>
-            )}
+            {/* Open from the moment a customer is picked; a price coming or going never closes it. */}
+            {customerId !== "" && <DeliverySection checkout={checkout} placing={placing} />}
           </div>
 
           {/* One ticket in the DOM at a time: beside the work when wide, a bar and a sheet below that. */}
