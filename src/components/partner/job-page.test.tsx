@@ -112,6 +112,7 @@ describe("JobPage", () => {
   it("fills in once accepted", async () => {
     renderPage();
     await userEvent.click(await screen.findByRole("button", { name: "Accept" }));
+    await userEvent.click(within(await screen.findByRole("dialog", { name: "Take Ring · Silver 925?" })).getByRole("button", { name: "Accept job" }));
 
     expect(await screen.findByText("0 of 10 done")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Pieces" })).toBeInTheDocument();

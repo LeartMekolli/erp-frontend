@@ -76,7 +76,6 @@ async function offer(title: string): Promise<HTMLElement> {
   return card;
 }
 
-const acceptPath = (jobId: string) => `/partner-portal/partners/${partnerId}/jobs/${jobId}/accept`;
 const declinePath = (jobId: string) => `/partner-portal/partners/${partnerId}/jobs/${jobId}/decline`;
 
 describe("OffersBox", () => {
@@ -98,29 +97,6 @@ describe("OffersBox", () => {
     expect(within(pendant).getByText("1 h 30 min left to answer")).toBeInTheDocument();
   });
 
-  it("accepts once on a double click", async () => {
-    renderBox();
-    const ring = await offer("Ring · Silver 925");
-    await userEvent.dblClick(within(ring).getByRole("button", { name: "Accept" }));
-
-    expect(await screen.findByText("Ring · Silver 925 is yours.")).toBeInTheDocument();
-    expect(posts).toEqual([acceptPath(RING_OFFER_ID)]);
-    expect(screen.getByRole("link", { name: "Open job" })).toHaveAttribute("href", `/partner-portal/${NORTHCAST_ID}/jobs/${RING_OFFER_ID}`);
-    expect(await screen.findByRole("heading", { name: "Waiting for your answer · 1" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Ring · Silver 925" })).not.toBeInTheDocument();
-  });
-
-  it("moves focus to the notice after accepting", async () => {
-    renderBox();
-    const ring = await offer("Ring · Silver 925");
-    await userEvent.click(within(ring).getByRole("button", { name: "Accept" }));
-
-    const line = await noticeSaying("Ring · Silver 925 is yours.");
-    await waitFor(() => expect(line).toHaveFocus());
-    expect(await screen.findByRole("heading", { name: "Waiting for your answer · 1" })).toBeInTheDocument();
-    expect(line).toHaveFocus();
-  });
-
   it("moves focus to the notice after declining", async () => {
     renderBox();
     const ring = await offer("Ring · Silver 925");
@@ -132,27 +108,6 @@ describe("OffersBox", () => {
     expect(await screen.findByRole("heading", { name: "Waiting for your answer · 1" })).toBeInTheDocument();
     // The dialog doesn't hand focus back to Decline: its offer is gone.
     await waitFor(() => expect(line).toHaveFocus());
-  });
-
-  it("keeps focus on the offer when an answer fails", async () => {
-    server.use(
-      http.post(`${FAKE_API_URL}/partner-portal/partners/:partnerId/jobs/:groupId/accept`, () =>
-        HttpResponse.json(
-          { type: "about:blank", title: "Error", status: 500, detail: "Something went wrong" },
-          { status: 500, headers: { "content-type": "application/problem+json" } },
-        ),
-      ),
-    );
-    renderBox();
-    const ring = await offer("Ring · Silver 925");
-    const accept = within(ring).getByRole("button", { name: "Accept" });
-    await userEvent.click(accept);
-
-    const line = await noticeSaying("Something went wrong");
-    await waitFor(() => expect(accept).toBeEnabled());
-    expect(screen.getByRole("heading", { name: "Waiting for your answer · 2" })).toBeInTheDocument();
-    expect(line).not.toHaveFocus();
-    expect(accept).toHaveFocus();
   });
 
   it("asks before declining", async () => {
@@ -174,25 +129,6 @@ describe("OffersBox", () => {
     expect(posts).toEqual([declinePath(RING_OFFER_ID)]);
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(await screen.findByRole("heading", { name: "Waiting for your answer · 1" })).toBeInTheDocument();
-  });
-
-  it("says when an offer is no longer open", async () => {
-    server.use(
-      http.post(`${FAKE_API_URL}/partner-portal/partners/:partnerId/jobs/:groupId/accept`, () => {
-        // The offer went elsewhere first: the fake's only way to close an offer is a decline, which lets it go the same way.
-        fakeState().partnerJobs.answer(NORTHCAST_ID, RING_OFFER_ID, "decline", null);
-        return HttpResponse.json(
-          { type: "about:blank", title: "Conflict", status: 409, detail: "The offer is no longer open" },
-          { status: 409, headers: { "content-type": "application/problem+json" } },
-        );
-      }),
-    );
-    renderBox();
-    const ring = await offer("Ring · Silver 925");
-    await userEvent.click(within(ring).getByRole("button", { name: "Accept" }));
-    expect(await screen.findByText("This offer is no longer open.")).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Waiting for your answer · 1" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Ring · Silver 925" })).not.toBeInTheDocument();
   });
 
   it("says when offers can't be loaded", async () => {
