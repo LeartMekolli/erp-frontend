@@ -20,7 +20,8 @@ import type { Photo } from "@/lib/production/shape";
 import { useApiMutation } from "@/lib/query/use-api-mutation";
 import { useCursorList, type Page } from "@/lib/query/use-cursor-list";
 
-const PAGE_SIZE = 20;
+/** Jobs a page. Past one page of offers, a count says `20+`, as only that many are known. */
+export const PAGE_SIZE = 20;
 const MOVES_PAGE = 25;
 const COMMENTS_PAGE = 50;
 
