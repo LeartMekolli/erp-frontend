@@ -149,6 +149,38 @@ describe("JobsTable", () => {
     expect(await row("Ring · Silver 925")).toBeInTheDocument();
   });
 
+  it("keeps an offer whose answer is on its way, and never says its time ran out", async () => {
+    freezeAt(NOW, ["Date", "setInterval", "clearInterval"]);
+    // Open the table a minute before the Pendant's deadline (90 min), so the fake's 15-minute sign-in still holds for the answer.
+    vi.setSystemTime(NOW + 89 * MINUTE);
+    // The answer waits here until let go; then the fake answers it as erp-api would.
+    let letGo = () => {};
+    const held = new Promise<void>((resolve) => (letGo = resolve));
+    server.use(
+      http.post(`${JOBS_URL}/:groupId/accept`, async () => {
+        await held;
+      }),
+    );
+    renderTable("offers");
+    const pendant = await row("Pendant · Gold 18k");
+
+    await userEvent.click(within(pendant).getByRole("button", { name: "Accept" }));
+    const dialog = await screen.findByRole("dialog", { name: "Take Pendant · Gold 18k?" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Accept job" }));
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Accept job" })).toBeDisabled());
+
+    // The deadline passes while the answer is sending: the offer and its dialog stay, and nothing is said.
+    act(() => vi.advanceTimersByTime(MINUTE + 15_000));
+    expect(screen.getByRole("dialog", { name: "Take Pendant · Gold 18k?" })).toBeInTheDocument();
+    expect(screen.queryByText("Time ran out on Pendant · Gold 18k.")).not.toBeInTheDocument();
+
+    // erp-api's answer is the one the partner reads, whichever it is.
+    act(() => letGo());
+    expect(await screen.findByText(/^(Pendant · Gold 18k is yours\.|This offer is no longer open\.)$/)).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(15_000));
+    expect(screen.queryByText("Time ran out on Pendant · Gold 18k.")).not.toBeInTheDocument();
+  });
+
   it("moves focus to the notice only when the run-out offer had it", async () => {
     freezeAt(NOW, ["Date", "setInterval", "clearInterval"]);
     renderTable("offers");

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { isApiProblem } from "@/lib/api/problem";
 import type { PartnerJobDetail } from "@/lib/api/schema-types";
 import { piecesText, timeLeft } from "@/lib/partner-jobs/labels";
-import { usePartnerJob } from "@/lib/partner-jobs/queries";
+import { useAnsweringOffers, usePartnerJob } from "@/lib/partner-jobs/queries";
 import { useNow } from "@/lib/use-now";
 
 import { JobBrief } from "./job-brief";
@@ -126,7 +126,10 @@ function Offer({
   onDeclined: () => void;
 }) {
   const now = useNow(TICK_MS);
-  const over = job.expires_at !== null && timeLeft(job.expires_at, now).over;
+  const { partnerId } = useWorkshop();
+  // An answer on its way decides what happened, even past the deadline: the answers and their dialog stay.
+  const answering = useAnsweringOffers(partnerId).has(job.id);
+  const over = job.expires_at !== null && timeLeft(job.expires_at, now).over && !answering;
   // The tick that last refetched, so each tick asks once.
   const refetched = useRef<number | null>(null);
 

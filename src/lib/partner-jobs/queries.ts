@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useQueryClient, type InfiniteData, type QueryClient } from "@tanstack/react-query";
+import { useMutationState, useQuery, useQueryClient, type InfiniteData, type QueryClient } from "@tanstack/react-query";
 
 import { partnerApi } from "@/lib/api/client";
 import { idempotencyHeader } from "@/lib/api/idempotency";
@@ -103,6 +103,20 @@ function moveToAccepted(client: QueryClient, partnerId: string, groupId: string)
   });
 }
 
+const answerKey = (partnerId: string) => ["partner-jobs", partnerId, "answer"] as const;
+
+/**
+ * The offers whose answer is on its way to erp-api. Their deadline may pass meanwhile, but erp-api's
+ * answer decides what happened, so they aren't let go as run out until it comes.
+ */
+export function useAnsweringOffers(partnerId: string): ReadonlySet<string> {
+  const ids = useMutationState({
+    filters: { mutationKey: answerKey(partnerId), status: "pending" },
+    select: (mutation) => (mutation.state.variables as { groupId: string } | undefined)?.groupId,
+  });
+  return new Set(ids.filter((id) => id !== undefined));
+}
+
 /** Accepts or declines an offer; every list and detail of the workshop's jobs fetches again. */
 export function useAnswerOffer(partnerId: string) {
   const client = useQueryClient();
@@ -117,6 +131,7 @@ export function useAnswerOffer(partnerId: string) {
       return data;
     },
     {
+      mutationKey: answerKey(partnerId),
       onSuccess: (_assignment, { groupId, answer }) => {
         if (answer === "accept") moveToAccepted(client, partnerId, groupId);
       },

@@ -11,7 +11,7 @@ import type { PartnerJob } from "@/lib/api/schema-types";
 import { useFormat } from "@/lib/format/use-format";
 import { workspaceToday } from "@/lib/orders/labels";
 import { jobTitle, timeLeft } from "@/lib/partner-jobs/labels";
-import { usePartnerJobs } from "@/lib/partner-jobs/queries";
+import { useAnsweringOffers, usePartnerJobs } from "@/lib/partner-jobs/queries";
 import { useNow } from "@/lib/use-now";
 
 import { JobTableRow, TH } from "./job-table-row";
@@ -51,11 +51,17 @@ export function JobsTable({ tab, empty }: { tab: JobsTab; empty: string }) {
   const focused = useRef<string | null>(null);
   const keys = useRowKeys({ open: (id) => router.push(jobHref(partnerId, id)), toggle: NO_TOGGLE });
 
+  const answering = useAnsweringOffers(partnerId);
+
   const offers = tab === "offers";
-  const rows = offers ? list.items.filter((job) => !ranOut(job, now)) : list.items;
-  const over = offers ? list.items.filter((job) => ranOut(job, now)) : [];
+  // An offer being answered stays until erp-api says what happened, its deadline passed or not.
+  const isOver = (job: PartnerJob) => ranOut(job, now) && !answering.has(job.id);
+  const rows = offers ? list.items.filter((job) => !isOver(job)) : list.items;
+  const over = offers ? list.items.filter(isOver) : [];
 
   useEffect(() => {
+    // An answered offer is announced by its answer, never also as run out.
+    for (const id of answering) gone.current.add(id);
     for (const job of over) {
       if (!shown.current.has(job.id) || gone.current.has(job.id)) continue;
       gone.current.add(job.id);
@@ -65,7 +71,7 @@ export function JobsTable({ tab, empty }: { tab: JobsTab; empty: string }) {
     }
     for (const job of rows) {
       shown.current.add(job.id);
-      gone.current.delete(job.id);
+      if (!answering.has(job.id) && !ranOut(job, now)) gone.current.delete(job.id);
     }
   });
 

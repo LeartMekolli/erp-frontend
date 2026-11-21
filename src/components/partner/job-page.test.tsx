@@ -180,6 +180,31 @@ describe("JobPage", () => {
     expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
   });
 
+  it("keeps the answers while an Accept is on its way past the deadline", async () => {
+    freezeAt(NOW, ["Date", "setInterval", "clearInterval"]);
+    vi.setSystemTime(NOW + 5 * 60 * MINUTE + 11 * MINUTE);
+    let letGo = () => {};
+    const held = new Promise<void>((resolve) => (letGo = resolve));
+    server.use(
+      http.post(`${DETAIL}/accept`, async () => {
+        await held;
+      }),
+    );
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Accept" }));
+    const dialog = await screen.findByRole("dialog", { name: "Take Ring · Silver 925?" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Accept job" }));
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Accept job" })).toBeDisabled());
+
+    act(() => vi.advanceTimersByTime(MINUTE + 15_000));
+    expect(screen.getByRole("dialog", { name: "Take Ring · Silver 925?" })).toBeInTheDocument();
+    expect(screen.queryByText("This job isn't yours any more, or doesn't exist.")).not.toBeInTheDocument();
+
+    // erp-api's answer is the one the partner reads, whichever it is.
+    act(() => letGo());
+    expect(await screen.findByText(/^(Ring · Silver 925 is yours\.|This offer is no longer open\.)$/)).toBeInTheDocument();
+  });
+
   it("says when the job can't be loaded", async () => {
     server.use(
       http.get(`${FAKE_API_URL}/partner-portal/partners/:partnerId/jobs/:groupId`, () =>
