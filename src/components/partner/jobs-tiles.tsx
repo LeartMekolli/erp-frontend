@@ -44,11 +44,21 @@ export function JobsTiles({ onReviewOffers }: { onReviewOffers: () => void }) {
   );
 }
 
-function OffersTile({ onReview }: { onReview: () => void }) {
+/**
+ * The offers still open, and how many there are as words: exact when every offer is loaded, else a
+ * floor (`20+`). The same query as the Offers tab, so the tile, the tab and the table agree.
+ */
+export function useOffersWaiting() {
   const { partnerId } = useWorkshop();
-  // The same query as the Offers tab: one request for both.
   const offers = usePartnerJobs(partnerId, "offered");
   const now = useNow(TICK_MS);
+  const waiting = offers.items.filter((job) => open(job, now));
+  const count = offers.hasNextPage ? `${PAGE_SIZE}+` : String(waiting.length);
+  return { offers, waiting, count, now };
+}
+
+function OffersTile({ onReview }: { onReview: () => void }) {
+  const { offers, waiting, count, now } = useOffersWaiting();
 
   if (offers.isPending) {
     return (
@@ -56,13 +66,10 @@ function OffersTile({ onReview }: { onReview: () => void }) {
     );
   }
 
-  const waiting = offers.items.filter((job) => open(job, now));
   const soonest = waiting
     .flatMap((job) => (job.expires_at ? [job.expires_at] : []))
     .sort()
     .at(0);
-  // Only one page of offers is known: past it, the count is a floor.
-  const count = offers.hasNextPage ? `${PAGE_SIZE}+` : String(waiting.length);
 
   return (
     <section aria-labelledby="offers-waiting" className={heroBox}>

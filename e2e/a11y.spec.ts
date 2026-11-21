@@ -181,29 +181,32 @@ test("workshop chooser: accessible and fits the screen", async ({ page }) => {
 /** The fake's 60-character job with its three options (`partner-jobs.ts`). */
 const LONG_JOB_TITLE = `${LONG_PRODUCT_NAME} · Silver 925 · Brushed satin with a hand-polished edge · Natural`;
 
+/** A row of the Jobs table by what it holds. */
+const jobRow = (page: Page, title: string) => page.getByRole("region", { name: "Job list" }).getByRole("row").filter({ hasText: title });
+
 /** Signs in as Northcast's owner and waits for both offers and the jobs in progress, the 60-character one among them. */
 async function openPartnerJobs(page: Page) {
   await signIn(page, PARTNER.email);
   await expect(page.getByRole("heading", { level: 1, name: "Jobs" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Waiting for your answer · 2" })).toBeVisible();
-  await expect(page.getByText(LONG_JOB_TITLE, { exact: true })).toBeVisible();
-  await expect(page.getByText("Ring band · Brass", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Waiting for your answer" })).toContainText("2 offers");
+  await expect(jobRow(page, LONG_JOB_TITLE)).toBeVisible();
+  await expect(jobRow(page, "Ring band · Brass")).toBeVisible();
 }
 
-// Every size, 1024 px included: there the sidebar is a rail and each job is one line, so
-// Ring band's scrapped count and the long job's amount must still fit.
+// Every size, 1024 px included: the long job's title is cut, never the table widened, and Ring
+// band's lost count and the long job's amount must still fit.
 test("partner jobs: accessible and fits the screen", async ({ page }) => {
   await openPartnerJobs(page);
   await expectAccessibleAndFits(page);
 
+  // The offers, with their answers in the last column at every size.
+  await page.getByRole("region", { name: "Job list" }).getByRole("tab", { name: "Offers 2" }).click();
+  await expect(jobRow(page, "Ring · Silver 925")).toBeVisible();
+  await expectAccessibleAndFits(page);
+
   // A bottom sheet on phones, a dialog from 640 px.
-  await page
-    .getByRole("region", { name: /^Waiting for your answer/ })
-    .getByRole("listitem")
-    .filter({ hasText: "Ring · Silver 925" })
-    .getByRole("button", { name: "Decline" })
-    .click();
-  await expect(page.getByRole("dialog", { name: "Decline this job?" })).toBeVisible();
+  await jobRow(page, "Ring · Silver 925").getByRole("button", { name: "Accept" }).click();
+  await expect(page.getByRole("dialog", { name: "Take Ring · Silver 925?" })).toBeVisible();
   await expectAccessibleAndFits(page);
 });
 

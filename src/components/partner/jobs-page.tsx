@@ -1,115 +1,111 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
 
-import { ListEnd } from "@/components/data/list-end";
-import { LoadFailure } from "@/components/data/load-failure";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Freshness } from "@/components/data/freshness";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useFormat } from "@/lib/format/use-format";
 import { usePartnerJobs } from "@/lib/partner-jobs/queries";
 
-import { JobRow } from "./job-row";
+import { JobsTable, type JobsTab } from "./jobs-table";
+import { JobsTiles, useOffersWaiting } from "./jobs-tiles";
 import { partnerHref } from "./nav";
-import { OffersBox } from "./offers-box";
 import { useWorkshop } from "./use-workshop";
 
-type Tab = "progress" | "finished";
+const TABS = ["offers", "progress", "finished"] as const satisfies readonly JobsTab[];
 
-const TAB_LABEL: Record<Tab, string> = { progress: "In progress", finished: "Finished" };
+const TAB_LABEL: Record<JobsTab, string> = { offers: "Offers", progress: "In progress", finished: "Finished" };
 
-type JobsQuery = ReturnType<typeof usePartnerJobs>;
+const STATUS = { offers: "offered", progress: "accepted", finished: "finished" } as const;
+
+const tabFrom = (value: string | null): JobsTab => (value === "offers" || value === "finished" ? value : "progress");
 
 /**
- * `/partner-portal/:partnerId/jobs`: the offers waiting for an answer, then the
- * accepted jobs under In progress and Finished. The tab is in the address
- * (`?tab=finished`); In progress has no parameter.
+ * `/partner-portal/:partnerId/jobs`, on the Orders layout: the title and today's date, the tiles,
+ * then one list panel whose tabs are Offers, In progress and Finished. The tab is in the address
+ * (`?tab=offers`, `?tab=finished`); In progress has no parameter.
  */
 export function JobsPage() {
   const { partnerId } = useWorkshop();
   const router = useRouter();
-  const tab: Tab = useSearchParams().get("tab") === "finished" ? "finished" : "progress";
+  const tab = tabFrom(useSearchParams().get("tab"));
+  const { date } = useFormat();
+  const [today] = useState(() => new Date().toISOString());
+  const waiting = useOffersWaiting();
 
-  // The same query as the OffersBox (same key): read here only to know whether there are offers.
-  const offers = usePartnerJobs(partnerId, "offered");
-  const inProgress = usePartnerJobs(partnerId, "accepted", tab === "progress");
   // With no offers and nothing in progress, Finished's first page decides between the two empty messages.
+  const inProgress = usePartnerJobs(partnerId, "accepted", tab === "progress");
   const nothingOpen =
-    tab === "progress" && offers.isSuccess && offers.items.length === 0 && inProgress.isSuccess && inProgress.items.length === 0;
-  const finished = usePartnerJobs(partnerId, "finished", tab === "finished" || nothingOpen);
+    tab === "progress" &&
+    waiting.offers.isSuccess &&
+    waiting.waiting.length === 0 &&
+    !waiting.offers.hasNextPage &&
+    inProgress.isSuccess &&
+    inProgress.items.length === 0;
+  const finished = usePartnerJobs(partnerId, "finished", nothingOpen);
+  // The table's query, shared through the cache: Freshness reports on it.
+  const shown = usePartnerJobs(partnerId, STATUS[tab]);
 
-  const choose = (value: string) => {
+  const choose = (value: JobsTab) => {
     const jobs = partnerHref(partnerId, "jobs");
-    router.replace(value === "finished" ? `${jobs}?tab=finished` : jobs, { scroll: false });
+    router.replace(value === "progress" ? jobs : `${jobs}?tab=${value}`, { scroll: false });
   };
 
+  const progressEmpty =
+    nothingOpen && finished.isSuccess && finished.items.length === 0
+      ? "No jobs yet. When staff offer you a job, it appears under Offers."
+      : "No jobs in progress.";
+  // Nothing in progress: wait for the offers, and then for Finished, before choosing the message.
+  const deciding = tab === "progress" && inProgress.isSuccess && inProgress.items.length === 0 && (waiting.offers.isPending || (nothingOpen && finished.isPending));
+  const empty = { offers: "No offers waiting.", progress: progressEmpty, finished: "No finished jobs yet." }[tab];
+
   return (
     <>
-      <h1 className="pt-1 text-title font-semibold">Jobs</h1>
-
-      <OffersBox />
-
-      <Tabs value={tab} onValueChange={choose} activationMode="manual" className="gap-0 rounded-[20px] bg-card">
-        <TabsList variant="line" aria-label="Your jobs" className="h-auto! w-full justify-start border-b border-line px-2 pt-2">
-          {(["progress", "finished"] as const).map((value) => (
-            <TabsTrigger
-              key={value}
-              value={value}
-              className="h-11 flex-none px-3 text-ink-2 group-data-horizontal/tabs:after:bottom-0 data-active:font-semibold data-active:text-ink"
-            >
-              {TAB_LABEL[value]}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        <TabsContent value="progress" className="p-3">
-          <JobList
-            list={inProgress}
-            empty={
-              nothingOpen && finished.isSuccess && finished.items.length === 0
-                ? "No jobs yet. When staff offer you a job, it appears here."
-                : "No jobs in progress. New offers appear above."
-            }
-            // Nothing in progress: wait for the offers, and then for Finished, before choosing the message.
-            deciding={inProgress.isSuccess && inProgress.items.length === 0 && (offers.isPending || (nothingOpen && finished.isPending))}
-          />
-        </TabsContent>
-        <TabsContent value="finished" className="p-3">
-          <JobList list={finished} empty="No finished jobs yet." />
-        </TabsContent>
-      </Tabs>
-    </>
-  );
-}
-
-/**
- * One tab's jobs: placeholder rows while they load (or while it's still
- * unknown which empty message applies), a retry when they can't, the empty
- * message, or the rows with a way to load more.
- */
-function JobList({ list, empty, deciding = false }: { list: JobsQuery; empty: string; deciding?: boolean }) {
-  if (list.isPending || deciding) {
-    return (
-      <div role="status" aria-label="Loading your jobs" className="flex flex-col gap-2">
-        {[0, 1, 2].map((n) => (
-          <div key={n} aria-hidden className="h-16 animate-pulse rounded-xl bg-ground motion-reduce:animate-none md:h-11 md:rounded-lg" />
-        ))}
+      <div className="flex items-center gap-3 pt-1">
+        <h1 className="text-title font-semibold">Jobs</h1>
+        <p className="hidden text-sm text-ink-2 sm:block">{date(today)}</p>
       </div>
-    );
-  }
 
-  if (list.isError && list.items.length === 0) {
-    return <LoadFailure error={list.error} fallback="Your jobs couldn't be loaded." onRetry={() => void list.refetch()} />;
-  }
+      <JobsTiles onReviewOffers={() => choose("offers")} />
 
-  if (list.items.length === 0) return <p className="px-1 py-6 text-center text-sm text-ink-2">{empty}</p>;
-
-  return (
-    <>
-      <ul className="flex flex-col gap-2 md:gap-0 md:divide-y md:divide-line">
-        {list.items.map((job) => (
-          <JobRow key={job.id} job={job} />
-        ))}
-      </ul>
-      <ListEnd list={list} />
+      <section id="job-list" aria-label="Job list" className="flex flex-col rounded-[20px] bg-card">
+        <div className="border-b border-line px-2 pt-2">
+          <Tabs value={tab} onValueChange={(value) => choose(value as JobsTab)} activationMode="manual" className="min-w-0">
+            <TabsList variant="line" aria-label="Jobs by state" className="-mb-px h-auto! w-full justify-start overflow-x-auto [scrollbar-width:none]">
+              {TABS.map((value) => (
+                <TabsTrigger
+                  key={value}
+                  value={value}
+                  // Every tab filters the one list below rather than showing a panel of its own.
+                  aria-controls="job-list"
+                  className="h-11 flex-none px-3 text-ink-2 group-data-horizontal/tabs:after:bottom-0 data-active:font-semibold data-active:text-ink"
+                >
+                  {TAB_LABEL[value]}
+                  {value === "offers" && waiting.offers.isSuccess && (
+                    <>
+                      {" "}
+                      <span className="rounded-full bg-line px-1.5 text-xs font-medium text-ink-2 tabular-nums in-data-active:bg-lilac in-data-active:text-violet-ink">
+                        {waiting.count}
+                      </span>
+                    </>
+                  )}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+        <div className="flex justify-end px-4 pt-2 empty:hidden">{shown.dataUpdatedAt > 0 && <Freshness query={shown} />}</div>
+        {deciding ? (
+          <div role="status" aria-label="Loading your jobs" className="flex flex-col gap-2 p-3">
+            {[0, 1, 2].map((n) => (
+              <div key={n} aria-hidden className="h-12 animate-pulse rounded-lg bg-ground motion-reduce:animate-none" />
+            ))}
+          </div>
+        ) : (
+          <JobsTable key={tab} tab={tab} empty={empty} />
+        )}
+      </section>
     </>
   );
 }
