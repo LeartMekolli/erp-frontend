@@ -1,5 +1,6 @@
 "use client";
 
+import { FileText } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
@@ -11,13 +12,17 @@ import { PhotoLinksProvider } from "@/components/production/photo-links";
 import { PiecesTab } from "@/components/production/pieces-tab";
 import { QualityTab } from "@/components/production/quality-tab";
 import { StepStrip } from "@/components/production/step-strip";
+import { submitErrorText } from "@/components/production/submit-error";
+import { Button } from "@/components/ui/button";
 import { TAB, TAB_ROW } from "@/components/production/tab-classes";
 import { useMe } from "@/components/session/session-gate";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { PartnerJobComment, PartnerJobDetail } from "@/lib/api/schema-types";
+import { openLink } from "@/lib/files/open-link";
 import {
   partnerCommentAttachmentUrl,
   partnerPhotoUrl,
+  partnerSopUrl,
   usePartnerComments,
   usePartnerMoves,
   usePartnerMovePieces,
@@ -63,7 +68,34 @@ function JobPieces({ job, partnerId }: { job: PartnerJobDetail; partnerId: strin
       onMove={async (body) => {
         await move.mutateAsync(body);
       }}
+      stepInstructions={(stepKey) => {
+        const step = job.steps.find((one) => one.key === stepKey);
+        return step?.sop_file_version_id ? <StepInstructions partnerId={partnerId} jobId={job.id} step={step} /> : null;
+      }}
+      focusAfterMove
+      lostLook
     />
+  );
+}
+
+/** Opens a step's instructions in a new tab; says so where it is when the link can't be had. */
+function StepInstructions({ partnerId, jobId, step }: { partnerId: string; jobId: string; step: { key: string; name: string } }) {
+  const [failure, setFailure] = useState<string | null>(null);
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-2">
+      <Button
+        variant="link"
+        aria-label={`Instructions for ${step.name}`}
+        onClick={() => {
+          setFailure(null);
+          openLink(() => partnerSopUrl(partnerId, jobId, step.key)).catch((error: unknown) => setFailure(submitErrorText(error)));
+        }}
+      >
+        <FileText aria-hidden />
+        Instructions
+      </Button>
+      {failure && <span className="text-caption text-late">{failure}</span>}
+    </span>
   );
 }
 

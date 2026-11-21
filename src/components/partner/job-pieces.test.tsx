@@ -82,6 +82,70 @@ async function fillPass(dialog: HTMLElement) {
   await within(dialog).findByRole("button", { name: "Remove photo.jpg" }, { timeout: 4_000 });
 }
 
+/** The Pieces tab's panel. */
+const piecesPanel = () => screen.findByRole("tabpanel", { name: "Pieces" });
+
+/** The section a step's toggle opens and closes, by the step's name. */
+async function sectionOf(name: string): Promise<{ toggle: HTMLElement; section: HTMLElement }> {
+  const toggle = await within(await piecesPanel()).findByRole("button", { name: new RegExp(`^${name}\\b`) });
+  return { toggle, section: toggle.closest("section")! };
+}
+
+describe("the partner's pieces list", () => {
+  it("links a step's instructions from its heading and from the move dialog", async () => {
+    renderPage();
+    const { section } = await sectionOf("Finish");
+    expect(within(section).getByRole("button", { name: "Instructions for Finish" })).toBeInTheDocument();
+
+    await tick("Select 4/12");
+    await openFromBar("Pass");
+    const dialog = await screen.findByRole("dialog", { name: "Pass 1 piece at Finish" });
+    expect(within(dialog).getByRole("button", { name: "Instructions for Finish" })).toBeInTheDocument();
+  });
+
+  it("keeps focus and the result at the step after a move", async () => {
+    renderPage();
+    await tick("Select 4/12");
+    await openFromBar("Pass");
+    const dialog = await screen.findByRole("dialog", { name: "Pass 1 piece at Finish" });
+    await fillPass(dialog);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Pass" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const { toggle, section } = await sectionOf("Finish");
+    await waitFor(() => expect(toggle).toHaveFocus());
+    const result = within(section).getByText("1 piece passed at Finish.");
+    expect(result.closest("[data-tone]")).toHaveAttribute("data-tone", "success");
+  });
+
+  it("moves focus to the next step when a move empties one", async () => {
+    renderPage();
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Select all at Finish" }));
+    await openFromBar("Pass");
+    const dialog = await screen.findByRole("dialog", { name: /^Pass \d+ pieces at Finish$/ });
+    await fillPass(dialog);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Pass" }));
+
+    const panel = await piecesPanel();
+    await waitFor(() => expect(within(panel).queryByRole("button", { name: /^Finish\b/ })).not.toBeInTheDocument());
+    await waitFor(() => expect(document.activeElement).not.toBe(document.body));
+    expect(panel.contains(document.activeElement)).toBe(true);
+    expect(within(panel).getByText(/pieces passed at Finish\./)).toBeInTheDocument();
+  });
+
+  it("marks a scrapped piece as lost, apart from one being redone", async () => {
+    renderPage();
+    const { toggle, section } = await sectionOf("Scrapped");
+    await userEvent.click(toggle);
+    await within(section).findByRole("listitem");
+    const mark = section.querySelector("li [data-look='lost']");
+    expect(mark).not.toBeNull();
+    expect(mark).toHaveTextContent("Scrapped");
+    expect(mark).toHaveClass("text-lost-ink");
+    expect(mark!.querySelector("svg")).not.toBeNull();
+  });
+});
+
 describe("moving pieces on the Job page", () => {
   it("passes a piece with its checklist and a photo", async () => {
     renderPage();
