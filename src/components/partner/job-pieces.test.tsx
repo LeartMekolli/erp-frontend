@@ -156,8 +156,7 @@ describe("moving pieces on the Job page", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Pass" }));
 
     expect(await screen.findByText("1 piece passed at Finish.")).toBeInTheDocument();
-    const strip = screen.getByRole("list", { name: "Progress through the steps" });
-    await waitFor(() => expect(within(strip).getByText("Your part done").closest("li")).toHaveTextContent("5"));
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Your part done\b/ })).toHaveAccessibleName("Your part done 5"));
     expect(screen.queryByRole("checkbox", { name: "Select 4/12" })).not.toBeInTheDocument();
   });
 

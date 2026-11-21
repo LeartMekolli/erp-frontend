@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 
-import { LONG_NAME_JOB_ID, LONG_PRODUCT_NAME, RING_BAND_JOB_ID } from "../test/fake-erp-api/partner-jobs";
+import { LONG_NAME_JOB_ID, LONG_PRODUCT_NAME, RING_BAND_JOB_ID, RING_OFFER_ID } from "../test/fake-erp-api/partner-jobs";
 import { NORTHCAST_ID, PARTNER, PARTNER_TWO_SHOPS, RESET_TOKEN, STAFF, STAFF_INVITE_TOKEN } from "../test/fake-erp-api/seed";
 
 import { expect, expectNoAxeViolations, expectNoSideScroll, settled, signIn, test } from "./helpers";
@@ -219,6 +219,14 @@ test("partner job: accessible and fits the screen", async ({ page }) => {
   await expectAccessibleAndFits(page);
 });
 
+test("partner offer: accessible and fits the screen", async ({ page }) => {
+  await openPartnerJobs(page);
+  await page.goto(`/partner-portal/${NORTHCAST_ID}/jobs/${RING_OFFER_ID}`);
+  await expect(page.getByRole("region", { name: "What you'd do" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Accept" })).toBeVisible();
+  await expectAccessibleAndFits(page);
+});
+
 /** Opens a tab of the job and checks it, from the top: a tab's click can scroll it under the sticky top bar. */
 async function checkTab(page: Page, name: string | RegExp, shows: Locator) {
   await page.getByRole("tab", { name }).click();
@@ -272,6 +280,8 @@ test("partner job tabs: accessible and fits the screen", async ({ page }) => {
   await openPartnerJobs(page);
   await page.goto(`/partner-portal/${NORTHCAST_ID}/jobs/${RING_BAND_JOB_ID}`);
   await expect(page.getByRole("heading", { level: 1, name: "Ring band · Brass" })).toBeVisible();
+  // The side column (Pay, Comments) sits beside the work from 1280px and below it under that.
+  await expect(page.getByRole("region", { name: "Comments" }).getByText("Matte polish on these, please.")).toBeVisible();
 
   // Pieces with one picked, then the move dialog: a bottom sheet on phones.
   await page.getByRole("checkbox", { name: "Select 4/12" }).click();
@@ -293,7 +303,6 @@ test("partner job tabs: accessible and fits the screen", async ({ page }) => {
 
   await checkTab(page, /^Quality/, page.getByRole("article", { name: "Finish" }));
   await checkTab(page, "History", page.getByText("Came to you"));
-  await checkTab(page, "Comments", page.getByText("Matte polish on these, please."));
 });
 
 test("signing in works with the keyboard alone", async ({ page }) => {

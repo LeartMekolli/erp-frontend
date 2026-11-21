@@ -95,7 +95,7 @@ export function OfferActions({
 
   // Radix gives focus back only to a DialogTrigger, and these dialogs open by hand, so it's done here,
   // as Pay does. Answered: the offer and its buttons go, so focus stays on the notice instead.
-  const focusBack = (button: RefObject<HTMLButtonElement | null>) => (event: Event) => {
+  const focusBack = (event: Event, button: RefObject<HTMLButtonElement | null>) => {
     event.preventDefault();
     if (!answered.current) button.current?.focus();
   };
@@ -114,7 +114,7 @@ export function OfferActions({
         onOpenChange={(open) => setAsking(open ? "decline" : null)}
         onDecline={() => void send("decline")}
         pending={answer.isPending}
-        onCloseAutoFocus={focusBack(declineButton)}
+        onCloseAutoFocus={(event) => focusBack(event, declineButton)}
       />
       <AcceptDialog
         job={job}
@@ -122,7 +122,7 @@ export function OfferActions({
         onOpenChange={(open) => setAsking(open ? "accept" : null)}
         onAccept={() => void send("accept")}
         pending={answer.isPending}
-        onCloseAutoFocus={focusBack(acceptButton)}
+        onCloseAutoFocus={(event) => focusBack(event, acceptButton)}
       />
     </div>
   );

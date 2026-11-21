@@ -112,11 +112,12 @@ async function openRingBand(page: Page) {
 
 const tick = (page: Page, label: string) => page.getByRole("checkbox", { name: `Select ${label}` }).click();
 const bar = (page: Page) => page.getByRole("region", { name: "Selected pieces" });
-const stripItem = (page: Page, name: string) => page.getByRole("list", { name: "Progress through the steps" }).getByRole("listitem").filter({ hasText: name });
+/** A section's toggle in the Pieces tab, named by its step and count: `Your part done 4`. */
+const sectionToggle = (page: Page, name: string) => page.getByRole("tabpanel", { name: "Pieces" }).getByRole("button", { name: new RegExp(`^${name}\\b`) });
 
 test("a partner passes a piece with a photo", async ({ page }) => {
   await openRingBand(page);
-  await expect(stripItem(page, "Your part done")).toContainText("4");
+  await expect(sectionToggle(page, "Your part done")).toHaveAccessibleName("Your part done 4");
   await tick(page, "4/12");
   await expect(bar(page)).toContainText("1 piece at Finish");
   const pass = bar(page).getByRole("button", { name: "Pass", exact: true });
@@ -129,8 +130,10 @@ test("a partner passes a piece with a photo", async ({ page }) => {
   await expect(dialog.getByRole("button", { name: "Remove photo.jpg" })).toBeVisible();
   await dialog.getByRole("button", { name: "Pass", exact: true }).click();
 
+  // Focus and the result stay at the step the piece left.
+  await expect(sectionToggle(page, "Finish")).toBeFocused();
   await expect(page.getByText("1 piece passed at Finish.")).toBeVisible();
-  await expect(stripItem(page, "Your part done")).toContainText("5");
+  await expect(sectionToggle(page, "Your part done")).toHaveAccessibleName("Your part done 5");
   await expect(page.getByRole("checkbox", { name: "Select 4/12" })).toHaveCount(0);
   await expect(bar(page)).toHaveCount(0);
 });
@@ -154,9 +157,7 @@ test("a partner fails a piece into rework", async ({ page }) => {
 
 test("a partner comments and staff read it", async ({ page }) => {
   await openRingBand(page);
-  await page.getByRole("tab", { name: "Comments" }).click();
-  await expect(page).toHaveURL(`${JOBS}/${RING_BAND_JOB_ID}?tab=comments`);
-  const thread = page.getByRole("list", { name: "Comments" });
+  const thread = page.getByRole("region", { name: "Comments" }).getByRole("list", { name: "Comments" });
   await expect(thread.getByRole("listitem").filter({ hasText: "Matte polish on these, please." })).toContainText("Staff");
   await expect(page.getByText("Staff at Demo will read this.")).toBeVisible();
   await page.getByLabel("Add a comment").fill("Polished, packing tomorrow.");

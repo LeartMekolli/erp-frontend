@@ -19,10 +19,6 @@ export function doneText(job: PartnerJob): string {
   return `${job.pieces.finished} of ${job.quantity} done`;
 }
 
-export function scrappedText(job: PartnerJob): string | null {
-  return job.pieces.scrapped > 0 ? `${job.pieces.scrapped} scrapped` : null;
-}
-
 /** Scrapped pieces, which are lost to the job: `1 lost`. Nothing when none are. */
 export function lostText(job: Pick<PartnerJob, "pieces">): string | null {
   return job.pieces.scrapped > 0 ? `${job.pieces.scrapped} lost` : null;

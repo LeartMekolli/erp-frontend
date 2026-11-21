@@ -1,76 +1,92 @@
 "use client";
 
-import { ChevronLeft, FileBox, FileText } from "lucide-react";
+import { ChevronLeft, FileBox } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
+
+import { cn } from "cn";
 
 import { submitErrorText } from "@/components/production/submit-error";
 import { Button } from "@/components/ui/button";
 import type { PartnerJobDetail } from "@/lib/api/schema-types";
 import { openLink } from "@/lib/files/open-link";
 import { useFormat } from "@/lib/format/use-format";
-import { jobTitle, piecesText } from "@/lib/partner-jobs/labels";
-import { partnerDesignUrl, partnerSopUrl } from "@/lib/partner-jobs/queries";
+import { workspaceToday } from "@/lib/orders/labels";
+import { doneText, dueText, jobTitle, lostText, piecesText } from "@/lib/partner-jobs/labels";
+import { partnerDesignUrl } from "@/lib/partner-jobs/queries";
 
-import { JobBrief } from "./job-brief";
 import { useWorkshop } from "./use-workshop";
 
-/**
- * The `Jobs` link, the title, then pieces, due date and pay, the partner's steps and the AI brief, then
- * what the job's status adds. Once the partner holds the job, its design file and each step's
- * instructions open from here; an offer's stay closed, as erp-api keeps them.
- */
-export function JobHeader({ job, jobs, held, children }: { job: PartnerJobDetail; jobs: string; held: boolean; children: ReactNode }) {
-  const format = useFormat();
-  const { partnerId } = useWorkshop();
-  const [failure, setFailure] = useState<string | null>(null);
-  const details = [
-    piecesText(job.quantity),
-    job.due_on ? `Due ${format.day(job.due_on)}` : null,
-    `You're paid ${format.money(job.cost, format.currency)}`,
-  ]
-    .filter((part) => part !== null)
-    .join(" · ");
+const STATUS: Record<PartnerJobDetail["status"], { word: string; dot: string }> = {
+  offered: { word: "Offered", dot: "bg-violet" },
+  accepted: { word: "In progress", dot: "bg-violet" },
+  finished: { word: "Finished", dot: "bg-ship" },
+};
 
-  const open = (link: () => Promise<string>) => {
-    setFailure(null);
-    openLink(link).catch((error: unknown) => setFailure(submitErrorText(error)));
-  };
+/**
+ * The job at a glance, in Order detail's header layout: the `Jobs` link, the title, then its status
+ * as a dot and a word, pieces, progress, the due day and (under 1280px, where the side column drops
+ * below) the pay. `actions` sit on the right: the answers to an offer, or the design file once held.
+ */
+export function JobHeader({ job, jobs, actions }: { job: PartnerJobDetail; jobs: string; actions?: ReactNode }) {
+  const format = useFormat();
+  const [today] = useState(() => workspaceToday(format.timeZone));
+  const status = STATUS[job.status];
+  const inProgress = job.status === "accepted";
+  const due = inProgress ? dueText(job.due_on, today) : job.due_on ? { text: `Due ${format.day(job.due_on)}`, late: false } : null;
+  const late = due?.late ?? false;
+  const lost = lostText(job);
 
   return (
-    <header className="flex flex-col gap-1 rounded-[20px] bg-card px-4 py-5 sm:px-6">
+    <header className="flex flex-col gap-3 pt-1">
       <BackToJobs href={jobs} />
-      <h1 className="text-title font-semibold break-words">{jobTitle(job)}</h1>
-      <p className="text-sm text-ink-2">{details}</p>
-      <ul aria-label="Your steps" className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-sm">
-        {job.steps.map((step) => (
-          <li key={step.key} className="inline-flex items-center gap-2">
-            <span className="font-medium">{step.name}</span>
-            {held && step.sop_file_version_id && (
-              <Button variant="link" aria-label={`Instructions for ${step.name}`} onClick={() => open(() => partnerSopUrl(partnerId, job.id, step.key))}>
-                <FileText aria-hidden />
-                Instructions
-              </Button>
-            )}
-          </li>
-        ))}
-      </ul>
-      {held && job.design_file_version_id && (
-        <Button variant="outline" className="mt-1 self-start" onClick={() => open(() => partnerDesignUrl(partnerId, job.id))}>
-          <FileBox aria-hidden />
-          Design file
-        </Button>
-      )}
-      {failure && <p className="text-caption text-late">{failure}</p>}
-      <JobBrief summary={job.summary} />
-      {children}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-2">
+          <h1 className="text-title font-semibold break-words">{jobTitle(job)}</h1>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-ink-2">
+            <span className={cn("inline-flex items-center gap-2 font-medium", late ? "text-late" : "text-ink")}>
+              <span aria-hidden className={cn("size-2 shrink-0 rounded-full", late ? "bg-late" : status.dot)} />
+              {late ? `${status.word} · Late` : status.word}
+            </span>
+            <span>{piecesText(job.quantity)}</span>
+            {job.status !== "offered" && <span>{doneText(job)}</span>}
+            {lost && <span className="font-medium text-lost-ink">{lost}</span>}
+            {due && <span className={cn(late && "font-semibold text-late")}>{due.text}</span>}
+            <span className="font-medium text-ink tabular-nums xl:hidden">{format.money(job.cost, format.currency)}</span>
+          </div>
+        </div>
+        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      </div>
     </header>
+  );
+}
+
+/** The job's design file, once the partner holds it; says so under the button when the link can't be had. */
+export function DesignFileButton({ job }: { job: PartnerJobDetail }) {
+  const { partnerId } = useWorkshop();
+  const [failure, setFailure] = useState<string | null>(null);
+  if (!job.design_file_version_id) return null;
+  return (
+    <span className="flex flex-col items-end gap-1">
+      <Button
+        variant="secondary"
+        className="rounded-full"
+        onClick={() => {
+          setFailure(null);
+          openLink(() => partnerDesignUrl(partnerId, job.id)).catch((error: unknown) => setFailure(submitErrorText(error)));
+        }}
+      >
+        <FileBox aria-hidden />
+        Design file
+      </Button>
+      {failure && <span className="text-caption text-late">{failure}</span>}
+    </span>
   );
 }
 
 export function BackToJobs({ href }: { href: string }) {
   return (
-    <Link href={href} className="inline-flex min-h-11 items-center gap-1 self-start font-medium text-ink-2 hover:text-ink">
+    <Link href={href} className="inline-flex min-h-11 items-center gap-1 self-start font-medium text-ink-2 hover:text-ink md:min-h-0">
       <ChevronLeft aria-hidden className="size-4" />
       Jobs
     </Link>

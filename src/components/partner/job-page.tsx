@@ -2,17 +2,20 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
+import { Freshness } from "@/components/data/freshness";
 import { LoadFailure } from "@/components/data/load-failure";
 import { Button } from "@/components/ui/button";
 import { isApiProblem } from "@/lib/api/problem";
 import type { PartnerJobDetail } from "@/lib/api/schema-types";
-import { doneText, scrappedText, timeLeft } from "@/lib/partner-jobs/labels";
+import { piecesText, timeLeft } from "@/lib/partner-jobs/labels";
 import { usePartnerJob } from "@/lib/partner-jobs/queries";
 import { useNow } from "@/lib/use-now";
 
-import { BackToJobs, JobHeader } from "./job-header";
+import { JobBrief } from "./job-brief";
+import { BackToJobs, DesignFileButton, JobHeader } from "./job-header";
+import { JobCommentsPanel, JobPayPanel } from "./job-side";
 import { JobTabs } from "./job-tabs";
 import { partnerHref } from "./nav";
 import { OfferActions } from "./offer-actions";
@@ -24,9 +27,9 @@ import { useWorkshop } from "./use-workshop";
 const TICK_MS = 15_000;
 
 /**
- * `/partner-portal/:partnerId/jobs/:groupId`: one job. An offer has its time
- * left with Accept and Decline; an accepted or finished job has its progress,
- * then its pieces, quality, history and comments.
+ * `/partner-portal/:partnerId/jobs/:groupId`: one job, on Order detail's layout. An offer has its
+ * time left with Accept and Decline; an accepted or finished job has its pieces, quality and history,
+ * with pay, the AI brief and the comments with staff beside them.
  */
 export function JobPage() {
   const { partnerId } = useWorkshop();
@@ -64,35 +67,50 @@ export function JobPage() {
   }
 
   const job = query.data;
-  return job.status === "offered" ? (
-    <Offer
-      job={job}
-      jobs={jobs}
-      leaving={leaving}
-      onRanOut={() => void query.refetch()}
-      onDeclined={() => {
-        setLeaving(true);
-        router.push(jobs);
-      }}
-    />
-  ) : (
+  if (job.status === "offered") {
+    return (
+      <Offer
+        job={job}
+        jobs={jobs}
+        leaving={leaving}
+        onRanOut={() => void query.refetch()}
+        onDeclined={() => {
+          setLeaving(true);
+          router.push(jobs);
+        }}
+      />
+    );
+  }
+
+  return (
     <PartnerSelectionProvider>
       <div className="flex flex-col gap-3.5">
-        <JobHeader job={job} jobs={jobs} held>
-          <p className="text-sm text-ink-2">{[doneText(job), scrappedText(job)].filter((part) => part !== null).join(" · ")}</p>
-        </JobHeader>
-        <JobTabs job={job} partnerId={partnerId} />
+        <JobHeader job={job} jobs={jobs} actions={job.design_file_version_id ? <DesignFileButton job={job} /> : undefined} />
+        <div className="flex justify-end">
+          <Freshness query={query} />
+        </div>
+        <div className={GRID}>
+          <JobTabs job={job} partnerId={partnerId} />
+          <div className="flex min-w-0 flex-col gap-3.5">
+            <JobPayPanel job={job} />
+            <JobBrief summary={job.summary} />
+            <JobCommentsPanel job={job} />
+          </div>
+        </div>
       </div>
     </PartnerSelectionProvider>
   );
 }
 
+/** Order detail's two columns: the work, and a 340px side column that drops below under 1280px. */
+const GRID = "grid items-start gap-3.5 xl:grid-cols-[minmax(0,1fr)_340px]";
+
 /**
- * An offer: the time left and the answers. After Accept the job fetches again
- * (`useAnswerOffer` refreshes every job of the workshop) and shows as accepted;
- * after Decline it goes back to Jobs, where the shell's notice stays. When the
- * time runs out while it's open, the job fetches again on each tick until
- * erp-api has let it go, which is the 404.
+ * An offer: the time left and the answers in the header, then what the partner would do and what it
+ * pays. After Accept the job fetches again (`useAnswerOffer` refreshes every job of the workshop) and
+ * shows as accepted; after Decline it goes back to Jobs, where the shell's notice stays. When the
+ * time runs out while it's open, the job fetches again on each tick until erp-api has let it go,
+ * which is the 404.
  */
 function Offer({
   job,
@@ -122,19 +140,54 @@ function Offer({
   });
 
   return (
-    <JobHeader job={job} jobs={jobs} held={false}>
-      {job.expires_at && <TimeLeft expiresAt={job.expires_at} now={now} />}
-      {!over && !leaving && (
-        <div className="pt-2">
-          <OfferActions
-            job={job}
-            onAnswered={(answer) => {
-              if (answer === "decline") onDeclined();
-            }}
-          />
+    <div className="flex flex-col gap-3.5">
+      <JobHeader
+        job={job}
+        jobs={jobs}
+        actions={
+          <>
+            {job.expires_at && <TimeLeft expiresAt={job.expires_at} now={now} />}
+            {!over && !leaving && (
+              <OfferActions
+                job={job}
+                onAnswered={(answer) => {
+                  if (answer === "decline") onDeclined();
+                }}
+              />
+            )}
+          </>
+        }
+      />
+      <div className={GRID}>
+        <WhatYoudDo job={job} />
+        <div className="flex min-w-0 flex-col gap-3.5">
+          <JobPayPanel job={job} />
+          <JobBrief summary={job.summary} />
         </div>
-      )}
-    </JobHeader>
+      </div>
+    </div>
+  );
+}
+
+/** An offer's work: the partner's steps in order and the pieces. Its files stay closed until it's taken, as erp-api keeps them. */
+function WhatYoudDo({ job }: { job: PartnerJobDetail }) {
+  const headingId = useId();
+  return (
+    <section aria-labelledby={headingId} className="flex min-w-0 flex-col gap-3 rounded-[20px] bg-card px-5 py-4">
+      <h2 id={headingId} className="text-base font-semibold">
+        What you&apos;d do
+      </h2>
+      <ol aria-label="Your steps" className="flex flex-col gap-1.5 text-sm">
+        {job.steps.map((step, index) => (
+          <li key={step.key} className="flex items-baseline gap-2.5">
+            <span aria-hidden className="w-4 shrink-0 text-ink-2 tabular-nums">{`${index + 1}.`}</span>
+            <span className="font-medium">{step.name}</span>
+          </li>
+        ))}
+      </ol>
+      <p className="text-sm text-ink">{piecesText(job.quantity)}</p>
+      <p className="text-sm text-ink-2">The design file and instructions open once you accept.</p>
+    </section>
   );
 }
 
