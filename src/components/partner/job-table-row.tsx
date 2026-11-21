@@ -38,7 +38,7 @@ export function rowFocus(onFocus: () => void) {
 }
 
 /** Done so far, and any lost pieces with an icon and the word, in the lost colour. */
-export function Progress({ job }: { job: PartnerJob }) {
+function Progress({ job }: { job: PartnerJob }) {
   const lost = lostText(job);
   return (
     <span className="inline-flex flex-wrap items-center gap-x-2">

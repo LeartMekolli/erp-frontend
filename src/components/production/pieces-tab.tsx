@@ -97,8 +97,11 @@ function SectionView({
   useSectionPieces: UseSectionPieces;
   onToggle: () => void;
   instructions?: ReactNode;
-  /** What the last move from this step did, shown as a band under its heading. */
-  result: string | null;
+  /**
+   * What the last move from this step did, shown as a band under its heading. `null` keeps an empty
+   * live region there, so the first result is read out; left out, the section has none (staff's pages).
+   */
+  result?: string | null;
   lostLook: boolean;
   toggleRef: (button: HTMLButtonElement | null) => void;
 }) {
@@ -139,12 +142,17 @@ function SectionView({
         </button>
         {instructions && <div className="shrink-0">{instructions}</div>}
       </div>
-      {result !== null && (
-        // A live region on the page while its step is: what the move did, where it was done.
-        <p role="status" data-tone="success" className="mb-1 flex items-start gap-2 rounded-lg bg-lilac px-3.5 py-3 text-sm text-violet-ink">
-          <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0" />
-          {result}
-        </p>
+      {result !== undefined && (
+        // A live region on the page while its step is, there before any result: a region that appears
+        // with its text already in it is often not read out.
+        <div role="status">
+          {result !== null && (
+            <p data-tone="success" className="mb-1 flex items-start gap-2 rounded-lg bg-lilac px-3.5 py-3 text-sm text-violet-ink">
+              <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0" />
+              {result}
+            </p>
+          )}
+        </div>
       )}
       {open && (
         <div className="pb-1">
@@ -282,6 +290,21 @@ export function PiecesTab(props: PiecesTabProps) {
     focusOn(next());
   }, [props.focusAfterMove, moved, sections]);
 
+  // Waiting for the step to empty ends at the partner's next click or key: once they've moved on,
+  // a step emptied later (by a refetch or someone else's move) never pulls focus back.
+  useEffect(() => {
+    if (!props.focusAfterMove || !moved) return;
+    const stop = () => {
+      waiting.current = false;
+    };
+    document.addEventListener("pointerdown", stop, true);
+    document.addEventListener("keydown", stop, true);
+    return () => {
+      document.removeEventListener("pointerdown", stop, true);
+      document.removeEventListener("keydown", stop, true);
+    };
+  }, [props.focusAfterMove, moved]);
+
   if (sections.length === 0) return <p className="py-2 text-sm text-ink-2">No pieces yet.</p>;
 
   const mine = selection.groupId === groupId;
@@ -291,7 +314,7 @@ export function PiecesTab(props: PiecesTabProps) {
   const resultAt = props.focusAfterMove && moved && sections.some((section) => section.stepKey === moved.stepKey) ? moved.stepKey : null;
 
   return (
-    <div ref={container} tabIndex={-1} className="flex flex-col outline-none">
+    <div ref={container} tabIndex={props.focusAfterMove ? -1 : undefined} className={cn("flex flex-col", props.focusAfterMove && "outline-none")}>
       {sections.map((section) => {
         const open = toggled[section.id] ?? section.id === firstId;
         return (
@@ -304,7 +327,7 @@ export function PiecesTab(props: PiecesTabProps) {
             useSectionPieces={useSectionPieces}
             onToggle={() => setToggled((current) => ({ ...current, [section.id]: !open }))}
             instructions={section.stepKey !== null ? props.stepInstructions?.(section.stepKey) : undefined}
-            result={resultAt !== null && section.stepKey === resultAt ? notice : null}
+            result={props.focusAfterMove ? (resultAt !== null && section.stepKey === resultAt ? notice : null) : undefined}
             lostLook={props.lostLook ?? false}
             toggleRef={(button) => {
               if (button) toggles.current.set(section.id, button);

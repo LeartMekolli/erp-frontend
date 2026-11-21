@@ -12,8 +12,8 @@ interface Notice {
   tone: NoticeTone;
 }
 
-/** `success` is a win (a job taken, pieces moved): shown as a band with a check. */
-export type NoticeTone = "plain" | "success";
+/** `success` is a win (a job taken): shown as a band with a check. Moves show their result in their step instead. */
+type NoticeTone = "plain" | "success";
 
 interface PartnerNotice {
   notice: Notice | null;

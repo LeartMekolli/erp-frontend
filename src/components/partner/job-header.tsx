@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, FileBox } from "lucide-react";
+import { ChevronLeft, CircleX, FileBox } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
@@ -50,7 +50,12 @@ export function JobHeader({ job, jobs, actions }: { job: PartnerJobDetail; jobs:
             </span>
             <span>{piecesText(job.quantity)}</span>
             {job.status !== "offered" && <span>{doneText(job)}</span>}
-            {lost && <span className="font-medium text-lost-ink">{lost}</span>}
+            {lost && (
+              <span className="inline-flex items-center gap-1 font-medium text-lost-ink">
+                <CircleX aria-hidden className="size-3.5 shrink-0" />
+                {lost}
+              </span>
+            )}
             {due && <span className={cn(late && "font-semibold text-late")}>{due.text}</span>}
             <span className="font-medium text-ink tabular-nums xl:hidden">{format.money(job.cost, format.currency)}</span>
           </div>
