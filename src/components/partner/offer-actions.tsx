@@ -28,7 +28,16 @@ export function jobHref(partnerId: string, jobId: string): string {
  * band, and the workshop's jobs fetch again (`useAnswerOffer`'s `onSettled`). Hidden while the
  * workshop is suspended, and until it's known whether it is.
  */
-export function OfferActions({ job, onAnswered }: { job: AcceptJob; onAnswered?: (answer: Answer) => void }) {
+export function OfferActions({
+  job,
+  onAnswered,
+  className = "grid grid-cols-2 gap-2 sm:flex sm:justify-end",
+}: {
+  job: AcceptJob;
+  onAnswered?: (answer: Answer) => void;
+  /** How the two buttons sit: side by side by default; the Jobs table stacks them on phones. */
+  className?: string;
+}) {
   const { partnerId, name, suspended } = useWorkshop();
   const { announce } = usePartnerNotice();
   const answer = useAnswerOffer(partnerId);
@@ -92,7 +101,7 @@ export function OfferActions({ job, onAnswered }: { job: AcceptJob; onAnswered?:
   };
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
+    <div className={className}>
       {/* Only the dialogs send, and they wait while sending. These stay enabled, so focus can come back to them. */}
       <Button ref={declineButton} variant="outline" onClick={() => ask("decline")}>
         Decline
