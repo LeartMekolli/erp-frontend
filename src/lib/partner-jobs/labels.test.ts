@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PartnerJob } from "@/lib/api/schema-types";
 
-import { doneText, jobTitle, piecesText, scrappedText, timeLeft } from "./labels";
+import { answerByText, doneText, dueText, jobTitle, lostText, piecesText, stepsText, timeLeft } from "./labels";
 
 const NOW = Date.parse("2026-11-12T10:00:00Z");
 const MIN = 60_000;
@@ -25,8 +25,29 @@ describe("partner job words", () => {
     expect(piecesText(1)).toBe("1 piece");
     expect(piecesText(10)).toBe("10 pieces");
     expect(doneText(job({ finished: 6, scrapped: 0 }))).toBe("6 of 10 done");
-    expect(scrappedText(job({ finished: 6, scrapped: 1 }))).toBe("1 scrapped");
-    expect(scrappedText(job({ finished: 6, scrapped: 0 }))).toBeNull();
+  });
+
+  it("counts lost pieces, and says nothing when none are", () => {
+    expect(lostText(job({ finished: 6, scrapped: 1 }))).toBe("1 lost");
+    expect(lostText(job({ finished: 0, scrapped: 3 }))).toBe("3 lost");
+    expect(lostText(job({ finished: 6, scrapped: 0 }))).toBeNull();
+  });
+
+  it("lists the steps in order", () => {
+    expect(stepsText([{ name: "Print pattern" }, { name: "Casting" }, { name: "Polishing" }])).toBe("Print pattern → Casting → Polishing");
+    expect(stepsText([])).toBe("");
+  });
+
+  it("says when an offer must be answered by, in the workspace's zone", () => {
+    expect(answerByText("2026-11-24T13:00:00Z", "Europe/Berlin")).toBe("Answer by 24 Nov 2026, 14:00");
+  });
+
+  it("words the due day, and how late a job is", () => {
+    expect(dueText(null, "2026-11-21")).toBeNull();
+    expect(dueText("2026-12-04", "2026-11-21")).toEqual({ text: "Due 4 Dec 2026", late: false });
+    expect(dueText("2026-11-21", "2026-11-21")).toEqual({ text: "Due 21 Nov 2026", late: false });
+    expect(dueText("2026-11-20", "2026-11-21")).toEqual({ text: "Late · 1 day", late: true });
+    expect(dueText("2026-11-19", "2026-11-21")).toEqual({ text: "Late · 2 days", late: true });
   });
 
   it("words the time left", () => {

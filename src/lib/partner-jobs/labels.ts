@@ -1,4 +1,6 @@
 import type { PartnerJob } from "@/lib/api/schema-types";
+import { formatDateTime, formatDay } from "@/lib/format/dates";
+import { daysBetween } from "@/lib/orders/labels";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -19,6 +21,29 @@ export function doneText(job: PartnerJob): string {
 
 export function scrappedText(job: PartnerJob): string | null {
   return job.pieces.scrapped > 0 ? `${job.pieces.scrapped} scrapped` : null;
+}
+
+/** Scrapped pieces, which are lost to the job: `1 lost`. Nothing when none are. */
+export function lostText(job: Pick<PartnerJob, "pieces">): string | null {
+  return job.pieces.scrapped > 0 ? `${job.pieces.scrapped} lost` : null;
+}
+
+/** The partner's steps in order: `Print pattern → Casting`. */
+export function stepsText(steps: readonly { name: string }[]): string {
+  return steps.map((step) => step.name).join(" → ");
+}
+
+/** The exact deadline of an offer, in the workspace's time zone. */
+export function answerByText(expiresAt: string, timeZone: string): string {
+  return `Answer by ${formatDateTime(expiresAt, timeZone)}`;
+}
+
+/** The day a job is due, or how many days late it is against the workspace's today. Null without a due day. */
+export function dueText(dueOn: string | null, today: string): { text: string; late: boolean } | null {
+  if (dueOn === null) return null;
+  const late = daysBetween(dueOn, today);
+  if (late > 0) return { text: `Late · ${late} ${late === 1 ? "day" : "days"}`, late: true };
+  return { text: `Due ${formatDay(dueOn)}`, late: false };
 }
 
 /** How long a partner has left to answer an offer. Urgent under 2 hours; over at or past the deadline. */

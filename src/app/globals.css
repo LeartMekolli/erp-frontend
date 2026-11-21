@@ -26,6 +26,9 @@
   /* Order status accents: ready to ship, and waiting for payment (never as text colour on white) */
   --color-ship: #1d8f63;
   --color-collect: #e0a33a;
+  /* A lost (scrapped) piece, apart from amber's "being redone": the dot 4.8:1 on white, text 6.9:1 */
+  --color-lost: #c2408a;
+  --color-lost-ink: #a3246b;
   /* Warning text and icons, between fine and late: 5.9:1 on white, 5.1:1 on `ground` */
   --color-warn: #8a5a00;
   --color-panel-soft: #faf9ff;
