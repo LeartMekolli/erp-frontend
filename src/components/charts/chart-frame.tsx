@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { ParentSize } from "@visx/responsive";
 
 import { ChartTable, type ChartTableProps } from "./chart-table";
@@ -20,6 +20,8 @@ export function ChartFrame({
   empty,
   table,
   width,
+  focus,
+  overlay,
   children,
 }: {
   label: string;
@@ -27,10 +29,22 @@ export function ChartFrame({
   empty?: string | null;
   table: ChartTableProps;
   width?: number;
+  /** Keyboard access, spread on the figure: focus can't live in the `aria-hidden` drawing. */
+  focus?: { tabIndex: 0; onKeyDown: (e: KeyboardEvent) => void; onBlur: () => void };
+  /** Shown over the drawing but outside the hidden area, in a live region (the tooltip). */
+  overlay?: ReactNode;
   children: (size: Size) => ReactNode;
 }) {
   return (
-    <figure aria-label={label} className="relative m-0">
+    <figure
+      aria-label={label}
+      className={
+        focus
+          ? "relative m-0 rounded-[12px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet"
+          : "relative m-0"
+      }
+      {...focus}
+    >
       <div className="relative" style={{ height }}>
         <div aria-hidden="true" style={{ height }}>
           {width !== undefined ? (
@@ -43,6 +57,7 @@ export function ChartFrame({
             </ParentSize>
           )}
         </div>
+        {overlay !== undefined ? <div aria-live="polite" className="pointer-events-none absolute inset-0">{overlay}</div> : null}
         {empty ? (
           <p className="text-ink-2 pointer-events-none absolute inset-0 m-0 flex items-center justify-center text-center text-[13px]">
             {empty}
