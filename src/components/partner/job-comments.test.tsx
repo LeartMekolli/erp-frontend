@@ -22,6 +22,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 beforeEach(() => {
+  // An old link to the Comments tab: it opens Pieces, with the comments in the side column.
   navigation.search = "tab=comments";
 });
 
@@ -43,7 +44,8 @@ function renderPage() {
 describe("comments on the Job page", () => {
   it("talks with staff", async () => {
     renderPage();
-    const staffs = (await screen.findByText("Matte polish on these, please.")).closest("li")!;
+    expect(await screen.findByRole("tab", { name: "Pieces" })).toHaveAttribute("aria-selected", "true");
+    const staffs = (await within(screen.getByRole("region", { name: "Comments" })).findByText("Matte polish on these, please.")).closest("li")!;
     expect(within(staffs).getByText("Staff")).toBeInTheDocument();
     expect(screen.getByText("Staff at Demo will read this.")).toBeInTheDocument();
 

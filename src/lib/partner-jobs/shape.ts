@@ -106,18 +106,3 @@ export function partnerStory(piece: PartnerWorkOrder): PieceStory {
     replacesId: null,
   };
 }
-
-/**
- * The job's step strip: the partner's own steps, then the pieces not with it yet, those whose part is
- * done, and the finished and scrapped ones. Workspace steps appear only in these groups, never by name.
- */
-export function partnerStages(job: PartnerJobDetail): { key: string; name: string; count: number; inRework: number }[] {
-  const atStage = (stage: JobPiece["stage"]) => job.work_orders.filter((piece) => piece.stage === stage).length;
-  return [
-    ...job.steps.map((step) => ({ key: step.key, name: step.name, count: step.count, inRework: step.in_rework })),
-    { key: "stage:not_yet", name: "Not with you yet", count: atStage("not_yet"), inRework: 0 },
-    { key: "stage:done", name: "Your part done", count: atStage("done"), inRework: 0 },
-    { key: "status:finished", name: "Finished", count: job.pieces.finished, inRework: 0 },
-    { key: "status:scrapped", name: "Scrapped", count: job.pieces.scrapped, inRework: 0 },
-  ];
-}

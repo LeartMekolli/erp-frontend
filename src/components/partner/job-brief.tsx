@@ -1,9 +1,7 @@
 "use client";
 
-import { ChevronDown, Sparkles } from "lucide-react";
-import { useId, useState } from "react";
-
-import { cn } from "cn";
+import { Sparkles } from "lucide-react";
+import { useId } from "react";
 
 import type { PartnerJobDetail } from "@/lib/api/schema-types";
 
@@ -26,44 +24,34 @@ function Section({ title, items }: { title: string; items: string[] | null }) {
 }
 
 /**
- * The AI's brief for the job: what to make, what to watch out for, what it recommends and about how long it
- * takes. While erp-api writes it the page asks again; a failed or missing brief shows nothing.
+ * The AI's brief for the job, as a panel of the side column: what to make, what to watch out for,
+ * what it recommends and about how long it takes. While erp-api writes it the page asks again; a
+ * failed or missing brief shows no panel.
  */
 export function JobBrief({ summary }: { summary: PartnerJobDetail["summary"] }) {
-  const [open, setOpen] = useState(false);
-  const panelId = useId();
-
+  const headingId = useId();
   if (summary === null || summary.status === "failed") return null;
-  if (summary.status === "pending") {
-    return (
-      <p role="status" className="inline-flex items-center gap-1.5 text-sm text-ink-2">
-        <Sparkles aria-hidden className="size-4 shrink-0" />
-        Writing the brief…
-      </p>
-    );
-  }
 
   return (
-    <div className="flex flex-col gap-2">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={() => setOpen(!open)}
-        className="inline-flex min-h-11 items-center gap-1.5 self-start rounded-lg font-medium hover:text-ink"
-      >
+    <section aria-labelledby={headingId} className="flex flex-col gap-3 rounded-[20px] bg-card px-5 py-4">
+      <h2 id={headingId} className="inline-flex items-center gap-1.5 text-base font-semibold">
         <Sparkles aria-hidden className="size-4 shrink-0" />
         AI brief
-        <ChevronDown aria-hidden className={cn("size-4 shrink-0 text-ink-2 transition-transform motion-reduce:transition-none", !open && "-rotate-90")} />
-      </button>
-      {open && <Brief id={panelId} summary={summary} />}
-    </div>
+      </h2>
+      {summary.status === "pending" ? (
+        <p role="status" className="text-sm text-ink-2">
+          Writing the brief…
+        </p>
+      ) : (
+        <Brief summary={summary} />
+      )}
+    </section>
   );
 }
 
-function Brief({ id, summary }: { id: string; summary: Summary }) {
+function Brief({ summary }: { summary: Summary }) {
   return (
-    <div id={id} className="flex flex-col gap-3 rounded-xl border border-line px-3.5 py-3">
+    <div className="flex flex-col gap-3">
       {summary.description && (
         <div className="flex flex-col gap-1">
           <h3 className="text-sm font-semibold">What to make</h3>

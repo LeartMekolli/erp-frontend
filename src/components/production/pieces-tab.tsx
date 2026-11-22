@@ -1,7 +1,7 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { ChevronDown, CircleCheck } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { cn } from "cn";
 
@@ -66,6 +66,16 @@ interface PiecesTabProps {
   /** The partner a move at one of its steps counts for. */
   countsFor: string | null;
   onMove: (body: MoveBody) => Promise<void>;
+  // The opt-ins below are for the partner's Job page; left out, the tab is as staff know it.
+  /** A step's instructions link: at the end of its section's heading, and in its move dialog. */
+  stepInstructions?: (stepKey: string) => ReactNode;
+  /**
+   * After a move, focus and the result stay at the step the pieces left: its heading, with the
+   * result as a band under it; once that step is empty, the next step's heading.
+   */
+  focusAfterMove?: boolean;
+  /** Scrapped pieces in the lost colour with an icon, apart from amber's "being redone". */
+  lostLook?: boolean;
 }
 
 function SectionView({
@@ -75,6 +85,10 @@ function SectionView({
   selectable,
   useSectionPieces,
   onToggle,
+  instructions,
+  result,
+  lostLook,
+  toggleRef,
 }: {
   groupId: string;
   section: PieceSection;
@@ -82,6 +96,14 @@ function SectionView({
   selectable: boolean;
   useSectionPieces: UseSectionPieces;
   onToggle: () => void;
+  instructions?: ReactNode;
+  /**
+   * What the last move from this step did, shown as a band under its heading. `null` keeps an empty
+   * live region there, so the first result is read out; left out, the section has none (staff's pages).
+   */
+  result?: string | null;
+  lostLook: boolean;
+  toggleRef: (button: HTMLButtonElement | null) => void;
 }) {
   const pieces = useSectionPieces(groupId, section, open);
   const selection = useStepSelection();
@@ -105,6 +127,7 @@ function SectionView({
           />
         )}
         <button
+          ref={toggleRef}
           type="button"
           aria-expanded={open}
           onClick={onToggle}
@@ -117,7 +140,20 @@ function SectionView({
             {section.inRework > 0 && ` · ${section.inRework} being redone`}
           </span>
         </button>
+        {instructions && <div className="shrink-0">{instructions}</div>}
       </div>
+      {result !== undefined && (
+        // A live region on the page while its step is, there before any result: a region that appears
+        // with its text already in it is often not read out.
+        <div role="status">
+          {result !== null && (
+            <p data-tone="success" className="mb-1 flex items-start gap-2 rounded-lg bg-lilac px-3.5 py-3 text-sm text-violet-ink">
+              <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0" />
+              {result}
+            </p>
+          )}
+        </div>
+      )}
       {open && (
         <div className="pb-1">
           {pieces.isPending ? (
@@ -135,6 +171,7 @@ function SectionView({
                   selectable={picking}
                   selected={pickedHere && selection.ids.has(piece.id)}
                   onToggle={() => selection.toggle(groupId, piece)}
+                  lostLook={lostLook}
                 />
               ))}
             </ul>
@@ -209,6 +246,7 @@ function MoveFlow({
             if (!open) setKind(null);
           }}
           onMoved={onMoved}
+          instructions={props.stepInstructions?.(stepKey)}
         />
       )}
     </>
@@ -222,17 +260,61 @@ export function PiecesTab(props: PiecesTabProps) {
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
   // What the last move did, announced politely.
   const [notice, setNotice] = useState<string | null>(null);
+  // With `focusAfterMove`: the step the last move left, and where it stood among the sections.
+  const [moved, setMoved] = useState<{ stepKey: string; index: number } | null>(null);
+  // The move whose focus has been placed, and whether it may still have to go on: once its step
+  // empties, the step's heading goes and focus falls with it.
+  const placed = useRef<{ stepKey: string; index: number } | null>(null);
+  const waiting = useRef(false);
+  const toggles = useRef(new Map<string, HTMLButtonElement>());
+  const container = useRef<HTMLDivElement>(null);
   const selection = useStepSelection();
   const firstId = sections[0]?.id;
+
+  // Runs after the commit that closed the move dialog, so its focus trap is gone. Later commits only
+  // act when the step has emptied and focus fell with its heading.
+  useEffect(() => {
+    if (!props.focusAfterMove || !moved) return;
+    const here = sections.find((section) => section.stepKey === moved.stepKey);
+    const focusOn = (section: PieceSection | undefined) => ((section && toggles.current.get(section.id)) ?? container.current)?.focus();
+    const next = () => sections[Math.min(moved.index, sections.length - 1)];
+    if (placed.current !== moved) {
+      placed.current = moved;
+      waiting.current = here !== undefined;
+      focusOn(here ?? next());
+      return;
+    }
+    const lost = document.activeElement === null || document.activeElement === document.body;
+    if (!waiting.current || here || !lost) return;
+    waiting.current = false;
+    focusOn(next());
+  }, [props.focusAfterMove, moved, sections]);
+
+  // Waiting for the step to empty ends at the partner's next click or key: once they've moved on,
+  // a step emptied later (by a refetch or someone else's move) never pulls focus back.
+  useEffect(() => {
+    if (!props.focusAfterMove || !moved) return;
+    const stop = () => {
+      waiting.current = false;
+    };
+    document.addEventListener("pointerdown", stop, true);
+    document.addEventListener("keydown", stop, true);
+    return () => {
+      document.removeEventListener("pointerdown", stop, true);
+      document.removeEventListener("keydown", stop, true);
+    };
+  }, [props.focusAfterMove, moved]);
 
   if (sections.length === 0) return <p className="py-2 text-sm text-ink-2">No pieces yet.</p>;
 
   const mine = selection.groupId === groupId;
   const dropped = mine ? selection.dropped : 0;
   const picked = mine && selection.stepKey !== null && selection.ids.size > 0 ? selection.stepKey : null;
+  // The move's result sits in its step while the step is there; else in the line below the sections.
+  const resultAt = props.focusAfterMove && moved && sections.some((section) => section.stepKey === moved.stepKey) ? moved.stepKey : null;
 
   return (
-    <div className="flex flex-col">
+    <div ref={container} tabIndex={props.focusAfterMove ? -1 : undefined} className={cn("flex flex-col", props.focusAfterMove && "outline-none")}>
       {sections.map((section) => {
         const open = toggled[section.id] ?? section.id === firstId;
         return (
@@ -244,11 +326,18 @@ export function PiecesTab(props: PiecesTabProps) {
             selectable={selectable}
             useSectionPieces={useSectionPieces}
             onToggle={() => setToggled((current) => ({ ...current, [section.id]: !open }))}
+            instructions={section.stepKey !== null ? props.stepInstructions?.(section.stepKey) : undefined}
+            result={props.focusAfterMove ? (resultAt !== null && section.stepKey === resultAt ? notice : null) : undefined}
+            lostLook={props.lostLook ?? false}
+            toggleRef={(button) => {
+              if (button) toggles.current.set(section.id, button);
+              else toggles.current.delete(section.id);
+            }}
           />
         );
       })}
       <p role="status" className="px-1 text-caption font-medium text-ink empty:hidden">
-        {dropped > 0 ? `${dropped} ${dropped === 1 ? "piece" : "pieces"} moved on and left your selection.` : notice}
+        {dropped > 0 ? `${dropped} ${dropped === 1 ? "piece" : "pieces"} moved on and left your selection.` : resultAt === null ? notice : null}
       </p>
       {selectable && picked !== null && (
         <MoveFlow
@@ -258,6 +347,7 @@ export function PiecesTab(props: PiecesTabProps) {
           onMoved={(message) => {
             selection.clear();
             setNotice(message);
+            setMoved({ stepKey: picked, index: Math.max(0, sections.findIndex((section) => section.stepKey === picked)) });
           }}
         />
       )}

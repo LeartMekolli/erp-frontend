@@ -100,18 +100,28 @@ describe("JobPage", () => {
     renderPage();
     expect(await screen.findByRole("heading", { level: 1, name: "Ring · Silver 925" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Jobs" })).toHaveAttribute("href", JOBS_PATH);
-    expect(screen.getByText(/^10 pieces · Due .+ · You're paid €240\.00$/)).toBeInTheDocument();
+    expect(screen.getByText("Offered")).toBeInTheDocument();
     expect(screen.getByText("5 h 12 min left to answer")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Accept" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Decline" })).toBeEnabled();
-    expect(within(screen.getByRole("list", { name: "Your steps" })).getByText("Casting")).toBeInTheDocument();
+
+    const work = screen.getByRole("region", { name: "What you'd do" });
+    expect(within(within(work).getByRole("list", { name: "Your steps" })).getByText("Casting")).toBeInTheDocument();
+    expect(work).toHaveTextContent("10 pieces");
+    expect(work).toHaveTextContent("The design file and instructions open once you accept.");
+
+    const pay = screen.getByRole("region", { name: "Pay" });
+    expect(pay).toHaveTextContent("€240.00");
+    expect(pay).toHaveTextContent("for 10 pieces");
     expect(screen.queryByRole("button", { name: "Design file" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Comments" })).not.toBeInTheDocument();
   });
 
   it("fills in once accepted", async () => {
     renderPage();
     await userEvent.click(await screen.findByRole("button", { name: "Accept" }));
+    await userEvent.click(within(await screen.findByRole("dialog", { name: "Take Ring · Silver 925?" })).getByRole("button", { name: "Accept job" }));
 
     expect(await screen.findByText("0 of 10 done")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Pieces" })).toBeInTheDocument();
@@ -170,6 +180,31 @@ describe("JobPage", () => {
     expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
   });
 
+  it("keeps the answers while an Accept is on its way past the deadline", async () => {
+    freezeAt(NOW, ["Date", "setInterval", "clearInterval"]);
+    vi.setSystemTime(NOW + 5 * 60 * MINUTE + 11 * MINUTE);
+    let letGo = () => {};
+    const held = new Promise<void>((resolve) => (letGo = resolve));
+    server.use(
+      http.post(`${DETAIL}/accept`, async () => {
+        await held;
+      }),
+    );
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "Accept" }));
+    const dialog = await screen.findByRole("dialog", { name: "Take Ring · Silver 925?" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Accept job" }));
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Accept job" })).toBeDisabled());
+
+    act(() => vi.advanceTimersByTime(MINUTE + 15_000));
+    expect(screen.getByRole("dialog", { name: "Take Ring · Silver 925?" })).toBeInTheDocument();
+    expect(screen.queryByText("This job isn't yours any more, or doesn't exist.")).not.toBeInTheDocument();
+
+    // erp-api's answer is the one the partner reads, whichever it is.
+    act(() => letGo());
+    expect(await screen.findByText(/^(Ring · Silver 925 is yours\.|This offer is no longer open\.)$/)).toBeInTheDocument();
+  });
+
   it("says when the job can't be loaded", async () => {
     server.use(
       http.get(`${FAKE_API_URL}/partner-portal/partners/:partnerId/jobs/:groupId`, () =>
@@ -189,16 +224,37 @@ describe("JobPage: a job the partner holds", () => {
     navigation.groupId = RING_BAND_JOB_ID;
   });
 
-  it("shows an accepted job's steps and tabs", async () => {
+  it("shows an accepted job on the order page's layout", async () => {
     renderPage();
     expect(await screen.findByRole("heading", { level: 1, name: "Ring band · Brass" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Jobs" })).toHaveAttribute("href", JOBS_PATH);
+    expect(screen.getByText("In progress")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Design file" })).toBeInTheDocument();
-    const strip = screen.getByRole("list", { name: "Progress through the steps" });
-    for (const name of ["Finish", "Not with you yet", "Your part done", "Finished", "Scrapped"]) expect(within(strip).getByText(name)).toBeInTheDocument();
-    expect(within(strip).queryByText("Print")).not.toBeInTheDocument();
+    // The steps are listed once: as the Pieces tab's sections, with no strip and no list in the header.
+    expect(screen.queryByRole("list", { name: "Progress through the steps" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Your steps" })).not.toBeInTheDocument();
+    const pieces = await screen.findByRole("tabpanel", { name: "Pieces" });
+    for (const name of ["Finish", "Not with you yet", "Your part done", "Finished", "Scrapped"]) {
+      expect(within(pieces).getByRole("button", { name: new RegExp(`^${name}\\b`) })).toBeInTheDocument();
+    }
+    expect(within(pieces).queryByRole("button", { name: /^Print\b/ })).not.toBeInTheDocument();
     // The scratched piece failed at Finish after the hand-over, so Quality counts it as staff's does.
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Pieces", "Quality 1 failed", "History", "Comments"]);
-    expect(screen.queryByText(/coming soon/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Pieces", "Quality 1 failed", "History"]);
+    expect(screen.getByRole("region", { name: "Pay" })).toHaveTextContent("€180.00");
+    expect(screen.getByRole("region", { name: "Comments" })).toBeInTheDocument();
+  });
+
+  it("says when a job is late", async () => {
+    server.use(
+      http.get(DETAIL, () => {
+        const answer = fakeState().partnerJobs.detail(NORTHCAST_ID, RING_BAND_JOB_ID);
+        if (!answer.ok) throw new Error("expected Ring band");
+        return HttpResponse.json({ ...answer.body, due_on: "2026-11-10" });
+      }),
+    );
+    renderPage();
+    expect(await screen.findByText("In progress · Late")).toBeInTheDocument();
+    expect(screen.getByText("Late · 2 days")).toBeInTheDocument();
   });
 
   it("opens the design file", async () => {
@@ -214,7 +270,8 @@ describe("JobPage: a job the partner holds", () => {
     const tab = stubNewTab();
     const asked = watchRequests();
     renderPage();
-    await userEvent.click(await screen.findByRole("button", { name: "Instructions for Finish" }));
+    const pieces = await screen.findByRole("tabpanel", { name: "Pieces" });
+    await userEvent.click(await within(pieces).findByRole("button", { name: "Instructions for Finish" }));
     await waitFor(() => expect(tab.location.href).not.toBe(""));
     expect(asked).toContain(`/partner-portal/partners/${NORTHCAST_ID}/jobs/${RING_BAND_JOB_ID}/steps/finish/sop`);
   });
@@ -222,7 +279,7 @@ describe("JobPage: a job the partner holds", () => {
   it("offers no instructions for a step without them", async () => {
     navigation.groupId = LONG_NAME_JOB_ID;
     renderPage();
-    expect(await screen.findByRole("list", { name: "Your steps" })).toHaveTextContent("Casting");
+    expect(await screen.findByRole("tabpanel", { name: "Pieces" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Instructions for/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Design file" })).not.toBeInTheDocument();
   });
@@ -238,10 +295,8 @@ describe("JobPage: a job the partner holds", () => {
       created_at: new Date(NOW).toISOString(),
     });
     renderPage();
-    const toggle = await screen.findByRole("button", { name: "AI brief" });
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-    await userEvent.click(toggle);
-    expect(screen.getByRole("heading", { name: "What to make" })).toBeInTheDocument();
+    const brief = await screen.findByRole("region", { name: "AI brief" });
+    expect(within(brief).getByRole("heading", { name: "What to make" })).toBeInTheDocument();
     expect(screen.getByText("A brass ring band, 4 mm wide.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Watch out for" })).toBeInTheDocument();
     expect(screen.getByText("Thin walls near the seam")).toBeInTheDocument();
@@ -252,14 +307,14 @@ describe("JobPage: a job the partner holds", () => {
   it("says the brief is being written", async () => {
     serveBrief({ status: "pending", description: null, watch_outs: null, recommendations: null, production_days: null, used_history: null, created_at: new Date(NOW).toISOString() });
     renderPage();
-    expect(await screen.findByText("Writing the brief…")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "AI brief" })).not.toBeInTheDocument();
+    expect(await within(await screen.findByRole("region", { name: "AI brief" })).findByText("Writing the brief…")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "What to make" })).not.toBeInTheDocument();
   });
 
   it("shows no brief when there is none", async () => {
     renderPage();
     expect(await screen.findByRole("heading", { level: 1, name: "Ring band · Brass" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "AI brief" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "AI brief" })).not.toBeInTheDocument();
     expect(screen.queryByText("Writing the brief…")).not.toBeInTheDocument();
   });
 

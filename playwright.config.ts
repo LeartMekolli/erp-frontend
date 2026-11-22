@@ -2,17 +2,18 @@ import { defineConfig, devices, type Project } from "@playwright/test";
 
 import { APP_URL, FAKE_URL } from "./e2e/urls";
 
-/** The screen sizes every page is checked at (spec §9): phones, a phone on its side, tablets, desktops. */
+/**
+ * The screen sizes every page is checked at (`docs/briefs/orders.md` §7): one or two in each band
+ * between the layout's breakpoints (400, 640, 768, 1024, 1280, 1536). A second size inside the same
+ * band shows the same layout, so it isn't run; 390 × 844 is covered by the WebKit project below.
+ */
 const SIZES = [
   [320, 640],
-  [390, 844],
   [430, 932],
   [844, 390],
   [768, 1024],
-  [820, 1180],
   [1024, 768],
   [1280, 800],
-  [1440, 900],
   [1920, 1080],
 ] as const;
 

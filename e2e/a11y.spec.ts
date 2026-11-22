@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 
-import { LONG_NAME_JOB_ID, LONG_PRODUCT_NAME, RING_BAND_JOB_ID } from "../test/fake-erp-api/partner-jobs";
+import { LONG_NAME_JOB_ID, LONG_PRODUCT_NAME, RING_BAND_JOB_ID, RING_OFFER_ID } from "../test/fake-erp-api/partner-jobs";
 import { NORTHCAST_ID, PARTNER, PARTNER_TWO_SHOPS, RESET_TOKEN, STAFF, STAFF_INVITE_TOKEN } from "../test/fake-erp-api/seed";
 
 import { expect, expectNoAxeViolations, expectNoSideScroll, settled, signIn, test } from "./helpers";
@@ -181,29 +181,32 @@ test("workshop chooser: accessible and fits the screen", async ({ page }) => {
 /** The fake's 60-character job with its three options (`partner-jobs.ts`). */
 const LONG_JOB_TITLE = `${LONG_PRODUCT_NAME} · Silver 925 · Brushed satin with a hand-polished edge · Natural`;
 
+/** A row of the Jobs table by what it holds. */
+const jobRow = (page: Page, title: string) => page.getByRole("region", { name: "Job list" }).getByRole("row").filter({ hasText: title });
+
 /** Signs in as Northcast's owner and waits for both offers and the jobs in progress, the 60-character one among them. */
 async function openPartnerJobs(page: Page) {
   await signIn(page, PARTNER.email);
   await expect(page.getByRole("heading", { level: 1, name: "Jobs" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Waiting for your answer · 2" })).toBeVisible();
-  await expect(page.getByText(LONG_JOB_TITLE, { exact: true })).toBeVisible();
-  await expect(page.getByText("Ring band · Brass", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Waiting for your answer" })).toContainText("2 offers");
+  await expect(jobRow(page, LONG_JOB_TITLE)).toBeVisible();
+  await expect(jobRow(page, "Ring band · Brass")).toBeVisible();
 }
 
-// Every size, 1024 px included: there the sidebar is a rail and each job is one line, so
-// Ring band's scrapped count and the long job's amount must still fit.
+// Every size, 1024 px included: the long job's title is cut, never the table widened, and Ring
+// band's lost count and the long job's amount must still fit.
 test("partner jobs: accessible and fits the screen", async ({ page }) => {
   await openPartnerJobs(page);
   await expectAccessibleAndFits(page);
 
+  // The offers, with their answers in the last column at every size.
+  await page.getByRole("region", { name: "Job list" }).getByRole("tab", { name: "Offers 2" }).click();
+  await expect(jobRow(page, "Ring · Silver 925")).toBeVisible();
+  await expectAccessibleAndFits(page);
+
   // A bottom sheet on phones, a dialog from 640 px.
-  await page
-    .getByRole("region", { name: /^Waiting for your answer/ })
-    .getByRole("listitem")
-    .filter({ hasText: "Ring · Silver 925" })
-    .getByRole("button", { name: "Decline" })
-    .click();
-  await expect(page.getByRole("dialog", { name: "Decline this job?" })).toBeVisible();
+  await jobRow(page, "Ring · Silver 925").getByRole("button", { name: "Accept" }).click();
+  await expect(page.getByRole("dialog", { name: "Take Ring · Silver 925?" })).toBeVisible();
   await expectAccessibleAndFits(page);
 });
 
@@ -213,6 +216,14 @@ test("partner job: accessible and fits the screen", async ({ page }) => {
   // The title wraps rather than widening the page.
   await expect(page.getByRole("heading", { level: 1, name: LONG_JOB_TITLE })).toBeVisible();
   await expect(page.getByText("No pieces yet.")).toBeVisible();
+  await expectAccessibleAndFits(page);
+});
+
+test("partner offer: accessible and fits the screen", async ({ page }) => {
+  await openPartnerJobs(page);
+  await page.goto(`/partner-portal/${NORTHCAST_ID}/jobs/${RING_OFFER_ID}`);
+  await expect(page.getByRole("region", { name: "What you'd do" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Accept" })).toBeVisible();
   await expectAccessibleAndFits(page);
 });
 
@@ -269,6 +280,8 @@ test("partner job tabs: accessible and fits the screen", async ({ page }) => {
   await openPartnerJobs(page);
   await page.goto(`/partner-portal/${NORTHCAST_ID}/jobs/${RING_BAND_JOB_ID}`);
   await expect(page.getByRole("heading", { level: 1, name: "Ring band · Brass" })).toBeVisible();
+  // The side column (Pay, Comments) sits beside the work from 1280px and below it under that.
+  await expect(page.getByRole("region", { name: "Comments" }).getByText("Matte polish on these, please.")).toBeVisible();
 
   // Pieces with one picked, then the move dialog: a bottom sheet on phones.
   await page.getByRole("checkbox", { name: "Select 4/12" }).click();
@@ -290,19 +303,4 @@ test("partner job tabs: accessible and fits the screen", async ({ page }) => {
 
   await checkTab(page, /^Quality/, page.getByRole("article", { name: "Finish" }));
   await checkTab(page, "History", page.getByText("Came to you"));
-  await checkTab(page, "Comments", page.getByText("Matte polish on these, please."));
-});
-
-test("signing in works with the keyboard alone", async ({ page }) => {
-  await page.goto("/sign-in");
-  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
-  await page.keyboard.press("Tab");
-  await expect(page.getByLabel("Workspace")).toBeFocused();
-  await page.keyboard.type("demo");
-  await page.keyboard.press("Tab");
-  await page.keyboard.type(STAFF.email);
-  await page.keyboard.press("Tab");
-  await page.keyboard.type("fake-password-1");
-  await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
 });

@@ -6,7 +6,7 @@ import { createPartnerJobsStore, RING_BAND_JOB_ID } from "../../../test/fake-erp
 import { createProductionStore } from "../../../test/fake-erp-api/production";
 import { NORTHCAST_ID } from "../../../test/fake-erp-api/seed";
 
-import { partnerEntry, partnerPiece, partnerRules, partnerStages } from "./shape";
+import { partnerEntry, partnerPiece, partnerRules } from "./shape";
 
 const NOW = Date.parse("2026-11-12T10:00:00Z");
 
@@ -22,18 +22,6 @@ function ringBand() {
 }
 
 describe("partner job shape", () => {
-  it("groups pieces by whose hands they're in", () => {
-    const stages = partnerStages(ringBand().read());
-    expect(stages.map(({ name, count }) => [name, count])).toEqual([
-      ["Finish", 4],
-      ["Not with you yet", 2],
-      ["Your part done", 4],
-      ["Finished", 1],
-      ["Scrapped", 1],
-    ]);
-    expect(stages[0]!.inRework).toBe(1);
-  });
-
   it("lets only the partner's pieces be picked", () => {
     const pieces = ringBand().read().work_orders;
     for (const item of pieces) expect(partnerPiece(item).mayWork).toBe(item.stage === "yours");

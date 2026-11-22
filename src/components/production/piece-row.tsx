@@ -1,6 +1,6 @@
 "use client";
 
-import { RotateCcw } from "lucide-react";
+import { CircleX, RotateCcw } from "lucide-react";
 import Link from "next/link";
 
 import { cn } from "cn";
@@ -28,14 +28,18 @@ export function PieceRow({
   selectable,
   selected,
   onToggle,
+  lostLook = false,
 }: {
   piece: Piece;
   /** Whether this list offers picking at all. */
   selectable: boolean;
   selected: boolean;
   onToggle: () => void;
+  /** A scrapped piece in the lost colour with an icon, apart from amber's "being redone". Partner pages only. */
+  lostLook?: boolean;
 }) {
   const status = STATUS[piece.status];
+  const lost = lostLook && piece.status === "scrapped";
   return (
     <li className="flex min-h-11 items-center gap-4 border-t border-line px-1 text-sm">
       {selectable && (
@@ -56,10 +60,17 @@ export function PieceRow({
       >
         {piece.label}
       </Link>
-      <span className="inline-flex items-center gap-1.5 text-ink-2">
-        <span aria-hidden className={cn("size-1.5 rounded-full", status.dot)} />
-        {status.word}
-      </span>
+      {lost ? (
+        <span data-look="lost" className="inline-flex items-center gap-1.5 font-medium text-lost-ink">
+          <CircleX aria-hidden className="size-3.5 shrink-0" />
+          {status.word}
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1.5 text-ink-2">
+          <span aria-hidden className={cn("size-1.5 rounded-full", status.dot)} />
+          {status.word}
+        </span>
+      )}
       {piece.inRework && (
         <span className="inline-flex items-center gap-1.5 font-medium">
           <RotateCcw aria-hidden className="size-3.5 shrink-0 text-collect" />

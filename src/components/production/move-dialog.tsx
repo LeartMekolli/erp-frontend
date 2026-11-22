@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useForm, useWatch, type Path } from "react-hook-form";
 
 import { Field } from "@/components/auth/field";
@@ -39,6 +39,8 @@ interface MoveDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onMoved: (message: string) => void;
+  /** Where the step's instructions open, under the title. Left out on staff pages. */
+  instructions?: ReactNode;
 }
 
 const nounFor = (count: number) => `${count} ${count === 1 ? "piece" : "pieces"}`;
@@ -78,6 +80,7 @@ function MoveForm({
   countsFor,
   onMove,
   onDone,
+  instructions,
 }: Omit<MoveDialogProps, "open" | "onOpenChange" | "onMoved"> & { onDone: (message: string) => void }) {
   const photos = usePhotos(uploadTarget);
   const [sending, setSending] = useState(false);
@@ -143,6 +146,7 @@ function MoveForm({
         <DialogTitle className="text-base font-semibold">{title}</DialogTitle>
         <DialogDescription className="text-sm break-words text-ink-2 tabular-nums">{pieces.map((piece) => piece.label).join(", ")}</DialogDescription>
         {countsFor && <p className="text-caption font-medium text-ink">{`This counts for ${countsFor}`}</p>}
+        {instructions && <div className="self-start">{instructions}</div>}
       </div>
       <form onSubmit={(event) => void handleSubmit(onSubmit)(event)} noValidate className="flex flex-col gap-5">
         {message && <FormMessage tone="error">{message}</FormMessage>}

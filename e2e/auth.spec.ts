@@ -19,6 +19,20 @@ test("staff sign in and land on Orders", async ({ page }) => {
   await expect(page).toHaveURL("/orders");
 });
 
+test("signing in works with the keyboard alone", async ({ page }) => {
+  await page.goto("/sign-in");
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(page.getByLabel("Workspace")).toBeFocused();
+  await page.keyboard.type("demo");
+  await page.keyboard.press("Tab");
+  await page.keyboard.type(STAFF.email);
+  await page.keyboard.press("Tab");
+  await page.keyboard.type("fake-password-1");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+});
+
 test("a partner lands on their own workshop's jobs", async ({ page }) => {
   await signIn(page, PARTNER.email);
   await expect(page.getByRole("heading", { level: 1, name: "Jobs" })).toBeVisible();

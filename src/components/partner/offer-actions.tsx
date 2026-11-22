@@ -1,15 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 
 import { Button } from "@/components/ui/button";
 import { errorMessage } from "@/lib/api/error-message";
 import { isApiProblem } from "@/lib/api/problem";
-import type { PartnerJob } from "@/lib/api/schema-types";
 import { jobTitle } from "@/lib/partner-jobs/labels";
 import { useAnswerOffer } from "@/lib/partner-jobs/queries";
 
+import { AcceptDialog, type AcceptJob } from "./accept-dialog";
 import { DeclineDialog } from "./decline-dialog";
 import { partnerHref } from "./nav";
 import { usePartnerNotice } from "./notice";
@@ -23,26 +23,32 @@ export function jobHref(partnerId: string, jobId: string): string {
 }
 
 /**
- * Decline and Accept for one offer. Accept sends at once; Decline asks first.
- * The answer is announced in the partner shell's notice line, and the
- * workshop's jobs fetch again (`useAnswerOffer`'s `onSettled`). Hidden while
- * the workshop is suspended, and until it's known whether it is.
+ * Decline and Accept for one offer. Both ask first: Accept with what taking the job means, Decline
+ * because it can't be undone. The answer is announced in the partner shell's notice line, a win as a
+ * band, and the workshop's jobs fetch again (`useAnswerOffer`'s `onSettled`). Hidden while the
+ * workshop is suspended, and until it's known whether it is.
  */
 export function OfferActions({
   job,
   onAnswered,
+  className = "grid grid-cols-2 gap-2 sm:flex sm:justify-end",
 }: {
-  job: Pick<PartnerJob, "id" | "product" | "options">;
+  job: AcceptJob;
   onAnswered?: (answer: Answer) => void;
+  /** How the two buttons sit: side by side by default; the Jobs table stacks them on phones. */
+  className?: string;
 }) {
   const { partnerId, name, suspended } = useWorkshop();
   const { announce } = usePartnerNotice();
   const answer = useAnswerOffer(partnerId);
-  const [asking, setAsking] = useState(false);
+  // The answer being asked about, if any.
+  const [asking, setAsking] = useState<Answer | null>(null);
   // A second click lands before the disabled button renders: only the first one sends.
   const sending = useRef(false);
   // Sent from the dialog: focus goes to the notice, not back to Decline, which leaves with the offer.
   const answered = useRef(false);
+  const declineButton = useRef<HTMLButtonElement>(null);
+  const acceptButton = useRef<HTMLButtonElement>(null);
 
   if (suspended || name === null) return null;
 
@@ -59,13 +65,13 @@ export function OfferActions({
     } catch (error) {
       const gone = isApiProblem(error) && error.status === 409;
       answered.current = gone;
-      setAsking(false);
+      setAsking(null);
       announce(gone ? "This offer is no longer open." : errorMessage(error), { focus: gone });
       return;
     } finally {
       sending.current = false;
     }
-    setAsking(false);
+    setAsking(null);
     announce(
       choice === "accept" ? (
         <>
@@ -77,34 +83,46 @@ export function OfferActions({
       ) : (
         `You declined ${title}.`
       ),
-      { focus: true },
+      { focus: true, tone: choice === "accept" ? "success" : "plain" },
     );
     onAnswered?.(choice);
   };
 
+  const ask = (choice: Answer) => {
+    answered.current = false;
+    setAsking(choice);
+  };
+
+  // Radix gives focus back only to a DialogTrigger, and these dialogs open by hand, so it's done here,
+  // as Pay does. Answered: the offer and its buttons go, so focus stays on the notice instead.
+  const focusBack = (event: Event, button: RefObject<HTMLButtonElement | null>) => {
+    event.preventDefault();
+    if (!answered.current) button.current?.focus();
+  };
+
   return (
-    <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
-      <Button
-        variant="outline"
-        disabled={answer.isPending}
-        onClick={() => {
-          answered.current = false;
-          setAsking(true);
-        }}
-      >
+    <div className={className}>
+      {/* Only the dialogs send, and they wait while sending. These stay enabled, so focus can come back to them. */}
+      <Button ref={declineButton} variant="outline" onClick={() => ask("decline")}>
         Decline
       </Button>
-      <Button disabled={answer.isPending} aria-busy={answer.isPending} onClick={() => void send("accept")}>
+      <Button ref={acceptButton} onClick={() => ask("accept")}>
         Accept
       </Button>
       <DeclineDialog
-        open={asking}
-        onOpenChange={setAsking}
+        open={asking === "decline"}
+        onOpenChange={(open) => setAsking(open ? "decline" : null)}
         onDecline={() => void send("decline")}
         pending={answer.isPending}
-        onCloseAutoFocus={(event) => {
-          if (answered.current) event.preventDefault();
-        }}
+        onCloseAutoFocus={(event) => focusBack(event, declineButton)}
+      />
+      <AcceptDialog
+        job={job}
+        open={asking === "accept"}
+        onOpenChange={(open) => setAsking(open ? "accept" : null)}
+        onAccept={() => void send("accept")}
+        pending={answer.isPending}
+        onCloseAutoFocus={(event) => focusBack(event, acceptButton)}
       />
     </div>
   );
