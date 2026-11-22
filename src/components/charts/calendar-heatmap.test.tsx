@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -53,9 +53,10 @@ describe("CalendarHeatmap", () => {
     const hit = container.querySelector('rect[data-hit="2026-03-10"]');
     expect(hit).not.toBeNull();
     fireEvent.pointerMove(hit as Element);
-    const live = container.querySelector('[aria-live="polite"]');
-    expect(live?.textContent).toContain("03-10");
-    expect(live?.textContent).toContain("9");
+    const live = container.querySelector('[aria-live="polite"]') as HTMLElement;
+    expect(within(live).getByText("03-10")).toBeTruthy();
+    expect(within(live).getByText("Orders")).toBeTruthy();
+    expect(within(live).getByText("9")).toBeTruthy();
   });
 
   it("steps by day with left and right, and by week with up and down", async () => {
@@ -65,17 +66,18 @@ describe("CalendarHeatmap", () => {
     expect(document.activeElement).toBe(screen.getByRole("figure", { name: "Orders by day" }));
 
     await user.keyboard("{ArrowRight}");
-    const live = container.querySelector('[aria-live="polite"]');
-    expect(live?.textContent).toContain("01-01");
+    const live = container.querySelector('[aria-live="polite"]') as HTMLElement;
+    expect(within(live).getByText("01-01")).toBeTruthy();
 
     // 5 January 2026 is a Monday.
     await user.keyboard("{ArrowRight}{ArrowRight}{ArrowRight}{ArrowRight}");
-    expect(live?.textContent).toContain("01-05");
-    expect(live?.textContent).toContain("Orders2");
+    expect(within(live).getByText("01-05")).toBeTruthy();
+    expect(within(live).getByText("Orders")).toBeTruthy();
+    expect(within(live).getByText("2")).toBeTruthy();
 
     await user.keyboard("{ArrowDown}");
-    expect(live?.textContent).toContain("01-12");
-    expect(live?.textContent).toContain("Orders0");
+    expect(within(live).getByText("01-12")).toBeTruthy();
+    expect(within(live).getByText("0")).toBeTruthy();
   });
 
   it("jumps to the first day and to today, never past today, and clears on Escape", async () => {
@@ -113,6 +115,21 @@ describe("CalendarHeatmap", () => {
     expect(fillOf(container, "2026-03-10")).toBe(CHART.ramp[5]);
     expect(fillOf(container, "2026-02-02")).toBe(CHART.ramp[0]);
     expect(fillOf(container, "2026-12-24")).toBe(CHART.future);
+  });
+
+  it("rings today's cell, and draws no ring when today is outside the year", () => {
+    const { container, unmount } = renderHeatmap();
+    const rings = container.querySelectorAll("rect[data-today]");
+    expect(rings).toHaveLength(1);
+    const cell = container.querySelector('rect[data-day="2026-11-22"]');
+    expect(rings[0].getAttribute("x")).toBe(cell?.getAttribute("x"));
+    expect(rings[0].getAttribute("y")).toBe(cell?.getAttribute("y"));
+    expect(rings[0].getAttribute("stroke")).toBe(CHART.axis);
+    expect(rings[0].getAttribute("stroke-width")).toBe("1.5");
+    unmount();
+
+    const other = renderHeatmap({ today: "2027-03-01" });
+    expect(other.container.querySelector("rect[data-today]")).toBeNull();
   });
 
   it("shows a lone order in the darkest step", () => {

@@ -7,6 +7,10 @@ export const CHART = {
   /** Parts of a whole in the split bar, in order (the ramp's steps with one extra between). */
   split: ["#3b2f8f", "#6d5ae6", "#a99cf2", "#b7aaff", "#d9d1fa"],
   violet: "#6d5ae6",
+  /** Text and strokes on a light chart. */
+  ink: "#16141c",
+  /** The white of a dot's outline and of the cards a chart sits on. */
+  surface: "#ffffff",
   lilac2: "#d9d1fa",
   gray: "#c9c7d4",
   grid: "#ecebf2",

@@ -10,7 +10,15 @@ import { curveMonotoneX } from "d3-shape";
 
 import { ChartFrame } from "./chart-frame";
 import { ChartTooltip, type ChartTooltipRow } from "./chart-tooltip";
-import { percentAxis } from "./scale-helpers";
+import { ChartAxisY } from "./chart-axis";
+import {
+  labelIndexes,
+  percentAxis,
+  runsOf,
+  toDate,
+  type ChartDot as Dot,
+  type ChartSize as Size,
+} from "./scale-helpers";
 import { CHART } from "./tokens";
 import { useChartKeys } from "./use-chart-keys";
 
@@ -22,18 +30,8 @@ export type TargetPoint = {
 };
 
 const MARGIN = { left: 46, right: 12, top: 18, bottom: 26 };
-const INK = "#16141c";
 const LATE_INK = "#b3262f";
-const SURFACE = "#ffffff";
 const STEP = 0.05;
-
-/** A local-time date, so ticks fall on the user's midnights. */
-function toDate(iso: string): Date {
-  return new Date(`${iso}T00:00:00`);
-}
-
-type Size = { width: number; height: number };
-type Dot = { x: number; y: number };
 
 function isUnder(rate: number | null, target: number | null): boolean {
   return rate !== null && target !== null && rate < target;
@@ -68,24 +66,9 @@ type Layout = ReturnType<typeof layoutFor>;
 
 /** Runs of consecutive non-null rates: a null breaks the line, it is never drawn as zero. */
 function segmentsOf(points: TargetPoint[], layout: Layout): Dot[][] {
-  const runs: Dot[][] = [];
-  let run: Dot[] = [];
-  for (const p of points) {
-    if (p.rate === null) {
-      if (run.length > 0) runs.push(run);
-      run = [];
-    } else {
-      run.push({ x: layout.xScale(toDate(p.at)), y: layout.yScale(p.rate) });
-    }
-  }
-  if (run.length > 0) runs.push(run);
-  return runs;
-}
-
-/** Up to five evenly spaced indexes for the bottom labels. */
-function labelIndexes(count: number): number[] {
-  if (count <= 5) return Array.from({ length: count }, (_, i) => i);
-  return [0, 1, 2, 3, 4].map((i) => Math.round((i * (count - 1)) / 4));
+  return runsOf(points, (p) =>
+    p.rate === null ? null : { x: layout.xScale(toDate(p.at)), y: layout.yScale(p.rate) },
+  );
 }
 
 function tooltipRows(p: TargetPoint, target: number | null): ChartTooltipRow[] {
@@ -145,21 +128,7 @@ function Drawing({
   return (
     <svg width={width} height={height} style={{ display: "block" }}>
       <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
-        {ticks.map((tick) => (
-          <g key={tick} transform={`translate(0,${yScale(tick)})`}>
-            <line x1={0} x2={innerWidth} stroke={CHART.grid} strokeWidth={1} />
-            <text
-              x={-8}
-              dy="0.32em"
-              textAnchor="end"
-              fontSize={11}
-              fill={CHART.axis}
-              style={{ fontVariantNumeric: "tabular-nums" }}
-            >
-              {percentAxis(tick)}
-            </text>
-          </g>
-        ))}
+        <ChartAxisY ticks={ticks} yScale={yScale} format={percentAxis} innerWidth={innerWidth} />
         {labelIndexes(points.length).map((i) => (
           <text
             key={i}
@@ -238,7 +207,7 @@ function Drawing({
               cy={run[0].y}
               r={4}
               fill={CHART.violet}
-              stroke={SURFACE}
+              stroke={CHART.surface}
               strokeWidth={2}
             />
           ),
@@ -254,7 +223,7 @@ function Drawing({
                   cy={yScale(p.rate)}
                   r={5}
                   fill={CHART.status.late}
-                  stroke={SURFACE}
+                  stroke={CHART.surface}
                   strokeWidth={2}
                 />
               ) : null,
@@ -268,7 +237,7 @@ function Drawing({
               x2={activeX}
               y1={0}
               y2={innerHeight}
-              stroke={INK}
+              stroke={CHART.ink}
               strokeWidth={1}
               strokeLinecap="round"
               opacity={0.25}
@@ -279,7 +248,7 @@ function Drawing({
                 cy={yScale(activePoint.rate)}
                 r={5}
                 fill={isUnder(activePoint.rate, target) ? CHART.status.late : CHART.violet}
-                stroke={SURFACE}
+                stroke={CHART.surface}
                 strokeWidth={2}
               />
             ) : null}

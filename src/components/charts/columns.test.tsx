@@ -54,10 +54,10 @@ describe("Columns", () => {
         axis={axis}
       />,
     );
-    const groups = container.querySelectorAll("svg > g > g");
-    const parts = (i: number) => groups[ticksBefore(container) + i].querySelectorAll("path[data-part]");
-    expect(parts(0)).toHaveLength(2);
-    expect(parts(1)).toHaveLength(3);
+    const parts = (key: string) =>
+      container.querySelectorAll(`[data-datum="${key}"] path[data-part]`);
+    expect(parts("a")).toHaveLength(2);
+    expect(parts("b")).toHaveLength(3);
     const legend = screen.getByRole("list");
     expect(legend.textContent).toContain("In house");
     expect(legend.textContent).toContain("At a partner");
@@ -104,9 +104,26 @@ describe("Columns", () => {
     expect(container.querySelectorAll("path[data-column]")).toHaveLength(0);
     expect(screen.getByRole("figure").hasAttribute("tabindex")).toBe(false);
   });
-});
 
-/** Gridline groups come first inside the plot group, one per tick. */
-function ticksBefore(container: HTMLElement): number {
-  return container.querySelectorAll("svg > g > g > line").length;
-}
+  it("keeps the highlighted label when narrow widths thin the labels, dropping a neighbour instead", () => {
+    const { container } = render(
+      <Columns
+        label="Orders per week"
+        data={weeks}
+        series={[{ name: "Orders", color: CHART.violet }]}
+        highlight={11}
+        height={200}
+        width={200}
+        format={format}
+        axis={axis}
+      />,
+    );
+    const labels = Array.from(container.querySelectorAll("svg text")).map((t) => t.textContent);
+    // Every third label at this width (W1, W4, W7, W10), which would skip W12.
+    expect(labels).toContain("W12");
+    expect(labels).toContain("W1");
+    expect(labels).toContain("W7");
+    // W10 sits too close to W12, so it makes way.
+    expect(labels).not.toContain("W10");
+  });
+});

@@ -19,7 +19,6 @@ const GAP = 3;
 const LEGEND = 24;
 const MIN_CELL = 8;
 const MAX_CELL = 14;
-const INK = "#16141c";
 const DAY_MS = 86_400_000;
 const WEEK_MS = 7 * DAY_MS;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -127,6 +126,8 @@ function Drawing({
   });
 
   const activeCell = active !== null ? cells.find((c) => c.on === active) : undefined;
+  // Only when today falls in this year: the ring shows where the year stands.
+  const todayCell = cells.find((c) => c.on === today);
   const legendY = MARGIN.top + 7 * layout.step + 8;
 
   return (
@@ -176,6 +177,21 @@ function Drawing({
         );
       })}
 
+      {todayCell ? (
+        <rect
+          data-today={todayCell.on}
+          x={x(todayCell.col)}
+          y={y(todayCell.row)}
+          width={cell}
+          height={cell}
+          rx={3}
+          fill="none"
+          stroke={CHART.axis}
+          strokeWidth={1.5}
+          pointerEvents="none"
+        />
+      ) : null}
+
       {activeCell ? (
         <rect
           data-active={activeCell.on}
@@ -185,7 +201,7 @@ function Drawing({
           height={cell}
           rx={3}
           fill="none"
-          stroke={INK}
+          stroke={CHART.ink}
           strokeWidth={1.5}
           pointerEvents="none"
         />

@@ -5,7 +5,8 @@ import { scaleBand, scaleLinear } from "@visx/scale";
 
 import { ChartFrame } from "./chart-frame";
 import { ChartTooltip, type ChartTooltipRow } from "./chart-tooltip";
-import { niceTicks } from "./scale-helpers";
+import { ChartAxisY } from "./chart-axis";
+import { niceTicks, type ChartSize as Size } from "./scale-helpers";
 import { CHART } from "./tokens";
 import { useChartKeys } from "./use-chart-keys";
 
@@ -13,12 +14,9 @@ export type ColumnsDatum = { key: string; label: string; values: number[] };
 export type ColumnsSeries = { name: string; color: string };
 
 const MARGIN = { left: 40, right: 8, top: 22, bottom: 24 };
-const INK = "#16141c";
 const MAX_COLUMN = 24;
 const GAP = 2;
 const RADIUS = 4;
-
-type Size = { width: number; height: number };
 
 function totalOf(d: ColumnsDatum): number {
   let sum = 0;
@@ -91,25 +89,17 @@ function Drawing({
   const bandwidth = xScale.bandwidth();
   const columnWidth = Math.min(MAX_COLUMN, bandwidth);
   const labelEvery = step > 0 && step < 28 ? Math.ceil(28 / step) : 1;
+  const marked =
+    highlight !== undefined && highlight >= 0 && highlight < data.length ? highlight : null;
+  // The highlighted label always shows; a regular label closer than `labelEvery` to it would collide, so it goes.
+  const showLabel = (i: number) =>
+    i === marked ||
+    (i % labelEvery === 0 && (marked === null || Math.abs(i - marked) >= labelEvery));
 
   return (
     <svg width={width} height={height} style={{ display: "block" }}>
       <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
-        {ticks.map((tick) => (
-          <g key={tick} transform={`translate(0,${yScale(tick)})`}>
-            <line x1={0} x2={innerWidth} stroke={CHART.grid} strokeWidth={1} />
-            <text
-              x={-8}
-              dy="0.32em"
-              textAnchor="end"
-              fontSize={11}
-              fill={CHART.axis}
-              style={{ fontVariantNumeric: "tabular-nums" }}
-            >
-              {axis(tick)}
-            </text>
-          </g>
-        ))}
+        <ChartAxisY ticks={ticks} yScale={yScale} format={axis} innerWidth={innerWidth} />
 
         {data.map((d, i) => {
           const bandX = xScale(d.key) ?? 0;
@@ -151,7 +141,7 @@ function Drawing({
           });
 
           return (
-            <g key={d.key}>
+            <g key={d.key} data-datum={d.key}>
               {parts}
               {i === highlight && total > 0 ? (
                 <text
@@ -160,13 +150,13 @@ function Drawing({
                   textAnchor="middle"
                   fontSize={12}
                   fontWeight={600}
-                  fill={INK}
+                  fill={CHART.ink}
                   style={{ fontVariantNumeric: "tabular-nums" }}
                 >
                   {format(total)}
                 </text>
               ) : null}
-              {i % labelEvery === 0 ? (
+              {showLabel(i) ? (
                 <text
                   x={centre}
                   y={innerHeight + 17}
@@ -190,7 +180,7 @@ function Drawing({
               y={0}
               width={step}
               height={innerHeight}
-              fill={i === active ? INK : "transparent"}
+              fill={i === active ? CHART.ink : "transparent"}
               fillOpacity={i === active ? 0.04 : undefined}
               onPointerEnter={() => onActive(i)}
               onPointerMove={() => onActive(i)}

@@ -12,7 +12,6 @@ const LABEL_WIDTH = 110;
 const VALUE_WIDTH = 64;
 const GAP = 8;
 const PAD = 8;
-const SURFACE = "#ffffff";
 
 /**
  * Before and now for each row on one shared scale. Worse (now above before) is
@@ -87,7 +86,7 @@ export function Dumbbell({
                       cy={ROW / 2}
                       r={5}
                       fill={worse ? CHART.status.late : CHART.violet}
-                      stroke={SURFACE}
+                      stroke={CHART.surface}
                       strokeWidth={2}
                     />
                   </svg>

@@ -12,7 +12,15 @@ import { useMediaQuery } from "@/lib/use-media-query";
 
 import { ChartFrame } from "./chart-frame";
 import { ChartTooltip, type ChartTooltipRow } from "./chart-tooltip";
-import { niceTicks } from "./scale-helpers";
+import { ChartAxisY } from "./chart-axis";
+import {
+  labelIndexes,
+  niceTicks,
+  runsOf,
+  toDate,
+  type ChartDot as Dot,
+  type ChartSize as Size,
+} from "./scale-helpers";
 import { CHART } from "./tokens";
 import { useChartKeys } from "./use-chart-keys";
 
@@ -24,7 +32,6 @@ export type TrendPoint = {
 };
 
 const MARGIN = { left: 46, right: 60, top: 10, bottom: 26 };
-const INK = "#16141c";
 
 const TONES = {
   light: {
@@ -32,9 +39,9 @@ const TONES = {
     previous: CHART.gray,
     grid: CHART.grid,
     axis: CHART.axis,
-    surface: "#ffffff",
-    ink: INK,
-    crosshair: INK,
+    surface: CHART.surface,
+    ink: CHART.ink,
+    crosshair: CHART.ink,
     washColor: "#6d5ae6",
     washOpacity: 0.22,
   },
@@ -50,14 +57,6 @@ const TONES = {
     washOpacity: 0.45,
   },
 } as const;
-
-/** A local-time date, so ticks fall on the user's midnights. */
-function toDate(iso: string): Date {
-  return new Date(`${iso}T00:00:00`);
-}
-
-type Size = { width: number; height: number };
-type Dot = { x: number; y: number };
 
 /** Both the drawing and the tooltip position come from these, so they can't drift apart. */
 function layoutFor(points: TrendPoint[], { width, height }: Size) {
@@ -84,25 +83,12 @@ type Layout = ReturnType<typeof layoutFor>;
 
 /** Runs of consecutive non-null values: a null breaks the line, it is never drawn as zero. */
 function segmentsOf(points: TrendPoint[], key: "value" | "previous", layout: Layout): Dot[][] {
-  const runs: Dot[][] = [];
-  let run: Dot[] = [];
-  for (const p of points) {
+  return runsOf(points, (p) => {
     const v = p[key];
-    if (v === null || v === undefined) {
-      if (run.length > 0) runs.push(run);
-      run = [];
-    } else {
-      run.push({ x: layout.xScale(toDate(p.at)), y: layout.yScale(v) });
-    }
-  }
-  if (run.length > 0) runs.push(run);
-  return runs;
-}
-
-/** Up to five evenly spaced indexes for the bottom labels. */
-function labelIndexes(count: number): number[] {
-  if (count <= 5) return Array.from({ length: count }, (_, i) => i);
-  return [0, 1, 2, 3, 4].map((i) => Math.round((i * (count - 1)) / 4));
+    return v === null || v === undefined
+      ? null
+      : { x: layout.xScale(toDate(p.at)), y: layout.yScale(v) };
+  });
 }
 
 function tooltipRows(p: TrendPoint, format: (v: number) => string, tone: "light" | "dark") {
@@ -207,21 +193,14 @@ function Drawing({
         toOpacity={0}
       />
       <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
-        {ticks.map((tick) => (
-          <g key={tick} transform={`translate(0,${yScale(tick)})`}>
-            <line x1={0} x2={innerWidth} stroke={colours.grid} strokeWidth={1} />
-            <text
-              x={-8}
-              dy="0.32em"
-              textAnchor="end"
-              fontSize={11}
-              fill={colours.axis}
-              style={{ fontVariantNumeric: "tabular-nums" }}
-            >
-              {axis(tick)}
-            </text>
-          </g>
-        ))}
+        <ChartAxisY
+          ticks={ticks}
+          yScale={yScale}
+          format={axis}
+          innerWidth={innerWidth}
+          grid={colours.grid}
+          text={colours.axis}
+        />
         {labelIndexes(points.length).map((i) => (
           <text
             key={i}
