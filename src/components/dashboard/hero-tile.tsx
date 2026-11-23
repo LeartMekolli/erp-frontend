@@ -49,7 +49,8 @@ export function HeroTile({ range, words }: { range: DashboardRange; words: strin
         )
       }
     >
-      <p className="mt-3 text-[58px] leading-none font-semibold tracking-[-0.04em]">{shown.figure}</p>
+      {/* Scales down on narrow phones: at 58px a figure like €49,485.00 ran past a 320px screen. */}
+      <p className="mt-3 text-[clamp(40px,13vw,58px)] leading-none font-semibold tracking-[-0.04em]">{shown.figure}</p>
       <ChangeLine change={shown.change} previous={previous} before={shown.before} tone="dark" />
       <div className="mt-3 min-w-0 flex-1">
         <TrendChart

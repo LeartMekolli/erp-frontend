@@ -70,8 +70,9 @@ function Dashboard({ firstName }: { firstName: string }) {
           )}
         >
           <HeroTile range={range.data} words={words} />
-          <BriefingTile />
+          {/* Attention before the briefing: a phone reads hero, attention, then the KPIs (spec, Responsive). */}
           <AttentionTile />
+          <BriefingTile />
           <KpiTiles range={range.data} />
           <ProductionTiles range={range.data} />
           <PartnerTiles range={range.data} />
