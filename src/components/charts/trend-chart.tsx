@@ -139,7 +139,6 @@ function Drawing({
   axis,
   dateLabel,
   endLabel,
-  format,
   active,
   onActive,
   onSize,
@@ -150,7 +149,6 @@ function Drawing({
   axis: (v: number) => string;
   dateLabel: (iso: string) => string;
   endLabel: boolean;
-  format: (v: number) => string;
   active: number | null;
   onActive: (index: number | null) => void;
   onSize: (size: Size) => void;
@@ -180,7 +178,9 @@ function Drawing({
     const v = points[i].value;
     if (v !== null) {
       last = { x: xScale(toDate(points[i].at)), y: yScale(v) };
-      lastWords = wordsOf(points[i], "value", format);
+      // In the axis's short form ("€1.9K"): it has only the right margin, and an exact amount
+      // like "€1,920.00" ran past it on a phone. The tooltip and the table keep the exact value.
+      lastWords = axis(v);
       break;
     }
   }
@@ -441,7 +441,6 @@ export function TrendChart({
           axis={axis}
           dateLabel={dateLabel}
           endLabel={endLabel}
-          format={format}
           active={active}
           onActive={setActive}
           onSize={setSize}
