@@ -6,10 +6,11 @@ export type TileSpan = 3 | 4 | 5 | 6 | 8 | 12;
 
 /**
  * Columns on the 12-column desktop bento and the 6-column tablet one. Phones have two columns: a
- * 3-wide tile (a KPI) takes one, so KPIs sit two across; every other tile takes both.
+ * 3-wide tile (a KPI) takes one from 640px, so KPIs sit two across; below that it takes both, as a
+ * money figure like "€268.94" at 34px ran out of a half-width tile. Every other tile takes both.
  */
 const SPAN: Record<TileSpan, string> = {
-  3: "col-span-1 md:col-span-3 lg:col-span-3",
+  3: "col-span-2 sm:col-span-1 md:col-span-3 lg:col-span-3",
   4: "col-span-2 md:col-span-3 lg:col-span-4",
   5: "col-span-2 md:col-span-6 lg:col-span-5",
   6: "col-span-2 md:col-span-6 lg:col-span-6",
