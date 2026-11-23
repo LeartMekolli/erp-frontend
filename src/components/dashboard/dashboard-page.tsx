@@ -1,7 +1,6 @@
 "use client";
 
 import { notFound, useSearchParams } from "next/navigation";
-import { useState } from "react";
 
 import { cn } from "cn";
 
@@ -13,6 +12,7 @@ import { useDashboardRange } from "@/lib/dashboard/queries";
 import { parseRange, rangeWords, resolveRange } from "@/lib/dashboard/range";
 import { dayKey } from "@/lib/format/dates";
 import { useFormat } from "@/lib/format/use-format";
+import { useNow } from "@/lib/use-now";
 
 import { AttentionTile } from "./attention-tile";
 import { BriefingTile } from "./briefing-tile";
@@ -39,7 +39,8 @@ export function DashboardPage() {
 
 function Dashboard({ firstName }: { firstName: string }) {
   const { date, timeZone } = useFormat();
-  const [now] = useState(() => new Date());
+  // Read again every minute, so a page left open past midnight moves its ranges, the heatmap's today and the greeting on.
+  const now = new Date(useNow(60_000));
   const choice = parseRange(useSearchParams());
   const today = dayKey(now.toISOString(), timeZone);
   const days = resolveRange(choice, today);

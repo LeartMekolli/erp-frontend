@@ -29,7 +29,19 @@ export type TrendPoint = {
   at: string;
   value: number | null;
   previous?: number | null;
+  /**
+   * The values in words, when they must not come from the numbers: money stays erp-api's
+   * string, so the tooltip and the table never show an amount that went through a float.
+   */
+  text?: { value?: string; previous?: string };
 };
+
+/** A point's value or previous in words: its own text if given, else `format` of the number. */
+function wordsOf(p: TrendPoint, key: "value" | "previous", format: (v: number) => string): string {
+  const v = p[key];
+  if (v === null || v === undefined) return "No data";
+  return p.text?.[key] ?? format(v);
+}
 
 const MARGIN = { left: 46, right: 60, top: 10, bottom: 26 };
 
@@ -101,12 +113,12 @@ function tooltipRows(p: TrendPoint, format: (v: number) => string, tone: "light"
     {
       key: colours.line,
       label: names.value,
-      value: p.value === null ? "No data" : format(p.value),
+      value: wordsOf(p, "value", format),
       strong: true,
     },
   ];
   if (p.previous !== null && p.previous !== undefined) {
-    rows.push({ key: colours.previous, label: names.previous, value: format(p.previous) });
+    rows.push({ key: colours.previous, label: names.previous, value: wordsOf(p, "previous", format) });
     if (names === PERIODS && p.value !== null && p.previous > 0) {
       const change = Math.round((p.value / p.previous - 1) * 100);
       rows.push({
@@ -163,12 +175,12 @@ function Drawing({
   const activeX = activePoint ? xScale(toDate(activePoint.at)) : 0;
 
   let last: Dot | null = null;
-  let lastValue: number | null = null;
+  let lastWords: string | null = null;
   for (let i = points.length - 1; i >= 0; i -= 1) {
     const v = points[i].value;
     if (v !== null) {
       last = { x: xScale(toDate(points[i].at)), y: yScale(v) };
-      lastValue = v;
+      lastWords = wordsOf(points[i], "value", format);
       break;
     }
   }
@@ -274,7 +286,7 @@ function Drawing({
           ),
         )}
 
-        {endLabel && last && lastValue !== null ? (
+        {endLabel && last && lastWords !== null ? (
           <>
             <circle
               data-end-dot
@@ -294,7 +306,7 @@ function Drawing({
               fill={colours.ink}
               style={{ fontVariantNumeric: "tabular-nums" }}
             >
-              {format(lastValue)}
+              {lastWords}
             </text>
           </>
         ) : null}
@@ -415,10 +427,8 @@ export function TrendChart({
         caption: label,
         columns: hasPrevious ? ["Date", names.value, names.previous] : ["Date", names.value],
         rows: points.map((p) => {
-          const row = [dateLabel(p.at), p.value === null ? "No data" : format(p.value)];
-          if (hasPrevious) {
-            row.push(p.previous === null || p.previous === undefined ? "No data" : format(p.previous));
-          }
+          const row = [dateLabel(p.at), wordsOf(p, "value", format)];
+          if (hasPrevious) row.push(wordsOf(p, "previous", format));
           return row;
         }),
       }}

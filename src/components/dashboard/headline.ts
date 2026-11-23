@@ -117,7 +117,9 @@ export type Metric = {
   /** A point per bucket, for marks only: null where there's no value. */
   values: (number | null)[];
   previous: (number | null)[];
-  /** The text for a mark's value, in the tooltip and the table. */
+  /** For money: each point in words from erp-api's strings, for the tooltip and the table. */
+  words?: { values: (string | undefined)[]; previous: (string | undefined)[] };
+  /** The text for a mark's value, in the tooltip and the table, where `words` has none. */
   format: (value: number) => string;
   axis: (value: number) => string;
 };
@@ -143,7 +145,11 @@ const scaled = (amount: string | null | undefined) => (amount === null || amount
 export function metric(range: DashboardRange, key: MetricKey): Metric | null {
   const { current, previous, series } = range;
   const currency = current.currency;
-  const money = (value: number) => formatMoney(String(value), currency);
+  // Every money point has its words from the string, so `money` is never reached for a shown amount;
+  // it only keeps `format` total. toFixed(2) keeps it a valid amount (String() can give exponent form).
+  const money = (value: number) => formatMoney(value.toFixed(2), currency);
+  const amountWords = (amount: string | null | undefined) =>
+    amount === null || amount === undefined ? undefined : formatMoney(amount, currency);
   const base = { key, label: LABEL[key] };
   switch (key) {
     case "revenue": {
@@ -157,6 +163,10 @@ export function metric(range: DashboardRange, key: MetricKey): Metric | null {
         change: moneyChange(now, before, "up"),
         values: series.map((point) => scaled(point.revenue)),
         previous: series.map((point) => scaled(point.previous.revenue)),
+        words: {
+          values: series.map((point) => amountWords(point.revenue)),
+          previous: series.map((point) => amountWords(point.previous.revenue)),
+        },
         format: money,
         axis: (value) => compactAxis(value, currency),
       };
@@ -172,6 +182,10 @@ export function metric(range: DashboardRange, key: MetricKey): Metric | null {
         change: moneyChange(now, before, "up"),
         values: series.map((point) => scaled(point.average_value)),
         previous: series.map((point) => scaled(point.previous.average_value)),
+        words: {
+          values: series.map((point) => amountWords(point.average_value)),
+          previous: series.map((point) => amountWords(point.previous.average_value)),
+        },
         format: money,
         axis: (value) => compactAxis(value, currency),
       };

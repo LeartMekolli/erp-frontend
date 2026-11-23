@@ -155,7 +155,7 @@ function TopCustomers({ range }: { range: DashboardRange }) {
       )}
       {orderingLess.length > 0 && (
         <p className="mt-3 text-caption text-warn">
-          <span aria-hidden>▲ </span>
+          <span aria-hidden>⚠ </span>
           {`Ordering less: ${orderingLess.map((customer) => `${customer.name}, last order ${bucketLabel(customer.last_order_on, "day")}`).join("; ")}`}
         </p>
       )}

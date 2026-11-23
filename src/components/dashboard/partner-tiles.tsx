@@ -77,8 +77,17 @@ function PartnerCost({ range, width }: { range: DashboardRange; width?: number }
           names={{ value: "Revenue", previous: "Partner cost" }}
           tone="light"
           height={160}
-          points={range.series.map((point) => ({ at: point.start, value: scaled(point.revenue), previous: scaled(point.partner_cost) }))}
-          format={(value) => formatMoney(String(value), currency)}
+          points={range.series.map((point) => ({
+            at: point.start,
+            value: scaled(point.revenue),
+            previous: scaled(point.partner_cost),
+            // The amounts in words come from erp-api's strings, never from the numbers that place the marks.
+            text: {
+              ...(point.revenue !== undefined && { value: formatMoney(point.revenue, currency) }),
+              ...(point.partner_cost !== undefined && { previous: formatMoney(point.partner_cost, currency) }),
+            },
+          }))}
+          format={(value) => formatMoney(value.toFixed(2), currency)}
           axis={(value) => compactAxis(value, currency)}
           dateLabel={(at) => bucketLabel(at, range.range.bucket)}
           width={width}

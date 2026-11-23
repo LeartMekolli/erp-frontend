@@ -8,7 +8,7 @@ import { TrendChart } from "@/components/charts/trend-chart";
 import type { DashboardRange } from "@/lib/api/schema-types";
 
 import { ChangeLine } from "./change-line";
-import { bucketLabel, heroMetrics, noOrdersWords, previousWords, type MetricKey } from "./headline";
+import { bucketLabel, heroMetrics, noOrdersWords, previousWords, rangeDays, type MetricKey } from "./headline";
 import { Tile } from "./tile";
 
 const CHIP = "min-h-8 rounded-full px-3 text-caption text-[#b9b6c9] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b7aaff] pointer-coarse:min-h-11";
@@ -21,7 +21,12 @@ export function HeroTile({ range, words }: { range: DashboardRange; words: strin
   const metrics = heroMetrics(range);
   const [picked, setPicked] = useState<MetricKey | null>(null);
   const shown = metrics.find((one) => one.key === picked) ?? metrics[0]!;
-  const empty = range.current.orders.placed === 0 ? noOrdersWords(range) : null;
+  // On time counts the lines due in the range, whenever they were placed (erp-api reports.service.ts), so a
+  // range with no orders placed can still have it; its chart is empty only when every point is null.
+  const placedOnly = shown.key !== "on_time";
+  const noneDue = rangeDays(range) === 1 ? "Nothing was due on this day" : `Nothing was due in these ${rangeDays(range)} days`;
+  const zeroed = placedOnly && range.current.orders.placed === 0;
+  const empty = placedOnly ? (zeroed ? noOrdersWords(range) : null) : noneDue;
   const previous = previousWords(range);
   const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
@@ -58,8 +63,16 @@ export function HeroTile({ range, words }: { range: DashboardRange; words: strin
           tone="dark"
           height={220}
           // erp-api sends a range with no orders as zeros; the chart then draws bare axes with the message, not a flat line.
+          // TrendChart shows `empty` only when no point has a value, so On time's message waits for all-null points.
           points={range.series.map((point, index) =>
-            empty ? { at: point.start, value: null, previous: null } : { at: point.start, value: shown.values[index] ?? null, previous: shown.previous[index] ?? null },
+            zeroed
+              ? { at: point.start, value: null, previous: null }
+              : {
+                  at: point.start,
+                  value: shown.values[index] ?? null,
+                  previous: shown.previous[index] ?? null,
+                  text: shown.words && { value: shown.words.values[index], previous: shown.words.previous[index] },
+                },
           )}
           format={shown.format}
           axis={shown.axis}
