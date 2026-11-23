@@ -61,6 +61,12 @@ function minorUnits(amount: string): number {
   return negative ? -units : units;
 }
 
+/** `part` as a whole percentage of `whole`, read from the strings; null when `whole` is zero. */
+export function shareOf(part: string, whole: string): number | null {
+  const total = minorUnits(whole);
+  return total === 0 ? null : Math.round((minorUnits(part) / total) * 100);
+}
+
 /** How a money amount moved, in percent. Null when either side is missing. */
 export function moneyChange(now: string | null | undefined, before: string | null | undefined, betterWhen: "up" | "down"): Change | null {
   if (now === null || now === undefined || before === null || before === undefined) return null;

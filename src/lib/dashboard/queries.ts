@@ -11,7 +11,7 @@ import { useApiMutation } from "@/lib/query/use-api-mutation";
 export const dashboardKeys = {
   all: ["dashboard"] as const,
   dashboard: () => ["dashboard", "week"] as const,
-  range: (from: string, to: string) => ["dashboard", "range", from, to] as const,
+  range: (from: string, to: string, bucket?: "day") => ["dashboard", "range", from, to, bucket ?? "auto"] as const,
 };
 
 /** How often the dashboard is read again while someone has it open. */
@@ -40,13 +40,16 @@ export function useDashboard() {
   });
 }
 
-/** The numbers for the days from `from` to `to`, both included. While another range loads, the last one stays. */
-export function useDashboardRange(range: { from: string; to: string }) {
-  const { from, to } = range;
+/**
+ * The numbers for the days from `from` to `to`, both included. While another range loads, the last one
+ * stays. `bucket: "day"` asks for a point per day whatever the length (the year heatmap).
+ */
+export function useDashboardRange(range: { from: string; to: string; bucket?: "day" }) {
+  const { from, to, bucket } = range;
   return useQuery({
-    queryKey: dashboardKeys.range(from, to),
+    queryKey: dashboardKeys.range(from, to, bucket),
     queryFn: async (): Promise<DashboardRange> => {
-      const { data, error, response } = await api.GET("/reports/range", { params: { query: { from, to } } });
+      const { data, error, response } = await api.GET("/reports/range", { params: { query: bucket ? { from, to, bucket } : { from, to } } });
       if (!data) throw problemFrom(error, response);
       return data;
     },

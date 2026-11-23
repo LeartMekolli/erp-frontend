@@ -71,9 +71,11 @@ const PRODUCTS = [
   { id: uuid("e2e2e2e2", 2), name: "Pendant", share: 30 },
   { id: uuid("e2e2e2e2", 3), name: "Cufflinks", share: 20 },
 ];
+/** Customer groups' shares of revenue; `group: null` is revenue from customers in no group. */
 const GROUPS = [
-  { id: uuid("e4e4e4e4", 1), key: "retail", name: "Retail", share: 60 },
-  { id: uuid("e4e4e4e4", 2), key: "trade", name: "Trade", share: 40 },
+  { group: { id: uuid("e4e4e4e4", 1), key: "retail", name: "Retail" }, share: 50 },
+  { group: { id: uuid("e4e4e4e4", 2), key: "trade", name: "Trade" }, share: 35 },
+  { group: null, share: 15 },
 ];
 const DEFECTS = [
   { id: uuid("e3e3e3e3", 1), key: "porosity", name: "Porosity" },
@@ -222,7 +224,7 @@ export function createReportsStore(now: () => number, orders: () => Order[] = ()
                   : [],
               ),
               by_customer_group: total.revenue > 0
-                ? GROUPS.map((group, index) => ({ customer_group: { id: group.id, key: group.key, name: group.name }, revenue: money(groupRevenue[index]!) }))
+                ? GROUPS.map(({ group }, index) => ({ customer_group: group, revenue: money(groupRevenue[index]!) }))
                 : [],
             }
           : {}),

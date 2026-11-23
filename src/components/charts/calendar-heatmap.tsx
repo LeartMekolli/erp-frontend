@@ -50,11 +50,22 @@ function weekIndex(date: Date, start: Date): number {
 
 type Cell = { on: string; col: number; row: number };
 
-/** Both the drawing and the tooltip position come from these, so they can't drift apart. */
-function layoutFor(year: number, width: number | null) {
+/**
+ * Both the drawing and the tooltip position come from these, so they can't drift apart. With `fit`,
+ * a width too narrow for the whole year at the smallest cell (a phone) shows only the weeks that fit,
+ * ending with the week of `today`, instead of clipping the year at the right.
+ */
+function layoutFor(year: number, width: number | null, fit: boolean, today: string) {
   const first = new Date(Date.UTC(year, 0, 1));
   const last = new Date(Date.UTC(year, 11, 31));
-  const weeks = weekIndex(last, first) + 1;
+  const allWeeks = weekIndex(last, first) + 1;
+  let weeks = allWeeks;
+  let startCol = 0;
+  if (fit && width !== null && MARGIN.left + allWeeks * (MIN_CELL + GAP) > width) {
+    weeks = Math.max(1, Math.floor((width - MARGIN.left) / (MIN_CELL + GAP)));
+    const todayCol = today < formatDay(first) ? 0 : today > formatDay(last) ? allWeeks - 1 : weekIndex(parseDay(today), first);
+    startCol = Math.max(0, Math.min(todayCol - weeks + 1, allWeeks - weeks));
+  }
   const cell =
     width === null
       ? MAX_CELL
@@ -67,24 +78,28 @@ function layoutFor(year: number, width: number | null) {
   const cells: Cell[] = [];
   for (let i = 0; i < dayCount; i += 1) {
     const date = new Date(first.getTime() + i * DAY_MS);
+    const col = weekIndex(date, first);
+    if (col < startCol || col >= startCol + weeks) continue;
     cells.push({
       on: formatDay(date),
-      col: weekIndex(date, first),
+      col,
       row: (date.getUTCDay() + 6) % 7,
     });
   }
   const months = MONTHS.map((name, m) => ({
     name,
     col: weekIndex(new Date(Date.UTC(year, m, 1)), first),
-  }));
+  })).filter((month) => month.col >= startCol && month.col < startCol + weeks);
   return {
     cell,
     step,
     weeks,
     cells,
     months,
+    /** The first day drawn: 1 January, or later when only the latest weeks fit. */
+    firstShown: cells[0]?.on ?? formatDay(first),
     height: MARGIN.top + 7 * step + LEGEND,
-    x: (col: number) => MARGIN.left + col * step,
+    x: (col: number) => MARGIN.left + (col - startCol) * step,
     y: (row: number) => MARGIN.top + row * step,
   };
 }
@@ -94,6 +109,7 @@ function Drawing({
   width,
   counts,
   today,
+  fit,
   interactive,
   active,
   onActive,
@@ -103,6 +119,7 @@ function Drawing({
   width: number;
   counts: Map<string, number>;
   today: string;
+  fit: boolean;
   interactive: boolean;
   active: string | null;
   onActive: (on: string | null) => void;
@@ -113,7 +130,7 @@ function Drawing({
     onSize(width);
   }, [width, onSize]);
 
-  const layout = layoutFor(year, width);
+  const layout = layoutFor(year, width, fit, today);
   const { cell, cells, months, x, y } = layout;
 
   let max = 0;
@@ -244,7 +261,8 @@ function Drawing({
 /**
  * A year of orders by day, one cell per day in ISO-week columns. Keys step by
  * day (left, right) and by week (up, down); days after `today` are drawn but
- * never selectable.
+ * never selectable. With `fitToWidth`, a phone shows the latest weeks that fit, ending with this
+ * one; the keys and the tooltip stay on the days drawn, and the table still holds the whole year.
  */
 export function CalendarHeatmap({
   label,
@@ -253,6 +271,7 @@ export function CalendarHeatmap({
   today,
   dateLabel,
   empty,
+  fitToWidth = false,
   width,
 }: {
   label: string;
@@ -261,17 +280,19 @@ export function CalendarHeatmap({
   today: string;
   dateLabel: (iso: string) => string;
   empty?: string | null;
+  fitToWidth?: boolean;
   width?: number;
 }) {
   const [active, setActive] = useState<string | null>(null);
   const [measured, setMeasured] = useState<number | null>(null);
 
-  const firstDay = `${String(year).padStart(4, "0")}-01-01`;
+  const layout = layoutFor(year, width ?? measured, fitToWidth, today);
+  const firstDay = layout.firstShown;
   const lastDay = `${String(year).padStart(4, "0")}-12-31`;
   const lastSelectable = today < lastDay ? today : lastDay;
 
   const inYear = days
-    .filter((d) => d.on >= firstDay && d.on <= lastDay)
+    .filter((d) => d.on >= `${String(year).padStart(4, "0")}-01-01` && d.on <= lastDay)
     .sort((a, b) => (a.on < b.on ? -1 : a.on > b.on ? 1 : 0));
   const counts = new Map(inYear.map((d) => [d.on, d.count]));
   const hasData = inYear.length > 0;
@@ -318,7 +339,6 @@ export function CalendarHeatmap({
     if (active !== null) setActive(null);
   }
 
-  const layout = layoutFor(year, width ?? measured);
   const activeCell = active !== null ? layout.cells.find((c) => c.on === active) : undefined;
   let tooltip: ReactNode = null;
   if (canSelect && activeCell && activeCell.on <= today) {
@@ -361,6 +381,7 @@ export function CalendarHeatmap({
           width={frameSize.width}
           counts={counts}
           today={today}
+          fit={fitToWidth}
           interactive={canSelect}
           active={active}
           onActive={setActive}

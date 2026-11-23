@@ -91,19 +91,23 @@ function segmentsOf(points: TrendPoint[], key: "value" | "previous", layout: Lay
   });
 }
 
-function tooltipRows(p: TrendPoint, format: (v: number) => string, tone: "light" | "dark") {
+/** What the two lines are called. The default compares a period with the one before; other names (two different figures) drop the change row. */
+type SeriesNames = { value: string; previous: string };
+const PERIODS: SeriesNames = { value: "This period", previous: "Previous" };
+
+function tooltipRows(p: TrendPoint, format: (v: number) => string, tone: "light" | "dark", names: SeriesNames) {
   const colours = TONES[tone];
   const rows: ChartTooltipRow[] = [
     {
       key: colours.line,
-      label: "This period",
+      label: names.value,
       value: p.value === null ? "No data" : format(p.value),
       strong: true,
     },
   ];
   if (p.previous !== null && p.previous !== undefined) {
-    rows.push({ key: colours.previous, label: "Previous", value: format(p.previous) });
-    if (p.value !== null && p.previous > 0) {
+    rows.push({ key: colours.previous, label: names.previous, value: format(p.previous) });
+    if (names === PERIODS && p.value !== null && p.previous > 0) {
       const change = Math.round((p.value / p.previous - 1) * 100);
       rows.push({
         label: "Change",
@@ -358,9 +362,12 @@ export function TrendChart({
   dateLabel,
   empty,
   endLabel = false,
+  names = PERIODS,
   width,
 }: {
   label: string;
+  /** The lines' names in the tooltip and table; by default "This period" and "Previous". */
+  names?: SeriesNames;
   points: TrendPoint[];
   tone: "light" | "dark";
   height: number;
@@ -390,7 +397,7 @@ export function TrendChart({
         left={MARGIN.left + layout.xScale(toDate(activePoint.at))}
         top={MARGIN.top + layout.yScale(shown)}
         title={dateLabel(activePoint.at)}
-        rows={tooltipRows(activePoint, format, tone)}
+        rows={tooltipRows(activePoint, format, tone, names)}
       />
     );
   }
@@ -406,7 +413,7 @@ export function TrendChart({
       overlay={tooltip}
       table={{
         caption: label,
-        columns: hasPrevious ? ["Date", "This period", "Previous"] : ["Date", "This period"],
+        columns: hasPrevious ? ["Date", names.value, names.previous] : ["Date", names.value],
         rows: points.map((p) => {
           const row = [dateLabel(p.at), p.value === null ? "No data" : format(p.value)];
           if (hasPrevious) {

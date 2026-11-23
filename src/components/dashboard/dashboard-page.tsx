@@ -18,8 +18,10 @@ import { AttentionTile } from "./attention-tile";
 import { BriefingTile } from "./briefing-tile";
 import { HeroTile } from "./hero-tile";
 import { KpiTiles } from "./kpi-tiles";
+import { PartnerTiles } from "./partner-tiles";
 import { ProductionTiles } from "./production-tiles";
 import { RangePicker } from "./range-picker";
+import { SalesTiles } from "./sales-tiles";
 
 /** "Good morning" before noon, "Good afternoon" before six, then "Good evening", in the workspace's time zone. */
 function greeting(now: Date, timeZone: string): string {
@@ -39,7 +41,8 @@ function Dashboard({ firstName }: { firstName: string }) {
   const { date, timeZone } = useFormat();
   const [now] = useState(() => new Date());
   const choice = parseRange(useSearchParams());
-  const days = resolveRange(choice, dayKey(now.toISOString(), timeZone));
+  const today = dayKey(now.toISOString(), timeZone);
+  const days = resolveRange(choice, today);
   const range = useDashboardRange(days);
   const words = rangeWords(choice);
 
@@ -71,6 +74,8 @@ function Dashboard({ firstName }: { firstName: string }) {
           <AttentionTile />
           <KpiTiles range={range.data} />
           <ProductionTiles range={range.data} />
+          <PartnerTiles range={range.data} />
+          <SalesTiles range={range.data} today={today} />
         </div>
       ) : range.isError ? (
         <div className="mt-4 rounded-[20px] bg-card px-5 py-4">

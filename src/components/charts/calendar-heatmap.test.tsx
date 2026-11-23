@@ -160,3 +160,30 @@ describe("CalendarHeatmap", () => {
     expect(container.querySelectorAll("rect[data-day]").length).toBe(365);
   });
 });
+
+describe("CalendarHeatmap on a phone", () => {
+  // 340px fits 28 weeks at the 8px floor: Monday 11 May to Sunday 22 Nov, the week of today.
+  const renderNarrow = (fitToWidth: boolean) => renderHeatmap({ width: 340, fitToWidth });
+
+  it("draws only the latest weeks that fit, ending with this week", () => {
+    const { container } = renderNarrow(true);
+    expect(container.querySelectorAll("rect[data-day]")).toHaveLength(28 * 7);
+    expect(fillOf(container, "2026-05-10")).toBeUndefined();
+    expect(fillOf(container, "2026-05-11")).toBeDefined();
+    expect(container.querySelector('rect[data-today="2026-11-22"]')).not.toBeNull();
+    expect(fillOf(container, "2026-11-23")).toBeUndefined();
+  });
+
+  it("keeps the whole year in the table, and the keys on the days drawn", async () => {
+    renderNarrow(true);
+    expect(screen.getAllByRole("row")).toHaveLength(4);
+    screen.getByRole("figure").focus();
+    await userEvent.keyboard("{Home}");
+    expect(await screen.findByText("05-11")).toBeInTheDocument();
+  });
+
+  it("still draws the whole year without fitToWidth", () => {
+    const { container } = renderNarrow(false);
+    expect(container.querySelectorAll("rect[data-day]")).toHaveLength(365);
+  });
+});
