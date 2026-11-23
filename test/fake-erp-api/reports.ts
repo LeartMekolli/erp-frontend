@@ -80,17 +80,20 @@ const DEFECTS = [
   { id: uuid("e3e3e3e3", 2), key: "scratch", name: "Scratch" },
   { id: uuid("e3e3e3e3", 3), key: "crack", name: "Crack" },
 ];
+/** `hours` is a step's median in a range, `hoursBefore` in the range before it: Casting got slower, Plating faster. */
 const STEPS = [
-  { id: uuid("e1e1e1e1", 1), name: "Print", hours: 6, inHouse: 14, atPartner: 6, late: 1 },
-  { id: uuid("e1e1e1e1", 2), name: "Cure", hours: 3, inHouse: 9, atPartner: 0, late: 0 },
-  { id: uuid("e1e1e1e1", 3), name: "Finish", hours: 5, inHouse: 11, atPartner: 3, late: 2 },
-  { id: uuid("e1e1e1e1", 4), name: "Packing", hours: 2, inHouse: 5, atPartner: 0, late: 0 },
-  { id: uuid("e1e1e1e1", 5), name: "Casting tree", hours: 4, inHouse: 4, atPartner: 7, late: 0 },
-  { id: uuid("e1e1e1e1", 6), name: "Casting", hours: 9, inHouse: 0, atPartner: 12, late: 3 },
-  { id: uuid("e1e1e1e1", 7), name: "Polishing", hours: 7, inHouse: 6, atPartner: 5, late: 1 },
-  { id: uuid("e1e1e1e1", 8), name: "Plating", hours: 11, inHouse: 0, atPartner: 8, late: 0 },
-  { id: uuid("e1e1e1e1", 9), name: "Final QC", hours: 2, inHouse: 7, atPartner: 0, late: 1 },
+  { id: uuid("e1e1e1e1", 1), name: "Print", hours: 6, hoursBefore: 6, inHouse: 14, atPartner: 6, late: 1 },
+  { id: uuid("e1e1e1e1", 2), name: "Cure", hours: 3, hoursBefore: 3, inHouse: 9, atPartner: 0, late: 0 },
+  { id: uuid("e1e1e1e1", 3), name: "Finish", hours: 5, hoursBefore: 4, inHouse: 11, atPartner: 3, late: 2 },
+  { id: uuid("e1e1e1e1", 4), name: "Packing", hours: 2, hoursBefore: 2, inHouse: 5, atPartner: 0, late: 0 },
+  { id: uuid("e1e1e1e1", 5), name: "Casting tree", hours: 4, hoursBefore: 4, inHouse: 4, atPartner: 7, late: 0 },
+  { id: uuid("e1e1e1e1", 6), name: "Casting", hours: 22, hoursBefore: 17, inHouse: 0, atPartner: 12, late: 3 },
+  { id: uuid("e1e1e1e1", 7), name: "Polishing", hours: 7, hoursBefore: 7, inHouse: 6, atPartner: 5, late: 1 },
+  { id: uuid("e1e1e1e1", 8), name: "Plating", hours: 11, hoursBefore: 13, inHouse: 0, atPartner: 8, late: 0 },
+  { id: uuid("e1e1e1e1", 9), name: "Final QC", hours: 2, hoursBefore: 2, inHouse: 7, atPartner: 0, late: 1 },
 ];
+
+type Period = "current" | "previous";
 const CUSTOMERS = [
   { id: LUNA_ID, name: "Luna Jewels", share: 60 },
   { id: MIRA_ID, name: "Mira Studio", share: 40 },
@@ -165,7 +168,7 @@ export function createReportsStore(now: () => number, orders: () => Order[] = ()
   }
 
   /** The reader week (`week-metrics.ts` `forReader`): what the dashboard shows of a week, cut to what the reader may see. */
-  function weekMetrics(total: Day, reader: Reader, to: string): WeekMetrics {
+  function weekMetrics(total: Day, reader: Reader, to: string, period: Period): WeekMetrics {
     const any = total.placed > 0;
     const customerRevenue = split(total.revenue, CUSTOMERS.map((customer) => customer.share));
     const defectCount = total.defects.reduce((sum, count) => sum + count, 0);
@@ -176,7 +179,9 @@ export function createReportsStore(now: () => number, orders: () => Order[] = ()
         : { placed: total.placed },
       production: {
         on_time_rate: rate(total.onTime, total.placed),
-        step_hours: any ? STEPS.map((step) => ({ step_type_id: step.id, name: step.name, median_hours: step.hours })) : [],
+        step_hours: any
+          ? STEPS.map((step) => ({ step_type_id: step.id, name: step.name, median_hours: period === "current" ? step.hours : step.hoursBefore }))
+          : [],
         defect_rate: rate(defectCount, total.pieces),
         claims: Math.floor(total.placed / 60),
         remakes: Math.floor(total.placed / 90),
@@ -200,8 +205,8 @@ export function createReportsStore(now: () => number, orders: () => Order[] = ()
   }
 
   /** A range's metrics (`range-metrics.ts` `forRangeReader`): the reader week plus the cuts only a range has. */
-  function rangeMetrics(total: Day, reader: Reader, to: string): RangeMetrics {
-    const base = weekMetrics(total, reader, to);
+  function rangeMetrics(total: Day, reader: Reader, to: string, period: Period): RangeMetrics {
+    const base = weekMetrics(total, reader, to, period);
     const productQuantity = split(total.placed * 2, PRODUCTS.map((product) => product.share));
     const productRevenue = split(total.revenue, PRODUCTS.map((product) => product.share));
     const groupRevenue = split(total.revenue, GROUPS.map((group) => group.share));
@@ -379,8 +384,8 @@ export function createReportsStore(now: () => number, orders: () => Order[] = ()
       const canSeeAi = reader.money && reader.partners;
       return {
         week: { start, previous_start: previousStart, computed_at: new Date(now()).toISOString() },
-        current: weekMetrics(sum(start, addDays(start, 6), today), reader, addDays(start, 6)),
-        previous: weekMetrics(sum(previousStart, addDays(previousStart, 6), today), reader, addDays(previousStart, 6)),
+        current: weekMetrics(sum(start, addDays(start, 6), today), reader, addDays(start, 6), "current"),
+        previous: weekMetrics(sum(previousStart, addDays(previousStart, 6), today), reader, addDays(previousStart, 6), "previous"),
         attention: attentionFor(permissions),
         ...(permissions.includes("workflow.read")
           ? { production: { wip: STEPS.map((step) => ({ step_type_id: step.id, name: step.name, in_house: step.inHouse, at_partner: step.atPartner, late: step.late })) } }
@@ -416,8 +421,8 @@ export function createReportsStore(now: () => number, orders: () => Order[] = ()
         ok: true,
         body: {
           range: { from, to, previous_from: previousFrom, previous_to: previousTo, bucket },
-          current: rangeMetrics(sum(from, to, today), reader, to),
-          previous: rangeMetrics(sum(previousFrom, previousTo, today), reader, previousTo),
+          current: rangeMetrics(sum(from, to, today), reader, to, "current"),
+          previous: rangeMetrics(sum(previousFrom, previousTo, today), reader, previousTo, "previous"),
           series: bucketsOf(from, to, bucket).map(({ start, end }) => ({
             ...pointOf(sum(start, end, today), reader),
             start,

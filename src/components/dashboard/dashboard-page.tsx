@@ -18,6 +18,7 @@ import { AttentionTile } from "./attention-tile";
 import { BriefingTile } from "./briefing-tile";
 import { HeroTile } from "./hero-tile";
 import { KpiTiles } from "./kpi-tiles";
+import { ProductionTiles } from "./production-tiles";
 import { RangePicker } from "./range-picker";
 
 /** "Good morning" before noon, "Good afternoon" before six, then "Good evening", in the workspace's time zone. */
@@ -69,6 +70,7 @@ function Dashboard({ firstName }: { firstName: string }) {
           <BriefingTile />
           <AttentionTile />
           <KpiTiles range={range.data} />
+          <ProductionTiles range={range.data} />
         </div>
       ) : range.isError ? (
         <div className="mt-4 rounded-[20px] bg-card px-5 py-4">
