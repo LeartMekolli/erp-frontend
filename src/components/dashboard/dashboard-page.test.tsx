@@ -56,8 +56,11 @@ describe("DashboardPage", () => {
     const tile = await hero(/^Revenue · last 30 days$/);
     expect(within(tile).getByText(revenueOf(expected(STAFF, 30)))).toBeInTheDocument();
     expect(within(tile).getByRole("button", { name: "Revenue" })).toHaveAttribute("aria-pressed", "true");
-    const kpis = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent).slice(1);
-    expect(kpis).toEqual(["Orders placed", "Average order", "On time", "Defect rate"]);
+    const KPIS = ["Orders placed", "Average order", "On time", "Defect rate"];
+    const kpis = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent).filter((name) => KPIS.includes(name ?? ""));
+    expect(kpis).toEqual(KPIS);
+    expect(await screen.findByRole("region", { name: "Needs attention" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "AI briefing" })).toBeInTheDocument();
   });
 
   it("shows no money and drops the On time tile for a reader without payment.read", async () => {

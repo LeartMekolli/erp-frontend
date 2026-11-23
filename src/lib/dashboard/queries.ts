@@ -54,7 +54,11 @@ export function useDashboardRange(range: { from: string; to: string }) {
   });
 }
 
-/** Has the AI write a new briefing now; it is written in the background, so the dashboard is read again to show it. */
+/**
+ * Has the AI write a new briefing now; it is written in the background, so the dashboard is read again
+ * to show it, and the mutation stays pending until that read is back (no "Write a new one" flash before
+ * `ai.pending` arrives). A refusal (409: written under 15 minutes ago, no AI limit left) reads nothing.
+ */
 export function useWriteBriefing() {
   const client = useQueryClient();
   return useApiMutation<void, { id: string }>(
@@ -63,7 +67,7 @@ export function useWriteBriefing() {
       if (!data) throw problemFrom(error, response);
       return data;
     },
-    { onSettled: () => client.invalidateQueries({ queryKey: dashboardKeys.dashboard() }) },
+    { onSuccess: () => client.invalidateQueries({ queryKey: dashboardKeys.dashboard() }) },
   );
 }
 

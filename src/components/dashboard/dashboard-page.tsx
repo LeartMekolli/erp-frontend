@@ -14,6 +14,8 @@ import { parseRange, rangeWords, resolveRange } from "@/lib/dashboard/range";
 import { dayKey } from "@/lib/format/dates";
 import { useFormat } from "@/lib/format/use-format";
 
+import { AttentionTile } from "./attention-tile";
+import { BriefingTile } from "./briefing-tile";
 import { HeroTile } from "./hero-tile";
 import { KpiTiles } from "./kpi-tiles";
 import { RangePicker } from "./range-picker";
@@ -64,6 +66,8 @@ function Dashboard({ firstName }: { firstName: string }) {
           )}
         >
           <HeroTile range={range.data} words={words} />
+          <BriefingTile />
+          <AttentionTile />
           <KpiTiles range={range.data} />
         </div>
       ) : range.isError ? (
