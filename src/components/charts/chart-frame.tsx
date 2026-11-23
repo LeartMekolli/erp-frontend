@@ -22,9 +22,12 @@ export function ChartFrame({
   width,
   focus,
   overlay,
+  tone = "light",
   children,
 }: {
   label: string;
+  /** The surface it sits on: the empty message's colour follows it (the dark hero). */
+  tone?: "light" | "dark";
   height: number;
   empty?: string | null;
   table: ChartTableProps;
@@ -59,7 +62,9 @@ export function ChartFrame({
         </div>
         {overlay !== undefined ? <div aria-live="polite" className="pointer-events-none absolute inset-0">{overlay}</div> : null}
         {empty ? (
-          <p className="text-ink-2 pointer-events-none absolute inset-0 m-0 flex items-center justify-center text-center text-[13px]">
+          <p
+            className={`${tone === "dark" ? "text-[#b9b6c9]" : "text-ink-2"} pointer-events-none absolute inset-0 m-0 flex items-center justify-center text-center text-[13px]`}
+          >
             {empty}
           </p>
         ) : null}

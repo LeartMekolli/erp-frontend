@@ -401,6 +401,7 @@ export function TrendChart({
       height={height}
       width={width}
       empty={hasData ? null : empty}
+      tone={tone}
       focus={keys.bind}
       overlay={tooltip}
       table={{
