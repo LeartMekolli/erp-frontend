@@ -193,6 +193,21 @@ export type AiRun = JsonOk<"/ai/runs/{id}", "get">;
 export type AiRef = NonNullable<AiRun["answer"]>["refs"][number];
 export type SuggestionKind = NonNullable<NonNullable<AiRun["answer"]>["action"]>["kind"];
 
+/** `GET /reports/dashboard`: this week against last week, what needs attention, the pieces in production and the AI briefing. */
+export type DashboardResponse = JsonOk<"/reports/dashboard", "get">;
+
+/** `GET /reports/range`: the dashboard's numbers for any dates, the period before, and a point per bucket. */
+export type DashboardRange = JsonOk<"/reports/range", "get">;
+
+/** One bucket of a range: its numbers, and the same days of the period before. */
+export type RangeSeriesPoint = DashboardRange["series"][number];
+
+/** One kind of thing that needs attention, with its total and up to 20 items. */
+export type AttentionGroup = DashboardResponse["attention"][number];
+
+/** The dashboard's AI part: the latest briefing, or why AI is off. Only for staff who may read reports, payments and partners. */
+export type AiSection = NonNullable<DashboardResponse["ai"]>;
+
 /** One in-app notification, from `GET /notifications`. */
 export type FeedEntry = JsonOk<"/notifications", "get">["data"][number];
 
@@ -220,11 +235,8 @@ export type SpeedChoice = JsonOk<"/pricing/quotes/delivery-speeds", "get">["data
 /** `POST /pricing/quotes`: a configuration of a product, for a customer. */
 export type QuoteBody = JsonBody<"/pricing/quotes", "post">;
 
-/**
- * That post's answer: a saved quote (201) or why it can't be priced. erp-api documents both under 201,
- * though a refusal comes as a 200; openapi-fetch reads either as data.
- */
-export type QuoteResult = JsonCreated<"/pricing/quotes", "post">;
+/** That post's answer: a saved quote (201) or why it can't be priced (200); openapi-fetch reads either as data. */
+export type QuoteResult = JsonOk<"/pricing/quotes", "post"> | JsonCreated<"/pricing/quotes", "post">;
 
 /** A saved quote as the customer would see it: summary lines, unit price, total and until when it holds. */
 export type QuoteSummary = Extract<QuoteResult, { accepted: true }>["quote"];

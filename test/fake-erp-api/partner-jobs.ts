@@ -135,8 +135,8 @@ export function createPartnerJobsStore(now: () => number, production: Production
       design_file_version_id: seed.id === RING_BAND_JOB_ID ? RING_BAND_DESIGN_ID : null,
       steps: [
         seed.partnerId === NORTHCAST_ID
-          ? { key: "casting", name: "Casting", sop_file_version_id: null }
-          : { key: "print", name: "Print", sop_file_version_id: null },
+          ? { key: "casting", name: "Casting", sop_file_version_id: null, count: seed.pieces.active }
+          : { key: "print", name: "Print", sop_file_version_id: null, count: seed.pieces.active },
       ],
       cost: seed.cost,
       pieces: seed.pieces,
@@ -166,7 +166,7 @@ export function createPartnerJobsStore(now: () => number, production: Production
     return {
       ...row.job,
       pieces: group.body.pieces,
-      steps: view.steps.map((step) => ({ key: step.key, name: step.name, sop_file_version_id: step.sop_file_version_id })),
+      steps: view.steps.map((step) => ({ key: step.key, name: step.name, sop_file_version_id: step.sop_file_version_id, count: step.count })),
     };
   }
   const view = (row: Row): PartnerJob => {

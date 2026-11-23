@@ -36,8 +36,8 @@ const RING: PartnerJob = {
   quantity: 10,
   design_file_version_id: null,
   steps: [
-    { key: "print_pattern", name: "Print pattern", sop_file_version_id: null },
-    { key: "casting", name: "Casting", sop_file_version_id: null },
+    { key: "print_pattern", name: "Print pattern", sop_file_version_id: null, count: 0 },
+    { key: "casting", name: "Casting", sop_file_version_id: null, count: 0 },
   ],
   cost: "240.00",
   pieces: { active: 10, finished: 0, scrapped: 0 },

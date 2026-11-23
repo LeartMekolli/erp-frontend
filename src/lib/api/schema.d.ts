@@ -410,7 +410,7 @@ export interface paths {
         get?: never;
         /**
          * Set one setting. The body is the value itself.
-         * @description Keys: `notification.sender`, `notification.staffRecipients`, `business.calendar`, `partners.routing`, `orders.scheduling`, `partners.scoreWeights`, `orders.claims`, `reports.schedules`, `payments.collection`, `ai.toolPrices`, `ai.jobSummary`, `customers.priority`, `auth.google`. The value is checked against the schema of its key; the body schema shows the shapes of all keys. Answers the stored value. An unknown key is a 400.
+         * @description Keys: `notification.sender`, `notification.staffRecipients`, `business.calendar`, `partners.routing`, `orders.scheduling`, `partners.scoreWeights`, `orders.claims`, `reports.schedules`, `reports.targets`, `payments.collection`, `ai.toolPrices`, `ai.jobSummary`, `customers.priority`, `auth.google`. The value is checked against the schema of its key; the body schema shows the shapes of all keys. Answers the stored value. An unknown key is a 400.
          *
          *     Access: permission `settings.write`.
          */
@@ -3050,6 +3050,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/partner-portal/partners/{partnerId}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The partner's jobs finished and pieces at its steps for any dates; earnings per bucket for admins and owners.
+         * @description Dates are in the workspace time zone, both ends included. `earned`, `previous_earned`, `currency` and `series` are left out for a member.
+         *
+         *     Access: a person acting for the partner, at least `member`; a suspended partner only reads.
+         */
+        get: operations["PartnerJobsController_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/partner-portal/partners/{partnerId}/owed": {
         parameters: {
             query?: never;
@@ -3080,12 +3102,34 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The jobs offered to or accepted by the partner, newest first, a page at a time.
-         * @description Never the customer, the quote or the price the customer pays. `status` filters before paging.
+         * The jobs offered to or accepted by the partner, a page at a time.
+         * @description Never the customer, the quote or the price the customer pays. `status`, `due` and `q` filter before paging, combined with AND. `due` picks jobs the partner is working on (`accepted`): `late` is past its due date, `due_soon` due from the workspace's today to 2 working days on, in the workspace's time zone and on its calendar; an offer or a finished job is neither. `q` matches part of the product name or of a chosen option value. `sort` is newest hand-over first by default; jobs with no due date come last in both `due_on` sorts, and a cursor works only with the sort it was made for. Each step's `count` is the job's active pieces at it now.
          *
          *     Access: a person acting for the partner, at least `member`; a suspended partner only reads.
          */
         get: operations["PartnerJobsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/partner-portal/partners/{partnerId}/jobs/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How many of the partner's jobs each tab and tile holds.
+         * @description Decided as the list decides `status` and `due`, for the same `q`, so a number always matches the list it opens. Only `q` is taken; anything else is a 400.
+         *
+         *     Access: a person acting for the partner, at least `member`; a suspended partner only reads.
+         */
+        get: operations["PartnerJobsController_counts"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4625,6 +4669,28 @@ export interface paths {
          *     Access: permission `role.write`.
          */
         delete: operations["RolesController_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/ai-spend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * AI spend per UTC day of a month, per workspace, in USD.
+         * @description Each figure is rounded to the cent on its own, so the days can differ from the month's total by a few cents. One read per workspace.
+         *
+         *     Access: permission `platform.tenant.read`.
+         */
+        get: operations["PlatformAiSpendController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -6236,12 +6302,34 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * This week against last week, what needs attention now, and the managers’ AI briefing.
-         * @description Weeks run from Monday in the workspace's time zone and are computed every 15 minutes. Money figures need `payment.read` and partner figures `partner.read`; without them they are left out, never zeroed. `attention` is live: each kind follows the permission of the list it comes from, with its total and at most 20 items. `ai` is only there for staff holding `report.read`, `payment.read` and `partner.read`: the latest briefing, with dismissed suggestions and ones naming a record that is gone left out, and the dismissals of the last 14 days; or why AI is off.
+         * This week against last week, what needs attention now, the pieces in production now, and the managers’ AI briefing.
+         * @description Weeks run from Monday in the workspace's time zone and are computed every 15 minutes. Money figures need `payment.read` and partner figures `partner.read`; without them they are left out, never zeroed. `attention` is live: each kind follows the permission of the list it comes from, with its total and at most 20 items. `production.wip` is live and only there for staff holding `workflow.read`: per step type the active pieces now, in house or at a partner, and how many are late (past the accepted job's due date, else the order's promised date). `ai` is only there for staff holding `report.read`, `payment.read` and `partner.read`: the latest briefing, with dismissed suggestions and ones naming a record that is gone left out, and the dismissals of the last 14 days; or why AI is off.
          *
          *     Access: permission `report.read`.
          */
         get: operations["DashboardController_dashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reports/range": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The dashboard's numbers for any dates, the period before, and a point per day, week or month.
+         * @description Worked out from the records on every request: a late refund, claim or correction changes past periods. Dates are calendar dates in the workspace's time zone, both ends included, for up to a year; the period before has the same number of days and ends the day before `from`. `series` has a point per bucket, and the same days of the period before in `previous`. Buckets are days up to 31 days, ISO weeks up to 183 days and calendar months beyond, the first and last clipped to the range; `bucket=day` forces days. Money figures (`revenue`, `average_value`, `partner_cost`) need `payment.read`, and partner figures (`partners`, `partner_cost`) need `partner.read`; without them they are left out, never zeroed.
+         *
+         *     Access: permission `report.read`.
+         */
+        get: operations["DashboardController_range"];
         put?: never;
         post?: never;
         delete?: never;
@@ -7773,6 +7861,8 @@ export interface operations {
                         enabled: boolean;
                         recipientUserIds: string[];
                     };
+                } | {
+                    onTimeRate: number;
                 } | {
                     /** @default 24 */
                     payWithinHours?: number;
@@ -10463,6 +10553,23 @@ export interface operations {
         };
         responses: {
             /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        accepted: false;
+                        reasons: {
+                            /** @enum {string} */
+                            code: "unknown_group" | "unknown_value" | "value_not_offered" | "required_missing" | "rule_excludes" | "rule_requires" | "size_out_of_range" | "unknown_size" | "not_sizeable" | "file_required" | "file_not_measured" | "measure_missing" | "no_material" | "conflicting_materials" | "price_missing" | "no_steps" | "price_too_large" | "step_conflict" | "step_price_missing" | "density_missing" | "unit_mismatch" | "workflow_missing" | "workflow_step_missing" | "partner_unavailable" | "quantity_too_large";
+                            message: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Success */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -10491,14 +10598,6 @@ export interface operations {
                             expires_at: string;
                             expired: boolean;
                         };
-                    } | {
-                        /** @enum {boolean} */
-                        accepted: false;
-                        reasons: {
-                            /** @enum {string} */
-                            code: "unknown_group" | "unknown_value" | "value_not_offered" | "required_missing" | "rule_excludes" | "rule_requires" | "size_out_of_range" | "unknown_size" | "not_sizeable" | "file_required" | "file_not_measured" | "measure_missing" | "no_material" | "conflicting_materials" | "price_missing" | "no_steps" | "price_too_large" | "step_conflict" | "step_price_missing" | "density_missing" | "unit_mismatch" | "workflow_missing" | "workflow_step_missing" | "partner_unavailable" | "quantity_too_large";
-                            message: string;
-                        }[];
                     };
                 };
             };
@@ -15978,6 +16077,27 @@ export interface operations {
         };
         responses: {
             /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        accepted: false;
+                        reasons: {
+                            /** @enum {string} */
+                            code: "unknown_group" | "unknown_value" | "value_not_offered" | "required_missing" | "rule_excludes" | "rule_requires" | "size_out_of_range" | "unknown_size" | "not_sizeable" | "file_required" | "file_not_measured" | "measure_missing" | "no_material" | "conflicting_materials" | "price_missing" | "no_steps" | "price_too_large" | "step_conflict" | "step_price_missing" | "density_missing" | "unit_mismatch" | "workflow_missing" | "workflow_step_missing" | "partner_unavailable" | "quantity_too_large";
+                            message: string;
+                            /** Format: uuid */
+                            rule_id?: string;
+                            step?: string;
+                            part?: number;
+                        }[];
+                    };
+                };
+            };
+            /** @description Success */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -16006,18 +16126,6 @@ export interface operations {
                             expires_at: string;
                             expired: boolean;
                         };
-                    } | {
-                        /** @enum {boolean} */
-                        accepted: false;
-                        reasons: {
-                            /** @enum {string} */
-                            code: "unknown_group" | "unknown_value" | "value_not_offered" | "required_missing" | "rule_excludes" | "rule_requires" | "size_out_of_range" | "unknown_size" | "not_sizeable" | "file_required" | "file_not_measured" | "measure_missing" | "no_material" | "conflicting_materials" | "price_missing" | "no_steps" | "price_too_large" | "step_conflict" | "step_price_missing" | "density_missing" | "unit_mismatch" | "workflow_missing" | "workflow_step_missing" | "partner_unavailable" | "quantity_too_large";
-                            message: string;
-                            /** Format: uuid */
-                            rule_id?: string;
-                            step?: string;
-                            part?: number;
-                        }[];
                     };
                 };
             };
@@ -21056,6 +21164,99 @@ export interface operations {
             };
         };
     };
+    PartnerJobsController_summary: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                bucket?: "day";
+            };
+            header?: never;
+            path: {
+                partnerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        range: {
+                            /** Format: date */
+                            from: string;
+                            /** Format: date */
+                            to: string;
+                            /** Format: date */
+                            previous_from: string;
+                            /** Format: date */
+                            previous_to: string;
+                            /** @enum {string} */
+                            bucket: "day" | "week" | "month";
+                        };
+                        jobs_finished: number;
+                        previous_jobs_finished: number;
+                        steps: {
+                            key: string;
+                            name: string;
+                            on_track: number;
+                            late: number;
+                        }[];
+                        earned?: string;
+                        previous_earned?: string;
+                        currency?: string;
+                        series?: {
+                            /** Format: date */
+                            start: string;
+                            days: number;
+                            paid: string;
+                            owed: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     PartnerJobsController_owed: {
         parameters: {
             query?: {
@@ -21146,6 +21347,9 @@ export interface operations {
                 limit?: number;
                 cursor?: string;
                 status?: "offered" | "accepted" | "finished";
+                due?: string;
+                q?: string;
+                sort?: "-offered_at" | "offered_at" | "due_on" | "-due_on";
             };
             header?: never;
             path: {
@@ -21188,6 +21392,7 @@ export interface operations {
                                 name: string;
                                 /** Format: uuid */
                                 sop_file_version_id: string | null;
+                                count: number;
                             }[];
                             cost: string;
                             pieces: {
@@ -21197,6 +21402,72 @@ export interface operations {
                             };
                         }[];
                         next_cursor: string | null;
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    PartnerJobsController_counts: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                partnerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        offered: number;
+                        accepted: number;
+                        finished: number;
+                        late: number;
+                        due_soon: number;
                     };
                 };
             };
@@ -30176,6 +30447,74 @@ export interface operations {
             };
         };
     };
+    PlatformAiSpendController_get: {
+        parameters: {
+            query?: {
+                month?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        month: string;
+                        days: {
+                            /** Format: date */
+                            date: string;
+                            total_usd: string;
+                            tenants: {
+                                /** Format: uuid */
+                                tenant_id: string;
+                                usd: string;
+                            }[];
+                        }[];
+                        tenants: {
+                            /** Format: uuid */
+                            id: string;
+                            name: string;
+                            monthly_limit_usd: string | null;
+                            spent_usd: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     PlatformAuthController_login: {
         parameters: {
             query?: never;
@@ -37305,6 +37644,16 @@ export interface operations {
                                 since: string | null;
                             }[];
                         }[];
+                        production?: {
+                            wip: {
+                                /** Format: uuid */
+                                step_type_id: string;
+                                name: string;
+                                in_house: number;
+                                at_partner: number;
+                                late: number;
+                            }[];
+                        };
                         ai?: {
                             /** @enum {boolean} */
                             enabled: true;
@@ -37354,6 +37703,262 @@ export interface operations {
                             reason: "not_set_up" | "limit_used";
                         };
                     };
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    DashboardController_range: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                bucket?: "day";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        range: {
+                            /** Format: date */
+                            from: string;
+                            /** Format: date */
+                            to: string;
+                            /** Format: date */
+                            previous_from: string;
+                            /** Format: date */
+                            previous_to: string;
+                            /** @enum {string} */
+                            bucket: "day" | "week" | "month";
+                        };
+                        current: {
+                            currency: string;
+                            orders: {
+                                placed: number;
+                                revenue?: string;
+                                average_value?: string | null;
+                                by_product?: {
+                                    /** Format: uuid */
+                                    product_id: string;
+                                    name: string;
+                                    quantity: number;
+                                    revenue: string;
+                                }[];
+                                by_customer_group?: {
+                                    customer_group: {
+                                        /** Format: uuid */
+                                        id: string;
+                                        key: string;
+                                        name: string;
+                                    } | null;
+                                    revenue: string;
+                                }[];
+                            };
+                            production: {
+                                on_time_rate: number | null;
+                                step_hours: {
+                                    /** Format: uuid */
+                                    step_type_id: string;
+                                    name: string;
+                                    median_hours: number;
+                                }[];
+                                defect_rate: number | null;
+                                /** @default 0 */
+                                claims: number;
+                                /** @default 0 */
+                                remakes: number;
+                                defects_by_kind: {
+                                    /** Format: uuid */
+                                    defect_id: string;
+                                    key: string;
+                                    name: string;
+                                    count: number;
+                                }[];
+                            };
+                            customers: {
+                                new: number;
+                                top: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                    revenue?: string;
+                                }[];
+                                ordering_less: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                    /** Format: date */
+                                    last_order_on: string;
+                                }[];
+                                slow_payers?: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                    overdue: string;
+                                }[];
+                            };
+                            partners?: {
+                                load: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                    percent: number;
+                                }[];
+                                on_time: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                    rate: number;
+                                }[];
+                                cost?: {
+                                    amount: string;
+                                    currency: string;
+                                };
+                            };
+                        };
+                        previous: {
+                            currency: string;
+                            orders: {
+                                placed: number;
+                                revenue?: string;
+                                average_value?: string | null;
+                                by_product?: {
+                                    /** Format: uuid */
+                                    product_id: string;
+                                    name: string;
+                                    quantity: number;
+                                    revenue: string;
+                                }[];
+                                by_customer_group?: {
+                                    customer_group: {
+                                        /** Format: uuid */
+                                        id: string;
+                                        key: string;
+                                        name: string;
+                                    } | null;
+                                    revenue: string;
+                                }[];
+                            };
+                            production: {
+                                on_time_rate: number | null;
+                                step_hours: {
+                                    /** Format: uuid */
+                                    step_type_id: string;
+                                    name: string;
+                                    median_hours: number;
+                                }[];
+                                defect_rate: number | null;
+                                /** @default 0 */
+                                claims: number;
+                                /** @default 0 */
+                                remakes: number;
+                                defects_by_kind: {
+                                    /** Format: uuid */
+                                    defect_id: string;
+                                    key: string;
+                                    name: string;
+                                    count: number;
+                                }[];
+                            };
+                            customers: {
+                                new: number;
+                                top: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                    revenue?: string;
+                                }[];
+                                ordering_less: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                    /** Format: date */
+                                    last_order_on: string;
+                                }[];
+                                slow_payers?: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                    overdue: string;
+                                }[];
+                            };
+                            partners?: {
+                                load: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                    percent: number;
+                                }[];
+                                on_time: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                    rate: number;
+                                }[];
+                                cost?: {
+                                    amount: string;
+                                    currency: string;
+                                };
+                            };
+                        };
+                        series: {
+                            orders_placed: number;
+                            revenue?: string;
+                            average_value?: string | null;
+                            on_time_rate: number | null;
+                            defect_rate: number | null;
+                            partner_cost?: string;
+                            /** Format: date */
+                            start: string;
+                            days: number;
+                            previous: {
+                                orders_placed: number;
+                                revenue?: string;
+                                average_value?: string | null;
+                                on_time_rate: number | null;
+                                defect_rate: number | null;
+                                partner_cost?: string;
+                            };
+                        }[];
+                        on_time_target: number | null;
+                        /** Format: date-time */
+                        computed_at: string;
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
             /** @description Missing or invalid token */
