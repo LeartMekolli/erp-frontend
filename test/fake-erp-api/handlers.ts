@@ -115,6 +115,17 @@ function staffWith(request: Request, permission: Permission): FakeUser | Respons
   return user;
 }
 
+/**
+ * Staff holding `permission` and also the report, payment and partner reads that the briefing's routes
+ * ask for in their handlers (`dashboard.controller.ts:78-110`); a 403 otherwise.
+ */
+function briefingCaller(request: Request, permission: Permission): FakeUser | Response {
+  const caller = staffWith(request, permission);
+  if (caller instanceof Response) return caller;
+  const all = (["report.read", "payment.read", "partner.read"] as const).every((one) => caller.permissions.includes(one));
+  return all ? caller : problem(403, "Forbidden");
+}
+
 /** A store's refusal as erp-api would send it. */
 function refusal(answer: Exclude<Answer<unknown>, { ok: true }>): Response {
   return answer.status === 400
@@ -683,7 +694,7 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       if (caller instanceof Response) return response.untyped(caller);
       const answer = fakeState().quotes.quote(await request.json(), request.headers.get("idempotency-key"));
       if (!answer.ok) return response.untyped(refusal(answer));
-      return answer.body.accepted ? response(201).json(answer.body) : response.untyped(HttpResponse.json(answer.body, { status: 200 }));
+      return answer.body.accepted ? response(201).json(answer.body) : response(200).json(answer.body);
     }),
 
     http.post("/orders/shipping-rates", async ({ request, response }) => {
@@ -702,6 +713,41 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
         request.headers.get("idempotency-key"),
       );
       return answer.ok ? response(201).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    // The dashboard (`dashboard.controller.ts`): every route needs `report.read` (the briefing's `ai.use`), and what comes back is cut to the reader.
+    http.get("/reports/dashboard", ({ request, response }) => {
+      const caller = staffWith(request, "report.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      return response(200).json(fakeState().reports.dashboard(caller.permissions));
+    }),
+
+    http.get("/reports/range", ({ request, response }) => {
+      const caller = staffWith(request, "report.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().reports.range(new URL(request.url).searchParams, caller.permissions);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/reports/dashboard/briefing", ({ request, response }) => {
+      const caller = briefingCaller(request, "ai.use");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().reports.writeBriefing(request.headers.get("idempotency-key"));
+      return answer.ok ? response(202).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/reports/dashboard/suggestions/{id}/dismiss", ({ request, params, response }) => {
+      const caller = briefingCaller(request, "report.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().reports.dismiss(params.id, { id: caller.id, name: caller.name });
+      return answer.ok ? response(204).empty() : response.untyped(refusal(answer));
+    }),
+
+    http.delete("/reports/dashboard/dismissals/{id}", ({ request, params, response }) => {
+      const caller = briefingCaller(request, "report.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().reports.undoDismissal(params.id);
+      return answer.ok ? response(204).empty() : response.untyped(refusal(answer));
     }),
 
     http.get("/search", ({ request, response }) => {

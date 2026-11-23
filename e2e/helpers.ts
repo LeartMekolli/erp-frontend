@@ -62,9 +62,22 @@ export async function expectNoSideScroll(page: Page) {
     const innermost = past.filter((element) => !past.some((other) => other !== element && element.contains(other)));
     const describe = (element: HTMLElement) =>
       `${element.tagName.toLowerCase()}.${(element.getAttribute("class") ?? "").split(" ").slice(0, 4).join(".")} → ${Math.round(element.getBoundingClientRect().right)}px "${(element.textContent ?? "").trim().slice(0, 40)}"`;
+    // Text can spill out of a box that itself fits (a big figure in a narrow tile), which no
+    // element's edge shows, so text past the edge is named by the element holding it.
+    const spilling: string[] = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const holder = node.parentElement;
+      if (!holder || !node.textContent?.trim() || past.includes(holder)) continue;
+      if (getComputedStyle(holder).overflowX !== "visible" || clipped(holder)) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const right = range.getBoundingClientRect().right;
+      if (right > width + 0.5) spilling.push(`text in ${describe(holder)}, ends at ${right.toFixed(1)}px`);
+    }
     return {
       overflow: document.documentElement.scrollWidth - width,
-      culprits: innermost.slice(0, 8).map(describe),
+      culprits: [...innermost.map(describe), ...spilling].slice(0, 8),
     };
   });
   expect(overflow, `Wider than the screen:\n${culprits.join("\n")}`).toBeLessThanOrEqual(0);

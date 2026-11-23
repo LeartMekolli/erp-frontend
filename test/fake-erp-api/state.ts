@@ -25,6 +25,7 @@ import { createPartnerJobsStore } from "./partner-jobs";
 import { createPartnersStore } from "./partners";
 import { createProductionStore } from "./production";
 import { createQuotesStore, type QuoteFile } from "./quotes";
+import { createReportsStore } from "./reports";
 
 /** What erp-api's login and refresh answer (`session.service.ts:22-26`). */
 export interface SessionTokens {
@@ -98,6 +99,7 @@ export function createFakeState(now: () => number = Date.now) {
   const ai = createAiStore(now);
   const partnerJobs = createPartnerJobsStore(now, production);
   const earnings = createEarningsStore(now);
+  const reports = createReportsStore(now, orders.all);
   const suspended = new Set<string>();
   const partners = createPartnersStore((id) => earnings.account(id).state, (id) => suspended.has(id));
   const catalog = createCatalogStore();
@@ -152,6 +154,7 @@ export function createFakeState(now: () => number = Date.now) {
     ai,
     partnerJobs,
     earnings,
+    reports,
     partners,
     catalog,
     quotes,

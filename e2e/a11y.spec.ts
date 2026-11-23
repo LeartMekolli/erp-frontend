@@ -252,6 +252,22 @@ test("partner earnings: accessible and fits the screen", async ({ page }) => {
   await checkTab(page, "Jobs", page.getByText("Taken back, nothing owed"));
 });
 
+test("dashboard: accessible and fits the screen", async ({ page }) => {
+  await signIn(page, STAFF.email);
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+  await page.goto("/dashboard");
+  await expect(page.getByRole("region", { name: /^Revenue · / })).toBeVisible();
+  await expect(page.getByRole("region", { name: /^Orders by day/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: "AI briefing" }).getByText(/^Orders are steady/)).toBeVisible();
+  await expectAccessibleAndFits(page);
+
+  // The custom range's popover too.
+  await page.getByRole("button", { name: "Custom…" }).click();
+  // exact: "Where revenue comes from" is a region whose name also contains "from".
+  await expect(page.getByLabel("From", { exact: true })).toBeVisible();
+  await expectAccessibleAndFits(page);
+});
+
 test("partners: accessible and fits the screen", async ({ page }) => {
   await signIn(page, STAFF.email);
   await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();

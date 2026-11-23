@@ -75,7 +75,7 @@ const late: PartnerJob = {
   options: [{ group: "Material", value: "Brass" }],
   quantity: 30,
   design_file_version_id: null,
-  steps: [{ key: "casting", name: "Casting", sop_file_version_id: null }],
+  steps: [{ key: "casting", name: "Casting", sop_file_version_id: null, count: 28 }],
   cost: "900.00",
   pieces: { active: 28, finished: 0, scrapped: 2 },
 };
