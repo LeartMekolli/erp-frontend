@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { clearAuthNote, leaveAuthNote } from "@/lib/auth/auth-note";
 import { safeNext } from "@/lib/auth/safe-next";
 import { clientSession } from "@/lib/session/client-session";
 
@@ -81,6 +82,8 @@ export function SignInForm({
           expiresAt: body.expiresAt,
           signedInAt: body.signedInAt,
         });
+        // Used: the next visit to /sign-in starts clean.
+        clearAuthNote();
         // Stays locked: the page is about to change.
         router.push(safeNext(next, body.destination.path));
         return;
@@ -125,7 +128,12 @@ export function SignInForm({
           error={errors.password?.message}
           after={
             <Link
-              href={workspace ? `/forgot-password?workspace=${encodeURIComponent(workspace)}` : "/forgot-password"}
+              href="/forgot-password"
+              // Not prefetched: the page must be fetched after the click has left the note.
+              prefetch={false}
+              onClick={() => {
+                if (workspace) leaveAuthNote({ workspace });
+              }}
               className="inline-flex min-h-11 items-center self-end text-caption font-medium underline underline-offset-[3px]"
             >
               Forgot password?

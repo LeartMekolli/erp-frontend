@@ -31,7 +31,7 @@ export const APP_ROUTES: readonly string[] = [
 ];
 
 /** A workspace slug as erp-api allows it: lowercase letters, digits and inner hyphens, at most 63. */
-const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+export const WORKSPACE_SLUG = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 /**
  * erp-api builds links as `<WEB_URL>/{tenant}/...` when there are no
@@ -40,7 +40,7 @@ const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
  */
 export function splitWorkspacePrefix(pathname: string): { workspace: string | null; path: string } {
   const [, first = "", ...rest] = pathname.split("/");
-  if (APP_ROUTES.includes(first) || !SLUG.test(first)) return { workspace: null, path: pathname };
+  if (APP_ROUTES.includes(first) || !WORKSPACE_SLUG.test(first)) return { workspace: null, path: pathname };
   const path = `/${rest.join("/")}`;
   return { workspace: first, path: path === "/" || path === "//" ? "/" : path };
 }

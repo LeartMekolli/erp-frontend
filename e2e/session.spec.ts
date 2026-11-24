@@ -71,15 +71,31 @@ test("someone signed in who opens the sign-in page goes home", async ({ page }) 
   await expect(page.getByRole("heading", HOME)).toBeVisible();
 });
 
-test("a return link to another site lands at home instead", async ({ page }) => {
-  await signIn(page, STAFF.email, { path: "/sign-in?next=%2F%2Fevil.example" });
+test("a forged return to another site lands at home instead", async ({ page, context }) => {
+  await context.addCookies([
+    { name: "ami_auth_note", value: encodeURIComponent(JSON.stringify({ next: "//evil.example" })), url: APP_URL },
+  ]);
+  await signIn(page, STAFF.email);
   await expect(page.getByRole("heading", HOME)).toBeVisible();
   await expect(page).toHaveURL("/orders");
 });
 
 test("a page needing a session sends someone signed out to sign in and back", async ({ page }) => {
   await page.goto("/partner-portal");
-  await expect(page).toHaveURL("/sign-in?next=%2Fpartner-portal");
-  await signIn(page, PARTNER.email, { path: "/sign-in?next=%2Fpartner-portal" });
+  await expect(page).toHaveURL("/sign-in");
+  await page.getByLabel("Workspace").fill("demo");
+  await page.getByLabel("Email").fill(PARTNER.email);
+  await page.getByLabel("Password", { exact: true }).fill("fake-password-1");
+  await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("heading", { name: "Choose a workshop" })).toBeVisible();
+  await expect(page).toHaveURL("/partner-portal");
+});
+
+test("signing out lands on plain /sign-in with the message", async ({ page }) => {
+  await signIn(page, STAFF.email);
+  await expect(page.getByRole("heading", HOME)).toBeVisible();
+  await page.getByRole("button", { name: /^Account:/ }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
+  await expect(page.getByRole("status")).toHaveText("You've signed out.");
+  await expect(page).toHaveURL("/sign-in");
 });

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { Component, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AUTH_NOTE_COOKIE, clearAuthNote, parseAuthNote } from "@/lib/auth/auth-note";
 import { WORKSPACE_HINT_COOKIE } from "@/lib/routes";
 import { OfflineError, SessionEndedError, clientSession } from "@/lib/session/client-session";
 import {
@@ -79,9 +80,18 @@ beforeEach(() => {
   vi.spyOn(clientSession(), "getAccessToken").mockImplementation(getAccessToken);
   vi.spyOn(clientSession(), "signOut").mockImplementation(signOut as never);
 });
+const readAuthNote = () =>
+  parseAuthNote(
+    document.cookie
+      .split("; ")
+      .find((part) => part.startsWith(`${AUTH_NOTE_COOKIE}=`))
+      ?.slice(AUTH_NOTE_COOKIE.length + 1),
+  );
+
 afterEach(() => {
   vi.restoreAllMocks();
   setHint(null);
+  clearAuthNote();
   window.history.replaceState(null, "", "/");
 });
 
@@ -132,7 +142,9 @@ describe("SessionGate", () => {
   it("sends someone with no session to sign in, coming back to this page after", async () => {
     getAccessToken.mockRejectedValue(new SessionEndedError("none"));
     renderGate("staff");
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/sign-in?next=%2Forders%2F1%3Ftab%3Dopen"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/sign-in"));
+    // The way back travels in the auth note, its query too (the payment provider's `?onboarding=`).
+    expect(readAuthNote()).toEqual({ next: "/orders/1?tab=open" });
     expect(screen.queryByText("Area content")).not.toBeInTheDocument();
   });
 
@@ -160,9 +172,8 @@ describe("SessionGate", () => {
     setHint("sandbox");
     getAccessToken.mockResolvedValue(signInAs(STAFF.email));
     renderGate("staff");
-    await waitFor(() =>
-      expect(replace).toHaveBeenCalledWith("/sign-in?workspace=sandbox&next=%2Forders%2F1%3Ftab%3Dopen"),
-    );
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/sign-in"));
+    expect(readAuthNote()).toEqual({ workspace: "sandbox", next: "/orders/1?tab=open" });
     expect(signOut).toHaveBeenCalledWith("signed-out", { quiet: true });
     expect(screen.queryByText("Area content")).not.toBeInTheDocument();
   });

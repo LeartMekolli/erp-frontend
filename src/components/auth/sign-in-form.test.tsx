@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type JsonBodyType } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AUTH_NOTE_COOKIE, clearAuthNote, leaveAuthNote, parseAuthNote } from "@/lib/auth/auth-note";
 import { clientSession } from "@/lib/session/client-session";
 import { server } from "../../../test/msw";
 
@@ -40,7 +41,18 @@ beforeEach(() => {
   startSession.mockReset();
   vi.spyOn(clientSession(), "startSession").mockImplementation(startSession);
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  clearAuthNote();
+});
+
+const readAuthNote = () =>
+  parseAuthNote(
+    document.cookie
+      .split("; ")
+      .find((part) => part.startsWith(`${AUTH_NOTE_COOKIE}=`))
+      ?.slice(AUTH_NOTE_COOKIE.length + 1),
+  );
 
 describe("SignInForm", () => {
   it("has the fields in the agreed tab order", async () => {
@@ -144,10 +156,35 @@ describe("SignInForm", () => {
     expect(screen.getByRole("status")).toHaveTextContent(copy);
   });
 
-  it("links to the password reset with the workspace filled in", async () => {
+  it("links to the plain password reset page, handing it the workspace out of sight", async () => {
     const user = userEvent.setup();
     render(<SignInForm initialWorkspace="" next={null} reason={null} />);
     await user.type(screen.getByLabelText("Workspace"), "demo");
-    expect(screen.getByRole("link", { name: "Forgot password?" })).toHaveAttribute("href", "/forgot-password?workspace=demo");
+    const link = screen.getByRole("link", { name: "Forgot password?" });
+    expect(link).toHaveAttribute("href", "/forgot-password");
+    await user.click(link);
+    expect(readAuthNote()).toEqual({ workspace: "demo" });
+  });
+
+  it("leaves no note for the reset page when the workspace is empty", async () => {
+    const user = userEvent.setup();
+    render(<SignInForm initialWorkspace="" next={null} reason={null} />);
+    await user.click(screen.getByRole("link", { name: "Forgot password?" }));
+    expect(readAuthNote()).toEqual({});
+  });
+
+  it("keeps the note while open, so every tab signed out together can read it", () => {
+    leaveAuthNote({ reason: "signed-out" });
+    render(<SignInForm initialWorkspace="" next={null} reason="signed-out" />);
+    expect(readAuthNote()).toEqual({ reason: "signed-out" });
+  });
+
+  it("clears the note once signed in", async () => {
+    leaveAuthNote({ reason: "idle", next: "/orders/1" });
+    answerLogin(200, { ...tokens, destination: { kind: "staff", path: "/" } });
+    render(<SignInForm initialWorkspace="" next="/orders/1" reason="idle" />);
+    await fillAndSubmit();
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/orders/1"));
+    expect(readAuthNote()).toEqual({});
   });
 });
