@@ -1,7 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 
 import { LONG_NAME_JOB_ID, LONG_PRODUCT_NAME, RING_BAND_JOB_ID, RING_OFFER_ID } from "../test/fake-erp-api/partner-jobs";
-import { NORTHCAST_ID, PARTNER, PARTNER_TWO_SHOPS, RESET_TOKEN, STAFF, STAFF_INVITE_TOKEN } from "../test/fake-erp-api/seed";
+import { NORTHCAST_ADMIN, NORTHCAST_ID, NORTHCAST_MEMBER, PARTNER, PARTNER_TWO_SHOPS, RESET_TOKEN, STAFF, STAFF_INVITE_TOKEN } from "../test/fake-erp-api/seed";
 
 import { expect, expectNoAxeViolations, expectNoSideScroll, settled, signIn, test } from "./helpers";
 import { chooseCourier, getPrice, openNewOrder, pickCustomer, pickProduct } from "./new-order-steps";
@@ -187,6 +187,8 @@ const jobRow = (page: Page, title: string) => page.getByRole("region", { name: "
 /** Signs in as Northcast's owner and waits for both offers and the jobs in progress, the 60-character one among them. */
 async function openPartnerJobs(page: Page) {
   await signIn(page, PARTNER.email);
+  await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
+  await page.goto(`/partner-portal/${NORTHCAST_ID}/jobs`);
   await expect(page.getByRole("heading", { level: 1, name: "Jobs" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Waiting for your answer" })).toContainText("2 offers");
   await expect(jobRow(page, LONG_JOB_TITLE)).toBeVisible();
@@ -237,7 +239,7 @@ async function checkTab(page: Page, name: string | RegExp, shows: Locator) {
 
 test("partner earnings: accessible and fits the screen", async ({ page }) => {
   await signIn(page, PARTNER.email);
-  await expect(page.getByRole("heading", { level: 1, name: "Jobs" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
   await page.goto(`/partner-portal/${NORTHCAST_ID}/earnings`);
   const pending = page.getByRole("button", { name: /^On its way/ });
   await expect(pending).toBeVisible();
@@ -267,6 +269,18 @@ test("dashboard: accessible and fits the screen", async ({ page }) => {
   await expect(page.getByLabel("From", { exact: true })).toBeVisible();
   await expectAccessibleAndFits(page);
 });
+
+for (const user of [NORTHCAST_ADMIN, NORTHCAST_MEMBER]) {
+  test(`partner dashboard as ${user.partnerRole}: accessible and fits the screen`, async ({ page }) => {
+    await signIn(page, user.email);
+    await expect(page).toHaveURL(`/partner-portal/${NORTHCAST_ID}/dashboard`);
+    await expect(page.getByRole("region", { name: /^Waiting for / }).getByRole("figure")).toBeVisible();
+    await expect(page.getByRole("region", { name: "Offers waiting for you" }).getByRole("listitem").first()).toBeVisible();
+    await expect(page.getByRole("img", { name: "Score 4.4 out of 5" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Setup still to finish" }).getByText(/ of \d/)).toBeVisible();
+    await expectAccessibleAndFits(page);
+  });
+}
 
 test("partners: accessible and fits the screen", async ({ page }) => {
   await signIn(page, STAFF.email);

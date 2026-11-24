@@ -241,6 +241,41 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
+    // Before `/jobs/{groupId}`, which would take `counts` for a job's id.
+    http.get("/partner-portal/partners/{partnerId}/jobs/counts", ({ request, params, response }) => {
+      const refusedCall = partnerCaller(request, params.partnerId);
+      if (refusedCall) return response.untyped(refusedCall);
+      return response(200).json(fakeState().partnerJobs.counts(params.partnerId));
+    }),
+
+    // The partner dashboard's reads (`partner-jobs.controller.ts:58`, `ratings.controller.ts:92`, `setup.controller.ts`):
+    // anyone acting for the workshop; the summary leaves the money out below admin.
+    http.get("/partner-portal/partners/{partnerId}/summary", ({ request, params, response }) => {
+      const person = partnerPerson(request, params.partnerId);
+      if (person instanceof Response) return response.untyped(person);
+      const answer = fakeState().partnerDashboard.summary(params.partnerId, new URL(request.url).searchParams, person.partnerRole ?? "owner");
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/partner-portal/partners/{partnerId}/score", ({ request, params, response }) => {
+      const refusedCall = partnerCaller(request, params.partnerId);
+      if (refusedCall) return response.untyped(refusedCall);
+      return response(200).json(fakeState().partnerDashboard.score(params.partnerId));
+    }),
+
+    http.get("/partner-portal/partners/{partnerId}/setup", ({ request, params, response }) => {
+      const refusedCall = partnerCaller(request, params.partnerId);
+      if (refusedCall) return response.untyped(refusedCall);
+      return response(200).json(fakeState().partnerDashboard.setup(params.partnerId));
+    }),
+
+    http.get("/partner-portal/partners/{partnerId}/capacity-history", ({ request, params, response }) => {
+      const refusedCall = partnerCaller(request, params.partnerId);
+      if (refusedCall) return response.untyped(refusedCall);
+      const answer = fakeState().partnerDashboard.capacity(params.partnerId, new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(problem(400, answer.detail));
+    }),
+
     http.get("/partner-portal/partners/{partnerId}/jobs/{groupId}", ({ request, params, response }) => {
       const refusedCall = partnerCaller(request, params.partnerId);
       if (refusedCall) return response.untyped(refusedCall);

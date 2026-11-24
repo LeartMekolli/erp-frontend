@@ -11,6 +11,8 @@ export const CHART = {
   ink: "#16141c",
   /** The white of a dot's outline and of the cards a chart sits on. */
   surface: "#ffffff",
+  /** A ring's track: the part of the score or the time that isn't there. */
+  lilac: "#ece8fd",
   lilac2: "#d9d1fa",
   gray: "#c9c7d4",
   grid: "#ecebf2",

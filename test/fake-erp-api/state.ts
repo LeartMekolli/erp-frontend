@@ -21,6 +21,7 @@ import { createJobsStore } from "./jobs";
 import { createEarningsStore } from "./earnings";
 import { createNotificationsStore } from "./notifications";
 import { createOrdersStore } from "./orders";
+import { createPartnerDashboardStore } from "./partner-dashboard";
 import { createPartnerJobsStore } from "./partner-jobs";
 import { createPartnersStore } from "./partners";
 import { createProductionStore } from "./production";
@@ -100,6 +101,7 @@ export function createFakeState(now: () => number = Date.now) {
   const partnerJobs = createPartnerJobsStore(now, production);
   const earnings = createEarningsStore(now);
   const reports = createReportsStore(now, orders.all);
+  const partnerDashboard = createPartnerDashboardStore(now);
   const suspended = new Set<string>();
   const partners = createPartnersStore((id) => earnings.account(id).state, (id) => suspended.has(id));
   const catalog = createCatalogStore();
@@ -155,6 +157,7 @@ export function createFakeState(now: () => number = Date.now) {
     partnerJobs,
     earnings,
     reports,
+    partnerDashboard,
     partners,
     catalog,
     quotes,

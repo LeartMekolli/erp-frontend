@@ -17,18 +17,13 @@ import { useNow } from "@/lib/use-now";
 
 import { AttentionTile } from "./attention-tile";
 import { BriefingTile } from "./briefing-tile";
+import { greeting } from "./greeting";
 import { HeroTile } from "./hero-tile";
 import { KpiTiles } from "./kpi-tiles";
 import { PartnerTiles } from "./partner-tiles";
 import { ProductionTiles } from "./production-tiles";
 import { RangePicker } from "./range-picker";
 import { SalesTiles } from "./sales-tiles";
-
-/** "Good morning" before noon, "Good afternoon" before six, then "Good evening", in the workspace's time zone. */
-function greeting(now: Date, timeZone: string): string {
-  const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone }).format(now));
-  return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-}
 
 /** `/dashboard`: how the business is doing over any range, against the range before it. Needs `report.read`. */
 export function DashboardPage() {

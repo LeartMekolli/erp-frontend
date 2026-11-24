@@ -8,7 +8,7 @@
  * steps, counts and pieces from there, so a move on either side shows on both.
  */
 
-import type { JobAssignment, MoveBody, MoveResponse, PartnerJob, PartnerJobDetail, PartnerJobStatus } from "../../src/lib/api/schema-types";
+import type { JobAssignment, MoveBody, MoveResponse, PartnerJob, PartnerJobCounts, PartnerJobDetail, PartnerJobStatus } from "../../src/lib/api/schema-types";
 
 import type { Answer, Page } from "./orders";
 import { groupIdOf, uuid } from "./orders-seed";
@@ -209,6 +209,30 @@ export function createPartnerJobsStore(now: () => number, production: Production
         .toSorted((a, b) => b.job.offered_at.localeCompare(a.job.offered_at))
         .map(view);
       return { ok: true, body: { data: all.slice(offset, offset + limit), next_cursor: offset + limit < all.length ? String(offset + limit) : null } };
+    },
+
+    /**
+     * `GET .../jobs/counts` (`partner-jobs.service.ts:110-122`, `partner-jobs-query.ts:76-84`): the list's
+     * statuses, plus the accepted jobs past their due day (`late`) and due from today to 2 working days on
+     * (`due_soon`). The fake's workspace is on UTC.
+     */
+    counts(partnerId: string): PartnerJobCounts {
+      const today = day(0);
+      let dueSoonUntil = today;
+      for (let added = 0; added < 2; ) {
+        dueSoonUntil = new Date(Date.parse(`${dueSoonUntil}T00:00:00Z`) + DAY_MS).toISOString().slice(0, 10);
+        const weekday = new Date(`${dueSoonUntil}T00:00:00Z`).getUTCDay();
+        if (weekday !== 0 && weekday !== 6) added += 1;
+      }
+      const jobs = rows.filter((row) => row.partnerId === partnerId && visible(row)).map(view);
+      const accepted = jobs.filter((job) => job.status === "accepted");
+      return {
+        offered: jobs.filter((job) => job.status === "offered").length,
+        accepted: accepted.length,
+        finished: jobs.filter((job) => job.status === "finished").length,
+        late: accepted.filter((job) => job.due_on !== null && job.due_on < today).length,
+        due_soon: accepted.filter((job) => job.due_on !== null && job.due_on >= today && job.due_on <= dueSoonUntil).length,
+      };
     },
 
     /**

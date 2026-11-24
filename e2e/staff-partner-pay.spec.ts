@@ -68,7 +68,7 @@ test("staff pay a partner and the partner sees it", async ({ page, request }) =>
   await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("status")).toHaveText("You've signed out.");
   await signIn(page, PARTNER.email);
-  await expect(page).toHaveURL(`/partner-portal/${NORTHCAST_ID}/jobs`);
+  await expect(page).toHaveURL(`/partner-portal/${NORTHCAST_ID}/dashboard`);
   await page.goto(`/partner-portal/${NORTHCAST_ID}/earnings`);
   await expect(page.getByRole("heading", { level: 1, name: "Earnings" })).toBeVisible();
   const newest = page.getByRole("button", { name: /^(On its way|Paid|Failed|Reversed)/ }).first();

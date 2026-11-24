@@ -155,6 +155,21 @@ export type PayoutStatus = PartnerPayout["status"];
 /** Where the partner's payout account stands, from `GET .../payout-account`. */
 export type PayoutAccountState = JsonOk<"/partner-portal/partners/{partnerId}/payout-account", "get">["state"];
 
+/** `GET .../summary`: jobs finished in a range and the period before, pieces at the steps now; the money only for admins and owners. */
+export type PartnerSummary = JsonOk<"/partner-portal/partners/{partnerId}/summary", "get">;
+
+/** `GET .../jobs/counts`: how many jobs are offered, accepted, finished, late and due soon. */
+export type PartnerJobCounts = JsonOk<"/partner-portal/partners/{partnerId}/jobs/counts", "get">;
+
+/** `GET .../score`: the score out of 5 with its parts (0 to 1, null with nothing to go on) and the 50 newest ratings. */
+export type PartnerScoreResponse = JsonOk<"/partner-portal/partners/{partnerId}/score", "get">;
+
+/** `GET .../setup`: the steps the partner can do with their capacity, closed days and the option values it offers. */
+export type PartnerSetup = JsonOk<"/partner-portal/partners/{partnerId}/setup", "get">;
+
+/** One day of one step from `GET .../capacity-history`: pieces waiting, and the capacity as the partner set it. */
+export type CapacityRow = JsonOk<"/partner-portal/partners/{partnerId}/capacity-history", "get">["data"][number];
+
 /** One partner workshop as staff see it, from `GET /partners/{id}`; `GET /partners` lists the same shape. */
 export type StaffPartner = JsonOk<"/partners/{id}", "get">;
 

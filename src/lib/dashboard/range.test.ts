@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_CHOICE, checkCustomRange, rangeWords, resolveRange, type RangeChoice } from "./range";
+import { DEFAULT_CHOICE, checkCustomRange, previousRangeWords, rangeWords, resolveRange, type RangeChoice } from "./range";
+
+describe("previousRangeWords", () => {
+  it("counts the days of the range, both ends included", () => {
+    expect(previousRangeWords({ from: "2026-10-26", to: "2026-11-24" })).toBe("previous 30 days");
+    expect(previousRangeWords({ from: "2026-11-18", to: "2026-11-24" })).toBe("previous 7 days");
+    expect(previousRangeWords({ from: "2025-12-28", to: "2026-01-03" })).toBe("previous 7 days");
+  });
+
+  it("says previous day for a single day", () => {
+    expect(previousRangeWords({ from: "2026-11-24", to: "2026-11-24" })).toBe("previous day");
+  });
+});
 
 describe("DEFAULT_CHOICE", () => {
   it("is the last 30 days", () => {

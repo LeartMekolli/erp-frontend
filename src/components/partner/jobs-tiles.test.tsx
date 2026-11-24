@@ -66,9 +66,9 @@ describe("JobsTiles", () => {
     expect(onReview).toHaveBeenCalledOnce();
   });
 
-  it("says 20+ when there are more offers than one page", async () => {
-    const offer = {
-      id: "c1c1c1c1-0000-4000-8000-000000000099",
+  it("says 20+ when a full page of open offers has more after it", async () => {
+    const offer = (i: number) => ({
+      id: `c1c1c1c1-0000-4000-8000-0000000001${String(i).padStart(2, "0")}`,
       status: "offered",
       offered_at: "2026-11-12T09:00:00.000Z",
       expires_at: "2026-11-13T10:00:00.000Z",
@@ -80,10 +80,12 @@ describe("JobsTiles", () => {
       steps: [],
       cost: "10.00",
       pieces: { active: 1, finished: 0, scrapped: 0 },
-    };
+    });
+    // The floor counts the open offers loaded, so a full page of 20 open ones reads "20+".
+    const page = Array.from({ length: 20 }, (_, i) => offer(i));
     server.use(
       http.get(JOBS_URL, ({ request }) =>
-        new URL(request.url).searchParams.get("status") === "offered" ? HttpResponse.json({ data: [offer], next_cursor: "more" }) : undefined,
+        new URL(request.url).searchParams.get("status") === "offered" ? HttpResponse.json({ data: page, next_cursor: "more" }) : undefined,
       ),
     );
     renderTiles();
