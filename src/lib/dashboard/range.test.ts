@@ -1,39 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { checkCustomRange, parseRange, rangeSearch, rangeWords, resolveRange, type RangeChoice } from "./range";
+import { DEFAULT_CHOICE, checkCustomRange, rangeWords, resolveRange, type RangeChoice } from "./range";
 
-const parse = (query: string) => parseRange(new URLSearchParams(query));
-
-describe("parseRange", () => {
-  it("gives the last 30 days for nothing or something unknown", () => {
-    expect(parse("")).toEqual({ preset: "30d" });
-    expect(parse("range=bogus")).toEqual({ preset: "30d" });
-  });
-
-  it("reads a preset and a custom pair", () => {
-    expect(parse("range=quarter")).toEqual({ preset: "quarter" });
-    expect(parse("from=2026-10-01&to=2026-10-31")).toEqual({ from: "2026-10-01", to: "2026-10-31" });
-  });
-
-  it("falls back to the last 30 days for a custom pair that is malformed or refused", () => {
-    expect(parse("from=2026-10-01")).toEqual({ preset: "30d" });
-    expect(parse("from=2026-13-01&to=2026-14-01")).toEqual({ preset: "30d" });
-    expect(parse("from=yesterday&to=today")).toEqual({ preset: "30d" });
-    expect(parse("from=2026-11-02&to=2026-11-01")).toEqual({ preset: "30d" });
-    expect(parse("from=2024-01-01&to=2026-01-01")).toEqual({ preset: "30d" });
-  });
-});
-
-describe("rangeSearch", () => {
-  it("leaves the default out of the address", () => {
-    expect(rangeSearch({ preset: "30d" })).toBe("");
-    expect(rangeSearch({ preset: "7d" })).toBe("range=7d");
-    expect(rangeSearch({ from: "2026-10-01", to: "2026-10-31" })).toBe("from=2026-10-01&to=2026-10-31");
-  });
-
-  it("round-trips through parseRange", () => {
-    const choices: RangeChoice[] = [{ preset: "7d" }, { preset: "30d" }, { preset: "quarter" }, { preset: "year" }, { from: "2025-12-15", to: "2026-01-03" }];
-    for (const choice of choices) expect(parse(rangeSearch(choice))).toEqual(choice);
+describe("DEFAULT_CHOICE", () => {
+  it("is the last 30 days", () => {
+    expect(DEFAULT_CHOICE).toEqual({ preset: "30d" } satisfies RangeChoice);
   });
 });
 

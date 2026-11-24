@@ -50,12 +50,12 @@ for (const size of SIZES) {
       expect(overflowing).toEqual([]);
     });
 
-    test("This year goes in the address and the hero", async ({ page }) => {
+    test("This year goes in the hero, and the address stays plain", async ({ page }) => {
       await openDashboard(page);
       await page.getByRole("group", { name: "Date range" }).getByRole("button", { name: "This year" }).click();
-      await expect(page).toHaveURL(/\/dashboard\?range=year$/);
       await expect(page.getByRole("region", { name: "Revenue · this year" })).toBeVisible();
       await expect(page.getByRole("button", { name: "This year" })).toHaveAttribute("aria-pressed", "true");
+      await expect(page).toHaveURL(/\/dashboard$/);
     });
 
     test("the arrow keys read the hero chart", async ({ page }) => {

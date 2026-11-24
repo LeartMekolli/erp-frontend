@@ -1,13 +1,12 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useId, useState } from "react";
 
 import { cn } from "cn";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { checkCustomRange, parseRange, rangeSearch, rangeWords, type RangeChoice, type RangePreset } from "@/lib/dashboard/range";
+import { checkCustomRange, rangeWords, type RangeChoice, type RangePreset } from "@/lib/dashboard/range";
 
 const PRESET_LABEL: Record<RangePreset, string> = {
   "7d": "7 days",
@@ -26,20 +25,12 @@ const DATE_INPUT =
   "h-11 rounded-lg border border-line px-3 text-base text-ink focus-visible:outline-2 focus-visible:outline-violet aria-invalid:border-late md:h-9 md:text-sm";
 
 /**
- * The dashboard's date range, kept in the address: `?range=7d|quarter|year`, `?from=…&to=…` for a
- * custom range, nothing for the default last 30 days. A custom range erp-api would refuse is
- * stopped under the fields, and the address doesn't change.
+ * The dashboard's date range, a preset or a custom range. The dashboard keeps the choice on the page,
+ * so the address stays plain. A custom range erp-api would refuse is stopped under the fields, and
+ * nothing changes.
  */
-export function RangePicker() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const choice = parseRange(useSearchParams());
+export function RangePicker({ choice, onChange: go }: { choice: RangeChoice; onChange: (next: RangeChoice) => void }) {
   const custom = !("preset" in choice);
-
-  const go = (next: RangeChoice) => {
-    const query = rangeSearch(next);
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  };
 
   return (
     <div role="group" aria-label="Date range" className="flex max-w-full overflow-x-auto overscroll-x-contain rounded-full bg-card p-1">

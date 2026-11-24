@@ -1,6 +1,7 @@
 "use client";
 
-import { notFound, useSearchParams } from "next/navigation";
+import { notFound } from "next/navigation";
+import { useState } from "react";
 
 import { cn } from "cn";
 
@@ -9,7 +10,7 @@ import { LoadFailure } from "@/components/data/load-failure";
 import { useMe } from "@/components/session/session-gate";
 import { can } from "@/lib/auth/permissions";
 import { useDashboardRange } from "@/lib/dashboard/queries";
-import { parseRange, rangeWords, resolveRange } from "@/lib/dashboard/range";
+import { DEFAULT_CHOICE, rangeWords, resolveRange, type RangeChoice } from "@/lib/dashboard/range";
 import { dayKey } from "@/lib/format/dates";
 import { useFormat } from "@/lib/format/use-format";
 import { useNow } from "@/lib/use-now";
@@ -41,7 +42,8 @@ function Dashboard({ firstName }: { firstName: string }) {
   const { date, timeZone } = useFormat();
   // Read again every minute, so a page left open past midnight moves its ranges, the heatmap's today and the greeting on.
   const now = new Date(useNow(60_000));
-  const choice = parseRange(useSearchParams());
+  // Kept on the page: a reload opens the last 30 days.
+  const [choice, setChoice] = useState<RangeChoice>(DEFAULT_CHOICE);
   const today = dayKey(now.toISOString(), timeZone);
   const days = resolveRange(choice, today);
   const range = useDashboardRange(days);
@@ -57,7 +59,7 @@ function Dashboard({ firstName }: { firstName: string }) {
           </p>
         </div>
         <div className="flex min-w-0 flex-col items-end gap-1 md:ml-auto">
-          <RangePicker />
+          <RangePicker choice={choice} onChange={setChoice} />
           {range.dataUpdatedAt > 0 && <Freshness query={range} />}
         </div>
       </div>

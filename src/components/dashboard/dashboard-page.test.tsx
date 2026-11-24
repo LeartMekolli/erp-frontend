@@ -1,4 +1,5 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DashboardRange } from "@/lib/api/schema-types";
@@ -10,18 +11,16 @@ import { renderAs } from "../../../test/render";
 
 import { DashboardPage } from "./dashboard-page";
 
-const navigation = vi.hoisted(() => ({ replace: vi.fn(), notFound: vi.fn(), search: "" }));
+const navigation = vi.hoisted(() => ({ replace: vi.fn(), notFound: vi.fn() }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
   useRouter: () => ({ push: vi.fn(), replace: navigation.replace, prefetch: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(navigation.search),
   notFound: navigation.notFound,
 }));
 
 beforeEach(() => {
   navigation.replace.mockReset();
   navigation.notFound.mockReset();
-  navigation.search = "";
 });
 
 // The fake workspace's time zone is UTC, so its today is the UTC date.
@@ -75,19 +74,22 @@ describe("DashboardPage", () => {
   });
 
   it("says when the range has no orders, and still draws the hero", async () => {
-    navigation.search = `from=${addDays(today(), 10)}&to=${addDays(today(), 39)}`;
     renderAs(STAFF, <DashboardPage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Custom…" }));
+    fireEvent.change(await screen.findByLabelText("From"), { target: { value: addDays(today(), 10) } });
+    fireEvent.change(screen.getByLabelText("To"), { target: { value: addDays(today(), 39) } });
+    await userEvent.click(screen.getByRole("button", { name: "Apply" }));
     const tile = await hero(/^Revenue · /);
     expect(within(tile).getByText("No orders in these 30 days")).toBeInTheDocument();
   });
 
   it("keeps the last range's figures, dimmed and busy, while a new range loads", async () => {
-    const { container, rerender } = renderAs(STAFF, <DashboardPage />);
+    const { container } = renderAs(STAFF, <DashboardPage />);
     const before = revenueOf(expected(STAFF, 30));
     await screen.findByText(before);
 
-    navigation.search = "range=7d";
-    rerender(<DashboardPage />);
+    // A synchronous click, so the checks below run while the new range is still loading.
+    fireEvent.click(screen.getByRole("button", { name: "7 days" }));
     const bento = container.querySelector("[aria-busy]");
     expect(bento).toHaveAttribute("aria-busy", "true");
     expect(screen.getByText(before)).toBeInTheDocument();
@@ -96,5 +98,6 @@ describe("DashboardPage", () => {
     expect(await screen.findByText(after)).toBeInTheDocument();
     expect(container.querySelector("[aria-busy]")).toHaveAttribute("aria-busy", "false");
     expect(screen.getByRole("region", { name: /^Revenue · last 7 days$/ })).toBeInTheDocument();
+    expect(navigation.replace).not.toHaveBeenCalled();
   });
 });
