@@ -16,7 +16,7 @@
 
 - An address is only the page: `/orders`, `/orders/:id`, `/partner-portal/:partnerId/earnings`. AMI never adds a `?` part (`?tab=`, `?piece=`, `?range=`, `?next=`…) or a `#` part to an address it builds.
 - What's on screen (a tab, filters, sort, a date range, an open panel) is kept in React state. A reload opens the page's default view; the Orders list set the pattern.
-- A one-time message for the next page (why someone was signed out, where to go after sign-in, "just placed", the tab a notification opens) is handed over out of sight: `leaveArrivalNote` (`src/lib/navigation/arrival-note.ts`) for moves inside AMI, the auth note cookie (`src/lib/auth/auth-note.ts`) for the sign-in pages.
+- A one-time message for the next page (why someone was signed out, where to go after sign-in, "just placed", the tab a notification opens) is handed over out of sight with `leaveArrivalNote` (`src/lib/navigation/arrival-note.ts`). It lives in the tab's memory, so each tab keeps its own and a reload starts clean. The only cookie is the shared "just signed out" mark (`src/lib/auth/auth-note.ts`), which tells the sign-in page's server half not to send someone home; it carries nothing per tab.
 - Something that truly needs its own link gets its own path (`/partners/:id/payouts`), and only after the user agrees.
 - Only addresses made outside AMI carry a `?` or `#` part: the payment provider's `?onboarding=`, erp-api's `#token=` and `/<workspace>/...` email links. AMI reads them once and moves to the plain address.
 - ESLint enforces it: no `useSearchParams`, no page `searchParams` and no `?key=` in a string, outside tests and the one page that receives `?onboarding=`.

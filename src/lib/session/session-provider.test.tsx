@@ -1,7 +1,10 @@
 import { act, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AUTH_NOTE_COOKIE, clearAuthNote, parseAuthNote } from "@/lib/auth/auth-note";
+import { SIGNED_OUT_COOKIE, clearSignedOut } from "@/lib/auth/auth-note";
+import { resetArrivalNotes } from "@/lib/navigation/arrival-note";
+
+import { takeArrivalNote } from "../../../test/arrival-note";
 
 import { clientSession, type SignOutReason } from "./client-session";
 import { SessionProvider } from "./session-provider";
@@ -12,13 +15,7 @@ vi.mock("next/navigation", () => ({
   usePathname: () => window.location.pathname,
 }));
 
-const readAuthNote = () =>
-  parseAuthNote(
-    document.cookie
-      .split("; ")
-      .find((part) => part.startsWith(`${AUTH_NOTE_COOKIE}=`))
-      ?.slice(AUTH_NOTE_COOKIE.length + 1),
-  );
+const markedSignedOut = () => document.cookie.split("; ").includes(`${SIGNED_OUT_COOKIE}=1`);
 
 let ended: ((reason: SignOutReason) => void) | null = null;
 
@@ -35,22 +32,25 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
-  clearAuthNote();
+  clearSignedOut();
+  resetArrivalNotes();
   window.history.replaceState(null, "", "/");
 });
 
 describe("SessionProvider", () => {
-  it("goes to plain /sign-in with the reason and the way back in the auth note", () => {
+  it("goes to plain /sign-in with the reason and the way back in this tab's note", () => {
     render(<SessionProvider>page</SessionProvider>);
     act(() => ended?.("idle"));
     expect(replace).toHaveBeenCalledWith("/sign-in");
-    expect(readAuthNote()).toEqual({ reason: "idle", next: "/orders/1" });
+    expect(takeArrivalNote("/sign-in")).toEqual({ reason: "idle", next: "/orders/1" });
+    // Shared by the tabs, and only says "just signed out", so the sign-in page doesn't send it home.
+    expect(markedSignedOut()).toBe(true);
   });
 
   it("after a deliberate sign-out, keeps no way back", () => {
     render(<SessionProvider>page</SessionProvider>);
     act(() => ended?.("signed-out"));
     expect(replace).toHaveBeenCalledWith("/sign-in");
-    expect(readAuthNote()).toEqual({ reason: "signed-out" });
+    expect(takeArrivalNote("/sign-in")).toEqual({ reason: "signed-out" });
   });
 });

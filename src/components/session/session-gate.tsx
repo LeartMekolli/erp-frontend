@@ -9,7 +9,8 @@ import { FormMessage } from "@/components/auth/form-message";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api/client";
 import type { MeResponse } from "@/lib/api/schema-types";
-import { leaveAuthNote } from "@/lib/auth/auth-note";
+import { markSignedOut } from "@/lib/auth/auth-note";
+import { leaveArrivalNote } from "@/lib/navigation/arrival-note";
 import { resolveDestination } from "@/lib/auth/destination";
 import { WORKSPACE_HINT_COOKIE } from "@/lib/routes";
 import { OfflineError, SessionEndedError, clientSession } from "@/lib/session/client-session";
@@ -64,14 +65,16 @@ export function SessionGate({ area, children }: { area: Area; children: ReactNod
 
   useEffect(() => {
     if (!noSession) return;
-    leaveAuthNote({ next: here() });
+    leaveArrivalNote("/sign-in", { next: here() });
     router.replace("/sign-in");
   }, [noSession, router]);
 
   useEffect(() => {
     if (!otherWorkspace || !hint) return;
     void clientSession().signOut("signed-out", { quiet: true });
-    leaveAuthNote({ workspace: hint, next: here() });
+    leaveArrivalNote("/sign-in", { workspace: hint, next: here() });
+    // Its session cookie may not be cleared yet: the sign-in page mustn't send it home.
+    markSignedOut();
     router.replace("/sign-in");
   }, [otherWorkspace, hint, router]);
 

@@ -119,7 +119,7 @@ export function HistoryEntry({ action, steps }: { action: LineAction; steps: Ste
           <ul id={listId} aria-label="Pieces in this move" className="mt-2 flex flex-wrap gap-1.5">
             {action.pieces.map((piece) => (
               <li key={piece.id} className="rounded-lg border border-line px-2 py-0.5 text-caption tabular-nums">
-                <button type="button" onClick={() => openPiece(piece.id)} className="tabular-nums underline-offset-2 hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center">
+                <button type="button" onClick={() => openPiece(piece.id)} className="cursor-pointer tabular-nums underline-offset-2 hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center">
                   {pieceName(piece)}
                 </button>
                 {mixed && ` · ${pieceResult(piece)}`}

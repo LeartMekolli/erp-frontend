@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 
+import type { SignOutReason } from "@/lib/session/client-session";
+
 /**
  * A one-time message for the page AMI is about to open, kept out of the address (CLAUDE.md § Addresses).
  * Only for moves inside AMI: it lives in this tab's memory, so a reload or a link from outside never sees it.
@@ -13,6 +15,12 @@ export type ArrivalNote = {
   placed?: true;
   /** The payment provider's answer after payout setup. */
   onboarding?: "done" | "expired";
+  /** Sign-in: why this tab was signed out. */
+  reason?: SignOutReason;
+  /** Sign-in: the page to go back to, checked with `safeNext` before use. */
+  next?: string;
+  /** Sign-in and Forgot password: the workspace to fill in. */
+  workspace?: string;
 };
 
 const notes = new Map<string, ArrivalNote>();

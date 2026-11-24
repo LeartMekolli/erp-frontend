@@ -56,7 +56,7 @@ export function PieceRow({
         type="button"
         onClick={() => openPiece(piece.id)}
         aria-label={`History of ${piece.label}`}
-        className="inline-flex min-h-11 items-center font-medium tabular-nums underline-offset-2 hover:underline"
+        className="inline-flex min-h-11 cursor-pointer items-center font-medium tabular-nums underline-offset-2 hover:underline"
       >
         {piece.label}
       </button>

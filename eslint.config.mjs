@@ -83,12 +83,22 @@ const eslintConfig = defineConfig([
           message: "Pages don't read a `?` part: pass one-time messages with an arrival note or the auth note (CLAUDE.md § Addresses).",
         },
         {
-          selector: "Literal[value=/\\?[a-z_]+=/]",
+          selector: "Literal[value=/\\?[A-Za-z0-9_-]+=/]",
           message: "An address is only the page: no `?key=` part (CLAUDE.md § Addresses).",
         },
         {
-          selector: "TemplateElement[value.raw=/\\?[a-z_]+=/]",
+          selector: "TemplateElement[value.raw=/\\?[A-Za-z0-9_-]+=/]",
           message: "An address is only the page: no `?key=` part (CLAUDE.md § Addresses).",
+        },
+        {
+          // A path ending in `?`, with the query added after it: `/sign-in?${params}`. Starting with `/`, so
+          // a question in the copy ("Forgot password?") isn't caught.
+          selector: "Literal[value=/^\\/\\S*\\?$/]",
+          message: "An address is only the page: no `?` part (CLAUDE.md § Addresses).",
+        },
+        {
+          selector: "TemplateElement[value.raw=/^\\/\\S*\\?$/]",
+          message: "An address is only the page: no `?` part (CLAUDE.md § Addresses).",
         },
       ],
     },

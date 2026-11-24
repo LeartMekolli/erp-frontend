@@ -176,7 +176,7 @@ function PieceHistory({ id, useStory, sopLink }: { id: string; useStory: UseStor
       </div>
       {sopLink && data.sop && data.step && <Instructions link={() => sopLink(data)} stepName={data.step.name} />}
       {replacesId && (
-        <button type="button" onClick={() => openPiece(replacesId)} className="self-start text-left text-sm underline underline-offset-2">
+        <button type="button" onClick={() => openPiece(replacesId)} className="cursor-pointer self-start text-left text-sm underline underline-offset-2">
           See the piece this replaces
         </button>
       )}

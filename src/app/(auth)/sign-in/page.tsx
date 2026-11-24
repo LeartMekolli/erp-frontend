@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { SignInForm } from "@/components/auth/sign-in-form";
-import { AUTH_NOTE_COOKIE, parseAuthNote } from "@/lib/auth/auth-note";
+import { SignIn } from "@/components/auth/sign-in-form";
+import { SIGNED_OUT_COOKIE } from "@/lib/auth/auth-note";
 import { homeForSession } from "@/lib/auth/destination";
 import { WORKSPACE_HINT_COOKIE } from "@/lib/routes";
 import { checkLimits } from "@/lib/session/limits";
@@ -17,23 +17,16 @@ async function signedInHome(cookie: string | undefined): Promise<string | null> 
   return session && checkLimits(session, Date.now()) === "ok" ? homeForSession(session) : null;
 }
 
-/** Always plain `/sign-in`: why, where back to and which workspace come in the auth note. */
+/** Always plain `/sign-in`: why, where back to and which workspace come in an arrival note (`SignIn`). */
 export default async function SignInPage() {
   const store = await cookies();
-  const note = parseAuthNote(store.get(AUTH_NOTE_COOKIE)?.value);
 
   // One workspace per browser: someone signed in goes home. Not right after a
-  // sign-out, whose cookie may not be cleared yet.
-  if (!note.reason) {
+  // sign-out, whose session cookie may not be cleared yet.
+  if (!store.has(SIGNED_OUT_COOKIE)) {
     const home = await signedInHome(store.get(SESSION_COOKIE)?.value);
     if (home) redirect(home);
   }
 
-  return (
-    <SignInForm
-      initialWorkspace={note.workspace ?? store.get(WORKSPACE_HINT_COOKIE)?.value ?? ""}
-      next={note.next ?? null}
-      reason={note.reason ?? null}
-    />
-  );
+  return <SignIn lastWorkspace={store.get(WORKSPACE_HINT_COOKIE)?.value ?? ""} />;
 }

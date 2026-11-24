@@ -71,15 +71,6 @@ test("someone signed in who opens the sign-in page goes home", async ({ page }) 
   await expect(page.getByRole("heading", HOME)).toBeVisible();
 });
 
-test("a forged return to another site lands at home instead", async ({ page, context }) => {
-  await context.addCookies([
-    { name: "ami_auth_note", value: encodeURIComponent(JSON.stringify({ next: "//evil.example" })), url: APP_URL },
-  ]);
-  await signIn(page, STAFF.email);
-  await expect(page.getByRole("heading", HOME)).toBeVisible();
-  await expect(page).toHaveURL("/orders");
-});
-
 test("a page needing a session sends someone signed out to sign in and back", async ({ page }) => {
   await page.goto("/partner-portal");
   await expect(page).toHaveURL("/sign-in");
@@ -97,5 +88,11 @@ test("signing out lands on plain /sign-in with the message", async ({ page }) =>
   await page.getByRole("button", { name: /^Account:/ }).click();
   await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("status")).toHaveText("You've signed out.");
+  await expect(page).toHaveURL("/sign-in");
+
+  // The message was for that one arrival: a reload doesn't show it again, and stays on sign-in.
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1, name: "Sign in" })).toBeVisible();
+  await expect(page.getByText("You've signed out.")).toHaveCount(0);
   await expect(page).toHaveURL("/sign-in");
 });

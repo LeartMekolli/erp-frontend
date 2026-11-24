@@ -4,9 +4,12 @@ import userEvent from "@testing-library/user-event";
 import { Component, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AUTH_NOTE_COOKIE, clearAuthNote, parseAuthNote } from "@/lib/auth/auth-note";
+import { SIGNED_OUT_COOKIE, clearSignedOut } from "@/lib/auth/auth-note";
+import { resetArrivalNotes } from "@/lib/navigation/arrival-note";
 import { WORKSPACE_HINT_COOKIE } from "@/lib/routes";
 import { OfflineError, SessionEndedError, clientSession } from "@/lib/session/client-session";
+
+import { takeArrivalNote } from "../../../test/arrival-note";
 import {
   FAKE_PASSWORD,
   LAYERLINE_ID,
@@ -80,18 +83,13 @@ beforeEach(() => {
   vi.spyOn(clientSession(), "getAccessToken").mockImplementation(getAccessToken);
   vi.spyOn(clientSession(), "signOut").mockImplementation(signOut as never);
 });
-const readAuthNote = () =>
-  parseAuthNote(
-    document.cookie
-      .split("; ")
-      .find((part) => part.startsWith(`${AUTH_NOTE_COOKIE}=`))
-      ?.slice(AUTH_NOTE_COOKIE.length + 1),
-  );
+const markedSignedOut = () => document.cookie.split("; ").includes(`${SIGNED_OUT_COOKIE}=1`);
 
 afterEach(() => {
   vi.restoreAllMocks();
   setHint(null);
-  clearAuthNote();
+  clearSignedOut();
+  resetArrivalNotes();
   window.history.replaceState(null, "", "/");
 });
 
@@ -143,9 +141,19 @@ describe("SessionGate", () => {
     getAccessToken.mockRejectedValue(new SessionEndedError("none"));
     renderGate("staff");
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/sign-in"));
-    // The way back travels in the auth note, its query too (the payment provider's `?onboarding=`).
-    expect(readAuthNote()).toEqual({ next: "/orders/1?tab=open" });
+    expect(takeArrivalNote("/sign-in")).toEqual({ next: "/orders/1?tab=open" });
+    // Nobody was signed out: the sign-in page may still send a live session home.
+    expect(markedSignedOut()).toBe(false);
     expect(screen.queryByText("Area content")).not.toBeInTheDocument();
+  });
+
+  it("keeps the payment provider's answer in the way back, for someone who finished payout setup signed out", async () => {
+    window.history.replaceState(null, "", `/partner-portal/${NORTHCAST_ID}/payout-account?onboarding=done`);
+    params = { partnerId: NORTHCAST_ID };
+    getAccessToken.mockRejectedValue(new SessionEndedError("none"));
+    renderGate("partner");
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/sign-in"));
+    expect(takeArrivalNote("/sign-in")).toEqual({ next: `/partner-portal/${NORTHCAST_ID}/payout-account?onboarding=done` });
   });
 
   it("leaves a sign-out with a reason to the session provider", async () => {
@@ -173,7 +181,8 @@ describe("SessionGate", () => {
     getAccessToken.mockResolvedValue(signInAs(STAFF.email));
     renderGate("staff");
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/sign-in"));
-    expect(readAuthNote()).toEqual({ workspace: "sandbox", next: "/orders/1?tab=open" });
+    expect(takeArrivalNote("/sign-in")).toEqual({ workspace: "sandbox", next: "/orders/1?tab=open" });
+    expect(markedSignedOut()).toBe(true);
     expect(signOut).toHaveBeenCalledWith("signed-out", { quiet: true });
     expect(screen.queryByText("Area content")).not.toBeInTheDocument();
   });
