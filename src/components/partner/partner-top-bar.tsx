@@ -25,7 +25,12 @@ export function PartnerTopBar({ onOpenMenu }: { onOpenMenu: () => void }) {
         <span className="sr-only">Open menu</span>
       </button>
       <div className="flex-1" />
-      <Bell hrefFor={(entry) => partnerSubjectHref(entry, partnerId, roleAt)} />
+      <Bell
+        hrefFor={(entry) => {
+          const href = partnerSubjectHref(entry, partnerId, roleAt);
+          return href ? { href } : null;
+        }}
+      />
       <UserMenu />
     </header>
   );

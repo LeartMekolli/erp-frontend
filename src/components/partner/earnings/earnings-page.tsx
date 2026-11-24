@@ -70,11 +70,9 @@ export function EarningsPage() {
 
   useOwedCatchUp(payouts.anyPending, partnerEarningsKeys.owed(partnerId));
 
-  const tab: Tab = search.get("tab") === "jobs" ? "jobs" : "payouts";
-  const choose = (value: string) => {
-    const earnings = partnerHref(partnerId, "earnings");
-    router.replace(value === "jobs" ? `${earnings}?tab=jobs` : earnings, { scroll: false });
-  };
+  // Kept on the page: a reload opens Payouts.
+  const [tab, setTab] = useState<Tab>("payouts");
+  const choose = (value: string) => setTab(value as Tab);
 
   return (
     <>

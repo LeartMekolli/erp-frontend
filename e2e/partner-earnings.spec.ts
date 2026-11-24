@@ -44,8 +44,8 @@ test("an owner reads a payout and a job's pay", async ({ page }) => {
   await expectNoSideScroll(page);
 
   await page.getByRole("tab", { name: "Jobs" }).click();
-  await expect(page).toHaveURL(`${EARNINGS}?tab=jobs`);
   await expect(page.getByText("Taken back, nothing owed")).toBeVisible();
+  await expect(page).toHaveURL(EARNINGS);
   await expectNoSideScroll(page);
 
   await page.getByRole("link", { name: /^Ring band/ }).click();

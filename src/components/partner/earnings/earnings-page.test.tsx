@@ -86,6 +86,8 @@ describe("EarningsPage", () => {
     afterEach(() => vi.useRealTimers());
 
     const payoutRows = async () => within(await screen.findByRole("tabpanel", { name: "Payouts" })).findAllByRole("button", { expanded: false });
+    const openJobsTab = async () =>
+      userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(await screen.findByRole("tab", { name: "Jobs" }));
 
     it("lists payouts newest first", async () => {
       renderPage(PARTNER);
@@ -153,30 +155,22 @@ describe("EarningsPage", () => {
       await until(() => expect(screen.getByText("€1,660.00")).toBeInTheDocument());
     });
 
-    it("puts the Jobs tab in the address", async () => {
+    it("switches between Payouts and Jobs on the page, leaving the address alone", async () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       renderPage(PARTNER);
       await payoutRows();
 
       await user.click(screen.getByRole("tab", { name: "Jobs" }));
-
-      expect(navigation.replace).toHaveBeenLastCalledWith(`/partner-portal/${NORTHCAST_ID}/earnings?tab=jobs`, { scroll: false });
-    });
-
-    it("leaves Payouts out of the address", async () => {
-      navigation.search = "tab=jobs";
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-      renderPage(PARTNER);
-      await screen.findByRole("tabpanel", { name: "Jobs" });
-
+      expect(await screen.findByRole("tabpanel", { name: "Jobs" })).toBeInTheDocument();
       await user.click(screen.getByRole("tab", { name: "Payouts" }));
+      expect(await screen.findByRole("tabpanel", { name: "Payouts" })).toBeInTheDocument();
 
-      expect(navigation.replace).toHaveBeenLastCalledWith(`/partner-portal/${NORTHCAST_ID}/earnings`, { scroll: false });
+      expect(navigation.replace).not.toHaveBeenCalled();
     });
 
     it("words and links each job", async () => {
-      navigation.search = "tab=jobs";
       renderPage(PARTNER);
+      await openJobsTab();
       const jobs = within(await screen.findByRole("tabpanel", { name: "Jobs" }));
 
       expect(await jobs.findByRole("link", { name: /^Ring band/ })).toHaveAttribute("href", `/partner-portal/${NORTHCAST_ID}/jobs/${RING_BAND_JOB_ID}`);
@@ -193,8 +187,8 @@ describe("EarningsPage", () => {
       expect(await screen.findByText("No payouts yet. The workspace pays what you're owed in one transfer.")).toBeInTheDocument();
       unmount();
 
-      navigation.search = "tab=jobs";
       renderPage(LAYERLINE_OWNER);
+      await openJobsTab();
       expect(await screen.findByText("No jobs yet. A job shows here once you accept it.")).toBeInTheDocument();
     });
 

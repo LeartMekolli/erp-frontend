@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { Freshness } from "@/components/data/freshness";
@@ -10,7 +9,6 @@ import { usePartnerJobs } from "@/lib/partner-jobs/queries";
 
 import { JobsTable, type JobsTab } from "./jobs-table";
 import { JobsTiles, useOffersWaiting } from "./jobs-tiles";
-import { partnerHref } from "./nav";
 import { useWorkshop } from "./use-workshop";
 
 const TABS = ["offers", "progress", "finished"] as const satisfies readonly JobsTab[];
@@ -19,17 +17,14 @@ const TAB_LABEL: Record<JobsTab, string> = { offers: "Offers", progress: "In pro
 
 const STATUS = { offers: "offered", progress: "accepted", finished: "finished" } as const;
 
-const tabFrom = (value: string | null): JobsTab => (value === "offers" || value === "finished" ? value : "progress");
-
 /**
  * `/partner-portal/:partnerId/jobs`, on the Orders layout: the title and today's date, the tiles,
- * then one list panel whose tabs are Offers, In progress and Finished. The tab is in the address
- * (`?tab=offers`, `?tab=finished`); In progress has no parameter.
+ * then one list panel whose tabs are Offers, In progress and Finished. The tab is kept on the page,
+ * so the address stays plain and a reload opens In progress.
  */
 export function JobsPage() {
   const { partnerId } = useWorkshop();
-  const router = useRouter();
-  const tab = tabFrom(useSearchParams().get("tab"));
+  const [tab, setTab] = useState<JobsTab>("progress");
   const { date } = useFormat();
   const [today] = useState(() => new Date().toISOString());
   const waiting = useOffersWaiting();
@@ -47,11 +42,6 @@ export function JobsPage() {
   // The table's query, shared through the cache: Freshness reports on it.
   const shown = usePartnerJobs(partnerId, STATUS[tab]);
 
-  const choose = (value: JobsTab) => {
-    const jobs = partnerHref(partnerId, "jobs");
-    router.replace(value === "progress" ? jobs : `${jobs}?tab=${value}`, { scroll: false });
-  };
-
   const progressEmpty =
     nothingOpen && finished.isSuccess && finished.items.length === 0
       ? "No jobs yet. When staff offer you a job, it appears under Offers."
@@ -67,11 +57,11 @@ export function JobsPage() {
         <p className="hidden text-sm text-ink-2 sm:block">{date(today)}</p>
       </div>
 
-      <JobsTiles onReviewOffers={() => choose("offers")} />
+      <JobsTiles onReviewOffers={() => setTab("offers")} />
 
       <section id="job-list" aria-label="Job list" className="flex flex-col rounded-[20px] bg-card">
         <div className="border-b border-line px-2 pt-2">
-          <Tabs value={tab} onValueChange={(value) => choose(value as JobsTab)} activationMode="manual" className="min-w-0">
+          <Tabs value={tab} onValueChange={(value) => setTab(value as JobsTab)} activationMode="manual" className="min-w-0">
             <TabsList variant="line" aria-label="Jobs by state" className="-mb-px h-auto! w-full justify-start overflow-x-auto [scrollbar-width:none]">
               {TABS.map((value) => (
                 <TabsTrigger

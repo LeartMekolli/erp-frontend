@@ -328,8 +328,8 @@ describe("JobPage: a job the partner holds", () => {
       null,
       { id: PARTNER.id, name: PARTNER.name },
     );
-    navigation.search = "tab=history";
     renderPage();
+    await userEvent.click(await screen.findByRole("tab", { name: "History" }));
 
     expect(await screen.findByText("Nora")).toBeInTheDocument();
     expect(screen.getAllByText("Workspace").length).toBeGreaterThan(0);
@@ -337,9 +337,10 @@ describe("JobPage: a job the partner holds", () => {
     expect(screen.queryByText("Ana Ruiz")).not.toBeInTheDocument();
   });
 
-  it("keeps the tab in the address", async () => {
+  it("keeps the tab on the page, never in the address", async () => {
     renderPage();
     await userEvent.click(await screen.findByRole("tab", { name: "History" }));
-    expect(navigation.replace).toHaveBeenCalledWith(`${JOBS_PATH}/${RING_BAND_JOB_ID}?tab=history`, { scroll: false });
+    expect(screen.getByRole("tab", { name: "History" })).toHaveAttribute("aria-selected", "true");
+    expect(navigation.replace).not.toHaveBeenCalled();
   });
 });

@@ -15,12 +15,11 @@ import { renderAs } from "../../../test/render";
 import { JobsPage } from "./jobs-page";
 import { PartnerNoticeProvider } from "./notice";
 
-const navigation = vi.hoisted(() => ({ replace: vi.fn(), search: "", partnerId: "" }));
+const navigation = vi.hoisted(() => ({ replace: vi.fn(), partnerId: "" }));
 vi.mock("next/navigation", () => ({
   usePathname: () => `/partner-portal/${navigation.partnerId}/jobs`,
   useParams: () => ({ partnerId: navigation.partnerId }),
   useRouter: () => ({ push: vi.fn(), replace: navigation.replace, prefetch: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(navigation.search),
 }));
 
 const JOBS_URL = `${FAKE_API_URL}/partner-portal/partners/:partnerId/jobs`;
@@ -30,7 +29,6 @@ const JOBS = (id: string) => `/partner-portal/${id}/jobs`;
 let requests: URL[] = [];
 beforeEach(() => {
   navigation.replace.mockReset();
-  navigation.search = "";
   navigation.partnerId = NORTHCAST_ID;
   requests = [];
   server.events.on("request:start", ({ request }) => {
@@ -67,6 +65,10 @@ async function row(text: string): Promise<HTMLElement> {
 
 const statusOf = (url: URL) => url.searchParams.get("status");
 
+async function pickTab(name: RegExp | string) {
+  await userEvent.click(await screen.findByRole("tab", { name }));
+}
+
 describe("JobsPage", () => {
   it("opens on In progress, under the title, the date and the tiles", async () => {
     renderPage();
@@ -80,38 +82,36 @@ describe("JobsPage", () => {
     expect(await row("Ring band · Brass")).toHaveTextContent("€180.00");
   });
 
-  it("takes Review to the offers", async () => {
+  it("takes Review to the offers, leaving the address alone", async () => {
     renderPage();
     const hero = (await screen.findByRole("heading", { name: "Waiting for your answer" })).closest("section")!;
     await userEvent.click(await within(hero).findByRole("button", { name: "Review" }));
-    expect(navigation.replace).toHaveBeenCalledWith(`${JOBS(NORTHCAST_ID)}?tab=offers`, { scroll: false });
+    expect(await screen.findByRole("table", { name: "Offers waiting for your answer" })).toBeInTheDocument();
+    expect(navigation.replace).not.toHaveBeenCalled();
   });
 
-  it("shows the offers on ?tab=offers", async () => {
-    navigation.search = "tab=offers";
+  it("shows the offers on the Offers tab", async () => {
     renderPage();
+    await pickTab(/^Offers/);
     expect(await screen.findByRole("table", { name: "Offers waiting for your answer" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Offers 2" })).toHaveAttribute("aria-selected", "true");
     expect(await row("Ring · Silver 925")).toHaveTextContent("Answer by");
   });
 
-  it("switches to Finished in the address", async () => {
+  it("switches to Finished on the page, and opens on In progress again", async () => {
     const { unmount } = renderPage();
     await row("Ring band · Brass");
     await userEvent.click(screen.getByRole("tab", { name: "Finished" }));
-    expect(navigation.replace).toHaveBeenCalledWith(`${JOBS(NORTHCAST_ID)}?tab=finished`, { scroll: false });
-    unmount();
-
-    navigation.search = "tab=finished";
-    renderPage();
     const earring = await row("Earring · Silver 925");
     expect(screen.getByRole("tab", { name: "Finished" })).toHaveAttribute("aria-selected", "true");
     expect(within(earring).getAllByRole("link", { name: "Earring · Silver 925" })[0]).toHaveAttribute("href", `${JOBS(NORTHCAST_ID)}/${EARRING_JOB_ID}`);
     expect(earring).toHaveTextContent("24 of 24 done");
     expect(earring).not.toHaveTextContent("Late");
+    expect(navigation.replace).not.toHaveBeenCalled();
+    unmount();
 
-    await userEvent.click(screen.getByRole("tab", { name: "In progress" }));
-    expect(navigation.replace).toHaveBeenLastCalledWith(JOBS(NORTHCAST_ID), { scroll: false });
+    renderPage();
+    expect(await screen.findByRole("tab", { name: "In progress" })).toHaveAttribute("aria-selected", "true");
   });
 
   it("says when In progress is empty, without asking for Finished while there are offers", async () => {
@@ -145,16 +145,16 @@ describe("JobsPage", () => {
   });
 
   it("says when there are no offers on the Offers tab", async () => {
-    navigation.search = "tab=offers";
     server.use(http.get(JOBS_URL, ({ request }) => (statusOf(new URL(request.url)) === "offered" ? emptyPage() : undefined)));
     renderPage();
+    await pickTab(/^Offers/);
     expect(await screen.findByText("No offers waiting.")).toBeInTheDocument();
   });
 
   it("shows only this workshop's jobs", async () => {
     navigation.partnerId = LAYERLINE_ID;
-    navigation.search = "tab=offers";
     renderPage(PARTNER_TWO_SHOPS);
+    await pickTab(/^Offers/);
     expect(await row("Facade panel · Standard resin")).toBeInTheDocument();
     expect(screen.queryByText(/Ring band/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Pendant/)).not.toBeInTheDocument();

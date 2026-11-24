@@ -1,7 +1,9 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { renderHook, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { resetArrivalNotes, useArrivalNote } from "@/lib/navigation/arrival-note";
 
 import { CLERK, FAKE_API_URL, STAFF } from "../../../../test/fake-erp-api/seed";
 import { fakeState } from "../../../../test/fake-erp-api/state";
@@ -14,9 +16,10 @@ const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace: push }), usePathname: () => "/orders" }));
 
 beforeEach(() => push.mockReset());
+afterEach(() => resetArrivalNotes());
 
 /** Orders open their page; everything else has nowhere to go. */
-const hrefFor = ({ subject }: { subject: { type: string; id: string } }) => (subject.type === "order" ? `/orders/${subject.id}` : null);
+const hrefFor = ({ subject }: { subject: { type: string; id: string } }) => (subject.type === "order" ? { href: `/orders/${subject.id}` } : null);
 
 async function openPanel() {
   await userEvent.click(await screen.findByRole("button", { name: /^Notifications/ }));
@@ -62,10 +65,22 @@ describe("Bell", () => {
   });
 
   it("opens where hrefFor says", async () => {
-    renderAs(STAFF, <Bell hrefFor={() => "/partner-portal/x/jobs"} />);
+    renderAs(STAFF, <Bell hrefFor={() => ({ href: "/partner-portal/x/jobs" })} />);
     const panel = await openPanel();
     await userEvent.click(await within(panel).findByRole("button", { name: /Order #1041 is 2 days late/ }));
     await waitFor(() => expect(push).toHaveBeenCalledWith("/partner-portal/x/jobs"));
+  });
+
+  it("leaves the destination's note before going there", async () => {
+    renderAs(STAFF, <Bell hrefFor={() => ({ href: "/partners/p1", note: { partnerTab: "payouts" } })} />);
+    const panel = await openPanel();
+    await userEvent.click(await within(panel).findByRole("button", { name: /Order #1041 is 2 days late/ }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/partners/p1"));
+
+    // The page it opens finds the note waiting.
+    const arrived = vi.fn();
+    renderHook(() => useArrivalNote("/partners/p1", arrived));
+    expect(arrived).toHaveBeenCalledWith({ partnerTab: "payouts" });
   });
 
   it("a notification with nowhere to go is marked read and the panel stays", async () => {

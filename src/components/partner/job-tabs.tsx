@@ -27,9 +27,6 @@ type Tab = (typeof TABS)[number];
 
 const TAB_LABEL: Record<Tab, string> = { pieces: "Pieces", quality: "Quality", history: "History" };
 
-/** Anything else, the old `?tab=comments` too, opens Pieces: comments now sit in the side column. */
-const isTab = (value: string | null): value is Tab => (TABS as readonly (string | null)[]).includes(value);
-
 /** The partner's rules never load apart from the job: they come with it. */
 const LOADED = { isPending: false, error: null, refetch: () => undefined };
 
@@ -103,20 +100,16 @@ function JobHistory({ job, partnerId }: { job: PartnerJobDetail; partnerId: stri
 
 /**
  * The main panel of a job the partner holds: Pieces, Quality and History. Each step shows once, as a
- * section of Pieces with its count and instructions. The tab is in the address (`?tab=history`);
- * Pieces has no parameter. So is the open piece (`?piece=<id>`), as on staff's order page.
+ * section of Pieces with its count and instructions. The tab is kept on the page, so a reload opens
+ * Pieces. The open piece is in the address (`?piece=<id>`), as on staff's order page.
  */
 export function JobTabs({ job, partnerId }: { job: PartnerJobDetail; partnerId: string }) {
   const router = useRouter();
   const search = useSearchParams();
-  const asked = search.get("tab");
-  const tab: Tab = isTab(asked) ? asked : "pieces";
+  const [tab, setTab] = useState<Tab>("pieces");
   const failed = failedOnLine(job.steps);
   const page = jobHref(partnerId, job.id);
-
-  const choose = (value: string) => {
-    router.replace(value === "pieces" ? page : `${page}?tab=${value}`, { scroll: false });
-  };
+  const choose = (value: string) => setTab(value as Tab);
 
   return (
     <PhotoLinksProvider link={(photo) => partnerPhotoUrl(partnerId, job.id, photo)} mayView>

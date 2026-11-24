@@ -1,7 +1,9 @@
-import { screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { leaveArrivalNote, resetArrivalNotes } from "@/lib/navigation/arrival-note";
 
 import { uuid } from "../../../test/fake-erp-api/orders-seed";
 import { FAKE_API_URL, NORTHCAST_ID, PAYER, STAFF } from "../../../test/fake-erp-api/seed";
@@ -11,17 +13,16 @@ import { until } from "../../../test/wait";
 
 import { PartnerPage } from "./partner-page";
 
-const navigation = vi.hoisted(() => ({ id: "", search: "", replace: vi.fn(), notFound: vi.fn() }));
+const navigation = vi.hoisted(() => ({ id: "", replace: vi.fn(), notFound: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: navigation.id }),
   useRouter: () => ({ push: vi.fn(), replace: navigation.replace }),
-  useSearchParams: () => new URLSearchParams(navigation.search),
   notFound: navigation.notFound,
 }));
 
+afterEach(() => resetArrivalNotes());
 beforeEach(() => {
   navigation.id = NORTHCAST_ID;
-  navigation.search = "";
   navigation.replace.mockReset();
   navigation.notFound.mockReset();
 });
@@ -41,18 +42,35 @@ describe("PartnerPage", () => {
     expect(screen.getByRole("link", { name: "Back to Partners" })).toHaveAttribute("href", "/partners");
   });
 
-  it("puts the Payouts tab in the address", async () => {
+  it("switches to Payouts on the page, leaving the address alone", async () => {
     renderAs(STAFF, <PartnerPage />);
     await screen.findByRole("heading", { level: 1, name: "Northcast Foundry" });
     expect(screen.getByRole("tablist", { name: "This partner's pay" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Jobs" })).toHaveAttribute("aria-selected", "true");
 
     await userEvent.click(screen.getByRole("tab", { name: "Payouts" }));
-    expect(navigation.replace).toHaveBeenLastCalledWith(`/partners/${NORTHCAST_ID}?tab=payouts`, { scroll: false });
+    expect(screen.getByRole("tab", { name: "Payouts" })).toHaveAttribute("aria-selected", "true");
+    expect(navigation.replace).not.toHaveBeenCalled();
   });
 
-  it("shows Payouts only with payment.read", async () => {
-    navigation.search = "tab=payouts";
+  it("opens on Payouts when a payout notification sent the person here", async () => {
+    leaveArrivalNote(`/partners/${NORTHCAST_ID}`, { partnerTab: "payouts" });
+    renderAs(STAFF, <PartnerPage />);
+    expect(await screen.findByRole("tabpanel", { name: "Payouts" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Payouts" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("switches to Payouts when the notification is for the partner already open", async () => {
+    renderAs(STAFF, <PartnerPage />);
+    await screen.findByRole("heading", { level: 1, name: "Northcast Foundry" });
+    expect(screen.getByRole("tab", { name: "Jobs" })).toHaveAttribute("aria-selected", "true");
+
+    act(() => leaveArrivalNote(`/partners/${NORTHCAST_ID}`, { partnerTab: "payouts" }));
+    expect(screen.getByRole("tab", { name: "Payouts" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("shows Payouts only with payment.read, even when a notification asks for it", async () => {
+    leaveArrivalNote(`/partners/${NORTHCAST_ID}`, { partnerTab: "payouts" });
     renderAs(PAYER, <PartnerPage />);
     await screen.findByRole("heading", { level: 1, name: "Northcast Foundry" });
     expect(screen.queryByRole("tab", { name: "Payouts" })).not.toBeInTheDocument();
@@ -94,9 +112,9 @@ describe("PartnerPage", () => {
     });
 
     it("shows a payout's jobs with their order", async () => {
-      navigation.search = "tab=payouts";
       const user = userEvent.setup();
       renderAs(STAFF, <PartnerPage />);
+      await user.click(await screen.findByRole("tab", { name: "Payouts" }));
       const payouts = within(await screen.findByRole("tabpanel", { name: "Payouts" }));
       const [pending] = await payouts.findAllByRole("button", { expanded: false });
 
