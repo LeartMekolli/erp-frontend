@@ -16,6 +16,8 @@ import { useNow } from "@/lib/use-now";
 
 import { useWorkshop } from "../use-workshop";
 
+import { CountTiles } from "./count-tiles";
+import { OffersTile } from "./offers-tile";
 import { WorkloadTile } from "./workload-tile";
 
 /**
@@ -59,7 +61,10 @@ export function PartnerDashboardPage() {
           busy && "opacity-60",
         )}
       >
+        {/* Reading order on a phone: the hero, the offers, then the counts. */}
         <WorkloadTile partnerId={partnerId} range={range} words={words} />
+        <OffersTile />
+        <CountTiles summary={summary.data} words={words} />
       </div>
     </>
   );

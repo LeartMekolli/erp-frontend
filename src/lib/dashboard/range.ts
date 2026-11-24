@@ -36,6 +36,12 @@ function spanDays(from: string, to: string): number {
   return Math.round((utc(to) - utc(from)) / DAY_MS) + 1;
 }
 
+/** The period before a range in words, counted from its dates: "previous 30 days", "previous day". */
+export function previousRangeWords({ from, to }: { from: string; to: string }): string {
+  const days = spanDays(from, to);
+  return days === 1 ? "previous day" : `previous ${days} days`;
+}
+
 /** "Pick a valid date.", "The end is before the start." or "Pick at most 366 days." for a custom range erp-api would refuse, else null. */
 export function checkCustomRange(from: string, to: string): string | null {
   if (!isDate(from) || !isDate(to)) return "Pick a valid date.";
