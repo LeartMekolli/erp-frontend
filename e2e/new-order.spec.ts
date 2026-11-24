@@ -29,7 +29,7 @@ async function prepareRing(page: Page) {
 
 /** The order page shows what was just placed: its heading and its state in the header. */
 async function expectAwaitingPayment(page: Page) {
-  // It says so once, then `placed=1` leaves the address, so a reload doesn't say it again.
+  // It says so once, at the plain address: the note that says so was used up, so a reload doesn't.
   await expect(page.getByRole("status").filter({ hasText: /^Order #\d+ placed\.$/ })).toBeVisible();
   await expect(page).toHaveURL(/\/orders\/[0-9a-f-]{36}$/);
   const heading = page.getByRole("heading", { level: 1, name: /^#\d+$/ });

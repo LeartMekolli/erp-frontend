@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import type { QuoteRefusal, QuoteSummary } from "@/lib/api/schema-types";
 import { canPlaceOrders } from "@/lib/auth/permissions";
+import { leaveArrivalNote } from "@/lib/navigation/arrival-note";
 import { EMPTY_VALUES, bodyKey, type NewOrderValues } from "@/lib/new-order/form";
 import { useCustomerProducts } from "@/lib/new-order/queries";
 import { useMediaQuery } from "@/lib/use-media-query";
@@ -59,8 +60,12 @@ function NewOrder() {
     form,
     price,
     quoteKey: body === null ? null : bodyKey(body),
-    // `placed=1` asks the order page to say it was just placed.
-    onPlaced: (orderId) => guard.leaveNow(`/orders/${orderId}?placed=1`),
+    // The note asks the order page to say it was just placed; the address stays plain.
+    onPlaced: (orderId) => {
+      const order = `/orders/${orderId}`;
+      leaveArrivalNote(order, { placed: true });
+      guard.leaveNow(order);
+    },
   });
   // The same cached list `useQuoteBody` reads, so the picked product is the one being priced.
   const products = useCustomerProducts(customerId || null);

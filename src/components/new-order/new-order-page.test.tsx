@@ -5,6 +5,9 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { resetArrivalNotes } from "@/lib/navigation/arrival-note";
+
+import { takeArrivalNote } from "../../../test/arrival-note";
 import { FAKE_API_URL, LUNA_ID, MIRA_ID, ORDER_TAKER, ORDER_WRITER, STAFF } from "../../../test/fake-erp-api/seed";
 import { fakeState } from "../../../test/fake-erp-api/state";
 import { setWide } from "../../../test/media";
@@ -45,6 +48,7 @@ afterEach(() => {
   document.removeEventListener("click", recordClick);
   server.events.removeAllListeners();
   vi.unstubAllGlobals();
+  resetArrivalNotes();
 });
 
 /** Every request that goes out from now on, with its body as text. */
@@ -322,7 +326,9 @@ describe("NewOrderPage", () => {
     const placed = fakeState().orders.all().filter((order) => !before.has(order.id));
     expect(placed).toHaveLength(1);
     expect(placed[0]).toMatchObject({ customer: { id: LUNA_ID }, channel: "staff", state: "awaiting_payment", total: "36.00" });
-    expect(navigation.push).toHaveBeenCalledWith(`/orders/${placed[0]!.id}?placed=1`);
+    // A plain address, with "just placed" handed to the order page out of sight.
+    expect(navigation.push).toHaveBeenCalledWith(`/orders/${placed[0]!.id}`);
+    expect(takeArrivalNote(`/orders/${placed[0]!.id}`)).toEqual({ placed: true });
 
     // The guard is off, though the form is still filled in: the order is placed, nothing is lost.
     const closing = new Event("beforeunload", { cancelable: true });

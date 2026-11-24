@@ -18,18 +18,18 @@ import { server } from "../../../../test/msw";
 import { renderAs, WithMe } from "../../../../test/render";
 import { until } from "../../../../test/wait";
 
+import { leaveArrivalNote, resetArrivalNotes } from "@/lib/navigation/arrival-note";
 import { partnerEarningsKeys } from "@/lib/partner-earnings/queries";
 
-import { PartnerNoticeProvider } from "../notice";
+import { PartnerNoticeLine, PartnerNoticeProvider } from "../notice";
 
 import { EarningsPage } from "./earnings-page";
 
-const navigation = vi.hoisted(() => ({ replace: vi.fn(), search: "", partnerId: "" }));
+const navigation = vi.hoisted(() => ({ replace: vi.fn(), partnerId: "" }));
 vi.mock("next/navigation", () => ({
   usePathname: () => `/partner-portal/${navigation.partnerId}/earnings`,
   useParams: () => ({ partnerId: navigation.partnerId }),
   useRouter: () => ({ push: vi.fn(), replace: navigation.replace, prefetch: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(navigation.search),
 }));
 
 const MEMBER_MESSAGE = "Only your workshop's owner and admins can see earnings.";
@@ -38,7 +38,6 @@ const MEMBER_MESSAGE = "Only your workshop's owner and admins can see earnings."
 let requests: URL[] = [];
 beforeEach(() => {
   navigation.replace.mockReset();
-  navigation.search = "";
   navigation.partnerId = NORTHCAST_ID;
   requests = [];
   server.events.on("request:start", ({ request }) => {
@@ -46,7 +45,10 @@ beforeEach(() => {
     if (/\/(owed|payouts|payout-account)/.test(url.pathname)) requests.push(url);
   });
 });
-afterEach(() => server.events.removeAllListeners());
+afterEach(() => {
+  server.events.removeAllListeners();
+  resetArrivalNotes();
+});
 
 function renderPage(user: FakeUser) {
   return renderAs(
@@ -69,12 +71,33 @@ describe("EarningsPage", () => {
     expect(requests).toEqual([]);
   });
 
-  it("reads how setup ended once and drops it from the address", async () => {
-    navigation.search = "onboarding=expired";
-    renderPage(PARTNER);
+  it("says how setup ended once, from the note the return page left", async () => {
+    leaveArrivalNote(`/partner-portal/${NORTHCAST_ID}/earnings`, { onboarding: "expired" });
+    const { unmount } = renderPage(PARTNER);
 
     expect(await screen.findByText("That setup link ran out.")).toBeInTheDocument();
-    expect(navigation.replace).toHaveBeenCalledWith(`/partner-portal/${NORTHCAST_ID}/earnings`, { scroll: false });
+    expect(navigation.replace).not.toHaveBeenCalled();
+
+    // A reload doesn't say it again.
+    unmount();
+    renderPage(PARTNER);
+    expect(await screen.findByText("Set up payouts so the workspace can pay you.")).toBeInTheDocument();
+    expect(screen.queryByText("That setup link ran out.")).not.toBeInTheDocument();
+  });
+
+  it("says setup finished", async () => {
+    fakeState().earnings.setAccount(NORTHCAST_ID, "ready");
+    leaveArrivalNote(`/partner-portal/${NORTHCAST_ID}/earnings`, { onboarding: "done" });
+    renderAs(
+      PARTNER,
+      <WithMe>
+        <PartnerNoticeProvider>
+          <PartnerNoticeLine />
+          <EarningsPage />
+        </PartnerNoticeProvider>
+      </WithMe>,
+    );
+    expect(await screen.findByText("Payouts are set up.")).toBeInTheDocument();
   });
 
   describe("payouts and jobs", () => {

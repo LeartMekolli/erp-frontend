@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { notFound, useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { notFound, useParams } from "next/navigation";
+import { useState, type ReactNode } from "react";
 
 import { noAnswer } from "@/components/auth/copy";
 import { Freshness } from "@/components/data/freshness";
@@ -13,6 +13,7 @@ import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
 import { isApiProblem } from "@/lib/api/problem";
 import { can } from "@/lib/auth/permissions";
+import { useArrivalNote } from "@/lib/navigation/arrival-note";
 import { useOrder } from "@/lib/orders/queries";
 import { OfflineError } from "@/lib/session/client-session";
 
@@ -66,8 +67,6 @@ function Loading() {
 
 function OrderDetail({ id }: { id: string }) {
   const query = useOrder(id);
-  const router = useRouter();
-  const params = useSearchParams();
   const piece = useOpenPiece();
   const [shipping, setShipping] = useState(false);
   const [paying, setPaying] = useState(false);
@@ -75,23 +74,14 @@ function OrderDetail({ id }: { id: string }) {
   // What the last action did, announced politely.
   const [notice, setNotice] = useState<string | null>(null);
 
-  // Just placed from New order (`?placed=1`): the number is kept once the order has loaded, then `placed`
-  // leaves the address, so a reload or a shared link doesn't say it again. The notice stays until the page
-  // is left. Set while rendering, so it shows in the same commit as the order.
-  // Kept with the order's id, so another order opened on this same page never says it.
-  const searchText = params.toString();
-  const justPlaced = params.get("placed") === "1";
-  const [placed, setPlaced] = useState<{ id: string; number: number } | null>(null);
-  if (justPlaced && query.data && placed?.id !== query.data.id) setPlaced({ id: query.data.id, number: query.data.number });
-  const placedNumber = placed !== null && placed.id === id ? placed.number : null;
-  useEffect(() => {
-    if (!justPlaced || placedNumber === null) return;
-    // Everything else in the address stays.
-    const rest = new URLSearchParams(searchText);
-    rest.delete("placed");
-    const kept = rest.toString();
-    router.replace(`/orders/${id}${kept ? `?${kept}` : ""}`, { scroll: false });
-  }, [justPlaced, placedNumber, searchText, router, id]);
+  // Just placed from New order, which left a note for this order: it says so once the order has loaded,
+  // until the page is left. The note is used up, so a reload doesn't say it again. This component starts
+  // over for each order (the provider above is keyed by it), so another order never says it.
+  const [justPlaced, setJustPlaced] = useState(false);
+  useArrivalNote(`/orders/${id}`, (note) => {
+    if (note.placed) setJustPlaced(true);
+  });
+  const placedNumber = justPlaced && query.data ? query.data.number : null;
 
   // On the page from the first render (the loading skeleton too) and filled once the order loads, so
   // screen readers announce it: a live region that appears already filled is often missed. Empty, it's

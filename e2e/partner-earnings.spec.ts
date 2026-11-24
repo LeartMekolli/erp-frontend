@@ -32,6 +32,18 @@ test("an owner sets up payouts", async ({ page }) => {
   await expect(page.getByText("Set up payouts so the workspace can pay you.")).toHaveCount(0);
 });
 
+test("a setup link that ran out says so once, at the plain Earnings address", async ({ page }) => {
+  await openEarnings(page);
+  // As the payment provider sends the owner back, with its `?onboarding=` part.
+  await page.goto(`/partner-portal/${NORTHCAST_ID}/payout-account?onboarding=expired`);
+  await expect(page).toHaveURL(EARNINGS);
+  await expect(page.getByText("That setup link ran out.")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText("Set up payouts so the workspace can pay you.")).toBeVisible();
+  await expect(page.getByText("That setup link ran out.")).toHaveCount(0);
+});
+
 test("an owner reads a payout and a job's pay", async ({ page }) => {
   await openEarnings(page);
 

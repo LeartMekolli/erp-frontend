@@ -20,10 +20,7 @@ import { StaffPiecePanel as PiecePanel } from "./staff-tabs";
 const navigation = vi.hoisted(() => ({ id: "", replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: navigation.id }),
-  useRouter: () => ({ push: vi.fn(), replace: navigation.replace }),
-  // The order page still reads `?placed` until it moves out of the address too.
-  useSearchParams: () => new URLSearchParams(),
-  notFound: vi.fn(),
+  useRouter: () => ({ push: vi.fn(), replace: navigation.replace }),  notFound: vi.fn(),
 }));
 
 const GROUP = groupIdOf(1048, 0);

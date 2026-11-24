@@ -1,9 +1,10 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { formatMoney } from "@/lib/format/money";
+import { leaveArrivalNote, resetArrivalNotes } from "@/lib/navigation/arrival-note";
 
 import { CLERK, FAKE_API_URL, NO_ACCESS, STAFF } from "../../../test/fake-erp-api/seed";
 import { fakeState } from "../../../test/fake-erp-api/state";
@@ -14,12 +15,11 @@ import { OrderDetailPage } from "./order-detail-page";
 
 const orderId = (number: number) => `22222222-0000-4000-8000-${String(number).padStart(12, "0")}`;
 
-// One router for every render, as Next's is; the address's query is `navigation.search`.
-const navigation = vi.hoisted(() => ({ id: "", search: "", notFound: vi.fn(), router: { push: vi.fn(), replace: vi.fn() } }));
+// One router for every render, as Next's is.
+const navigation = vi.hoisted(() => ({ id: "", notFound: vi.fn(), router: { push: vi.fn(), replace: vi.fn() } }));
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: navigation.id }),
   useRouter: () => navigation.router,
-  useSearchParams: () => new URLSearchParams(navigation.search),
   notFound: navigation.notFound,
 }));
 
@@ -31,31 +31,40 @@ function open(number: number, user = STAFF) {
 beforeEach(() => {
   navigation.notFound.mockReset();
   navigation.router.replace.mockReset();
-  navigation.search = "";
 });
+afterEach(() => resetArrivalNotes());
 
 describe("OrderDetailPage", () => {
   it("says the order was placed once", async () => {
-    navigation.search = "placed=1&ref=email";
-    const { rerender } = open(1048);
+    leaveArrivalNote(`/orders/${orderId(1048)}`, { placed: true });
+    const { rerender, unmount } = open(1048);
     // The live region is there, empty, while the order loads, and the notice fills that same region, so
     // screen readers announce it.
     const region = (await screen.findAllByRole("status")).find((element) => element.textContent === "" && !element.hasAttribute("aria-label"));
     expect(region).toBeDefined();
     const notice = await screen.findByText("Order #1048 placed.");
     expect(notice.closest("[role=status]")).toBe(region);
-    // `placed` leaves the address, the rest of it stays (an open piece would), and the page isn't scrolled.
-    expect(navigation.router.replace).toHaveBeenCalledTimes(1);
-    expect(navigation.router.replace).toHaveBeenCalledWith(`/orders/${orderId(1048)}?ref=email`, { scroll: false });
 
-    // With `placed` gone, the notice stays on this visit and nothing is replaced again.
-    navigation.search = "ref=email";
+    // The notice stays on this visit, and the address is never touched.
     rerender(<OrderDetailPage />);
     expect(screen.getByText("Order #1048 placed.")).toBeInTheDocument();
-    expect(navigation.router.replace).toHaveBeenCalledTimes(1);
+    expect(navigation.router.replace).not.toHaveBeenCalled();
+
+    // Coming back, or reloading, doesn't say it again: the note was used.
+    unmount();
+    open(1048);
+    await screen.findByRole("heading", { level: 1, name: "#1048" });
+    expect(screen.queryByText(/placed\.$/)).not.toBeInTheDocument();
   });
 
-  it("says nothing about placing without placed=1", async () => {
+  it("doesn't say another order was placed", async () => {
+    leaveArrivalNote(`/orders/${orderId(1049)}`, { placed: true });
+    open(1048);
+    await screen.findByRole("heading", { level: 1, name: "#1048" });
+    expect(screen.queryByText(/placed\.$/)).not.toBeInTheDocument();
+  });
+
+  it("says nothing about placing without a note", async () => {
     open(1048);
     await screen.findByRole("heading", { level: 1, name: "#1048" });
     expect(screen.queryByText(/placed\.$/)).not.toBeInTheDocument();
