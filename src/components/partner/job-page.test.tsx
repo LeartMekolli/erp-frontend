@@ -17,12 +17,11 @@ import { renderAs } from "../../../test/render";
 import { JobPage } from "./job-page";
 import { PartnerNoticeLine, PartnerNoticeProvider } from "./notice";
 
-const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), partnerId: "", groupId: "", search: "" }));
+const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), partnerId: "", groupId: "" }));
 vi.mock("next/navigation", () => ({
   usePathname: () => `/partner-portal/${navigation.partnerId}/jobs/${navigation.groupId}`,
   useParams: () => ({ partnerId: navigation.partnerId, groupId: navigation.groupId }),
   useRouter: () => ({ push: navigation.push, replace: navigation.replace, prefetch: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(navigation.search),
 }));
 
 const NOW = Date.parse("2026-11-12T10:00:00Z");
@@ -40,7 +39,6 @@ beforeEach(() => {
   navigation.replace.mockReset();
   navigation.partnerId = NORTHCAST_ID;
   navigation.groupId = RING_OFFER_ID;
-  navigation.search = "";
   freezeAt(NOW);
 });
 afterEach(() => {

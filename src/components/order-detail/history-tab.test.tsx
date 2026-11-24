@@ -4,6 +4,7 @@ import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
+import { OpenPieceProvider } from "@/components/production/open-piece";
 import { useMe } from "@/components/session/session-gate";
 import type { Group, MoveHistory } from "@/lib/api/schema-types";
 
@@ -29,7 +30,11 @@ const group = (): Group => ok(fakeState().production.group(GROUP));
 const fakeMoves = (params: Record<string, string> = {}): MoveHistory => ok(fakeState().production.moves(GROUP, new URLSearchParams({ limit: "200", ...params })));
 
 function WithMe({ children }: { children: ReactNode }) {
-  return useMe().data ? <StepSelectionProvider>{children}</StepSelectionProvider> : null;
+  return useMe().data ? (
+    <OpenPieceProvider>
+      <StepSelectionProvider>{children}</StepSelectionProvider>
+    </OpenPieceProvider>
+  ) : null;
 }
 
 function renderTab() {

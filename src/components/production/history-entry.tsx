@@ -1,7 +1,6 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import Link from "next/link";
 import { useId, useState, type ReactNode } from "react";
 
 import { cn } from "cn";
@@ -11,6 +10,7 @@ import { actionTitle, actorText, isMixed, isNotable, nextText, overrideText, pie
 import type { MoveEntry, StepRules } from "@/lib/production/shape";
 
 import { answerText, MovePhoto, moveIcon } from "./move-look";
+import { useOpenPiece } from "./open-piece";
 import { usePhotoLinks } from "./photo-links";
 
 type LineAction = MoveEntry;
@@ -75,6 +75,7 @@ function Details({ action, steps }: { action: LineAction; steps: StepRules[] }) 
 export function HistoryEntry({ action, steps }: { action: LineAction; steps: StepRules[] }) {
   const { time } = useFormat();
   const [open, setOpen] = useState(false);
+  const openPiece = useOpenPiece().open;
   const listId = useId();
   const { Icon, tone } = moveIcon(action);
   const notable = isNotable(action);
@@ -118,9 +119,9 @@ export function HistoryEntry({ action, steps }: { action: LineAction; steps: Ste
           <ul id={listId} aria-label="Pieces in this move" className="mt-2 flex flex-wrap gap-1.5">
             {action.pieces.map((piece) => (
               <li key={piece.id} className="rounded-lg border border-line px-2 py-0.5 text-caption tabular-nums">
-                <Link href={`?piece=${piece.id}`} scroll={false} prefetch={false} className="underline-offset-2 hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center">
+                <button type="button" onClick={() => openPiece(piece.id)} className="tabular-nums underline-offset-2 hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center">
                   {pieceName(piece)}
-                </Link>
+                </button>
                 {mixed && ` · ${pieceResult(piece)}`}
               </li>
             ))}

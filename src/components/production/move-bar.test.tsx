@@ -17,11 +17,16 @@ import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
 import { MoveBar } from "./move-bar";
+import { OpenPieceProvider } from "./open-piece";
 
 const GROUP = groupIdOf(1048, 0);
 
 function WithMe({ children }: { children: ReactNode }) {
-  return useMe().data ? <StepSelectionProvider>{children}</StepSelectionProvider> : null;
+  return useMe().data ? (
+    <OpenPieceProvider>
+      <StepSelectionProvider>{children}</StepSelectionProvider>
+    </OpenPieceProvider>
+  ) : null;
 }
 
 function renderPieces(orderState: OrderState = "in_production", user = STAFF, groupId = GROUP) {

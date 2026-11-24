@@ -151,7 +151,7 @@ test("a partner fails a piece into rework", async ({ page }) => {
   await dialog.getByRole("button", { name: "Fail", exact: true }).click();
 
   await expect(page.getByText("1 piece failed at Finish.")).toBeVisible();
-  const row = page.getByRole("listitem").filter({ has: page.getByRole("link", { name: "History of 4/12" }) });
+  const row = page.getByRole("listitem").filter({ has: page.getByRole("button", { name: "History of 4/12" }) });
   await expect(row).toContainText("Being redone");
 });
 

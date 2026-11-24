@@ -1,7 +1,6 @@
 "use client";
 
 import { ChevronDown, FileText } from "lucide-react";
-import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
 import { cn } from "cn";
@@ -15,6 +14,7 @@ import { actorText } from "@/lib/production/history";
 import type { PieceStory, StoryMove } from "@/lib/production/shape";
 
 import { answerText, MovePhoto, moveIcon } from "./move-look";
+import { useOpenPiece } from "./open-piece";
 import { usePhotoLinks } from "./photo-links";
 import { submitErrorText } from "./submit-error";
 
@@ -135,6 +135,7 @@ function Instructions({ link, stepName }: { link: () => Promise<string>; stepNam
 
 function PieceHistory({ id, useStory, sopLink }: { id: string; useStory: UseStory; sopLink: ((story: PieceStory) => Promise<string>) | null }) {
   const piece = useStory(id);
+  const openPiece = useOpenPiece().open;
 
   if (piece.isPending) {
     return (
@@ -147,12 +148,12 @@ function PieceHistory({ id, useStory, sopLink }: { id: string; useStory: UseStor
   }
 
   if (!piece.data) {
-    // A mistyped link fails erp-api's id check with a 400, and a piece it doesn't have is a 404.
+    // erp-api answers 404 for a piece it doesn't have, and 400 for an id that fails its check.
     if (isApiProblem(piece.error) && (piece.error.status === 404 || piece.error.status === 400)) {
       return (
         <>
           <SheetTitle className="text-base font-semibold">We couldn&apos;t find this piece</SheetTitle>
-          <SheetDescription className="text-sm text-ink-2">It may have been a mistyped link.</SheetDescription>
+          <SheetDescription className="text-sm text-ink-2">It may no longer be there.</SheetDescription>
         </>
       );
     }
@@ -166,6 +167,7 @@ function PieceHistory({ id, useStory, sopLink }: { id: string; useStory: UseStor
   }
 
   const data = piece.data;
+  const replacesId = data.replacesId;
   return (
     <>
       <div className="flex flex-col gap-0.5 pr-8">
@@ -173,10 +175,10 @@ function PieceHistory({ id, useStory, sopLink }: { id: string; useStory: UseStor
         <SheetDescription className="text-sm font-medium text-ink">{nowText(data)}</SheetDescription>
       </div>
       {sopLink && data.sop && data.step && <Instructions link={() => sopLink(data)} stepName={data.step.name} />}
-      {data.replacesId && (
-        <Link href={`?piece=${data.replacesId}`} scroll={false} prefetch={false} className="text-sm underline underline-offset-2">
+      {replacesId && (
+        <button type="button" onClick={() => openPiece(replacesId)} className="self-start text-left text-sm underline underline-offset-2">
           See the piece this replaces
-        </Link>
+        </button>
       )}
       {data.history.length === 0 ? (
         <p className="text-sm text-ink-2">It hasn&apos;t moved yet.</p>

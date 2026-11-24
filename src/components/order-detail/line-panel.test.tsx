@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { OpenPieceProvider } from "@/components/production/open-piece";
 import { useMe } from "@/components/session/session-gate";
 import type { Order } from "@/lib/api/schema-types";
 
@@ -17,7 +18,11 @@ const order = (number: number): Order => fakeState().orders.all().find((o) => o.
 
 /** As under SessionGate: nothing renders until `/me` has loaded. */
 function WithMe({ children }: { children: ReactNode }) {
-  return useMe().data ? <StepSelectionProvider>{children}</StepSelectionProvider> : null;
+  return useMe().data ? (
+    <OpenPieceProvider>
+      <StepSelectionProvider>{children}</StepSelectionProvider>
+    </OpenPieceProvider>
+  ) : null;
 }
 
 function renderLine(number: number, position = 0, user = STAFF) {

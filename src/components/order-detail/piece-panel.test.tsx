@@ -4,6 +4,7 @@ import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { OpenPieceProvider, useOpenPiece } from "@/components/production/open-piece";
 import { useMe } from "@/components/session/session-gate";
 import type { Transition, WorkOrderDetail } from "@/lib/api/schema-types";
 
@@ -16,11 +17,12 @@ import { renderAs } from "../../../test/render";
 import { OrderDetailPage } from "./order-detail-page";
 import { StaffPiecePanel as PiecePanel } from "./staff-tabs";
 
-const navigation = vi.hoisted(() => ({ id: "", search: "", replace: vi.fn() }));
+const navigation = vi.hoisted(() => ({ id: "", replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: navigation.id }),
   useRouter: () => ({ push: vi.fn(), replace: navigation.replace }),
-  useSearchParams: () => new URLSearchParams(navigation.search),
+  // The order page still reads `?placed` until it moves out of the address too.
+  useSearchParams: () => new URLSearchParams(),
   notFound: vi.fn(),
 }));
 
@@ -41,7 +43,12 @@ function pieceAt(stepKey: string, index = 0): string {
 const scrappedPiece = () => ok(fakeState().production.pieces(new URLSearchParams({ group_id: GROUP, status: "scrapped" }))).data[0]!.id;
 
 function WithMe({ children }: { children: ReactNode }) {
-  return useMe().data ? children : null;
+  return useMe().data ? <OpenPieceProvider>{children}</OpenPieceProvider> : null;
+}
+
+/** Which piece the page would show in its panel. */
+function OpenId() {
+  return <p data-testid="open-piece">{useOpenPiece().id ?? "none"}</p>;
 }
 
 function renderPanel(id: string, user = STAFF) {
@@ -50,21 +57,21 @@ function renderPanel(id: string, user = STAFF) {
     user,
     <WithMe>
       <PiecePanel id={id} onClose={onClose} />
+      <OpenId />
     </WithMe>,
   );
   return onClose;
 }
 
-/** Serves this piece as if erp-api had changed it. */
+/** Serves this piece as if erp-api had changed it. Other pieces are served as before. */
 function serve(id: string, change: (piece: WorkOrderDetail) => WorkOrderDetail) {
   const piece = change(ok(fakeState().production.piece(id)));
-  server.use(http.get(`${FAKE_API_URL}/workflow/work-orders/:id`, () => HttpResponse.json(piece)));
+  server.use(http.get(`${FAKE_API_URL}/workflow/work-orders/:id`, ({ params }) => (params.id === id ? HttpResponse.json(piece) : undefined)));
 }
 
 const REWORK = () => pieceAt("finish", 0);
 
 beforeEach(() => {
-  navigation.search = "";
   navigation.replace.mockReset();
 });
 
@@ -225,11 +232,12 @@ describe("PiecePanel", () => {
     expect(screen.getByText("Ana Ruiz, for Northcast Foundry")).toBeInTheDocument();
   });
 
-  it("links a replacement to the piece it replaces", async () => {
+  it("opens the piece a replacement replaces", async () => {
     const id = pieceAt("final_qc");
     serve(id, (piece) => ({ ...piece, replaces_id: UNKNOWN_ID }));
     renderPanel(id);
-    expect(await screen.findByRole("link", { name: "See the piece this replaces" })).toHaveAttribute("href", `?piece=${UNKNOWN_ID}`);
+    await userEvent.click(await screen.findByRole("button", { name: "See the piece this replaces" }));
+    expect(screen.getByTestId("open-piece")).toHaveTextContent(UNKNOWN_ID);
   });
 
   it("shows photos through signed links", async () => {
@@ -262,31 +270,30 @@ describe("PiecePanel", () => {
 });
 
 describe("the piece panel on the order page", () => {
-  function open(search = "") {
+  function open() {
     navigation.id = orderId(1048);
-    navigation.search = search;
     renderAs(STAFF, <OrderDetailPage />);
   }
 
-  it("links each piece to its own address", async () => {
+  it("opens a piece's story on the page and closes it, leaving the address alone", async () => {
     open();
-    const id = ok(fakeState().production.pieces(new URLSearchParams({ group_id: GROUP, step_key: "print", status: "active" }))).data[0]!.id;
-    expect(await screen.findByRole("link", { name: "History of 1/12" })).toHaveAttribute("href", `?piece=${id}`);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // Print is the first step with pieces, so its list starts open.
+    await userEvent.click(await screen.findByRole("button", { name: "History of 1/12" }));
+    expect(await screen.findByRole("dialog", { name: "Piece 1/12" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Piece 1/12" })).not.toBeInTheDocument());
+    expect(navigation.replace).not.toHaveBeenCalled();
   });
 
-  it("opens from the address and removes it on closing", async () => {
-    open(`piece=${REWORK()}`);
-    await screen.findByRole("dialog", { name: "Piece 3/12" });
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
-    expect(navigation.replace).toHaveBeenCalledWith(`/orders/${orderId(1048)}`, { scroll: false });
-  });
-
-  it("says when a shared piece can't be found, and the order still shows", async () => {
-    open(`piece=${UNKNOWN_ID}`);
+  it("says when a replaced piece can't be found, and the order still shows", async () => {
+    serve(pieceAt("print"), (piece) => ({ ...piece, replaces_id: UNKNOWN_ID }));
+    open();
+    await userEvent.click(await screen.findByRole("button", { name: "History of 1/12" }));
+    await userEvent.click(await screen.findByRole("button", { name: "See the piece this replaces" }));
     expect(await screen.findByText("We couldn't find this piece")).toBeInTheDocument();
     expect(screen.getByText("#1048")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
-    expect(navigation.replace).toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(navigation.replace).not.toHaveBeenCalled();
   });
 });

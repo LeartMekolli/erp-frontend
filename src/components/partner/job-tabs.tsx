@@ -1,10 +1,10 @@
 "use client";
 
 import { FileText } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { HistoryTab } from "@/components/production/history-tab";
+import { OpenPieceProvider, useOpenPiece } from "@/components/production/open-piece";
 import { PhotoLinksProvider } from "@/components/production/photo-links";
 import { PiecesTab } from "@/components/production/pieces-tab";
 import { QualityTab } from "@/components/production/quality-tab";
@@ -19,13 +19,18 @@ import { partnerEntry, partnerProgress, partnerRules } from "@/lib/partner-jobs/
 import { failedOnLine } from "@/lib/production/quality";
 import type { UploadTarget } from "@/lib/upload/upload";
 
-import { jobHref } from "./offer-actions";
 import { PartnerPiecePanel, partnerSections, usePartnerSectionPieces } from "./partner-pieces";
 
 const TABS = ["pieces", "quality", "history"] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABEL: Record<Tab, string> = { pieces: "Pieces", quality: "Quality", history: "History" };
+
+/** The story of the piece open on this job, if any. */
+function JobPiecePanel() {
+  const piece = useOpenPiece();
+  return <PartnerPiecePanel id={piece.id} onClose={piece.close} />;
+}
 
 /** The partner's rules never load apart from the job: they come with it. */
 const LOADED = { isPending: false, error: null, refetch: () => undefined };
@@ -101,45 +106,44 @@ function JobHistory({ job, partnerId }: { job: PartnerJobDetail; partnerId: stri
 /**
  * The main panel of a job the partner holds: Pieces, Quality and History. Each step shows once, as a
  * section of Pieces with its count and instructions. The tab is kept on the page, so a reload opens
- * Pieces. The open piece is in the address (`?piece=<id>`), as on staff's order page.
+ * Pieces. The open piece is kept on the page too, as on staff's order page, and starts closed on another job.
  */
 export function JobTabs({ job, partnerId }: { job: PartnerJobDetail; partnerId: string }) {
-  const router = useRouter();
-  const search = useSearchParams();
   const [tab, setTab] = useState<Tab>("pieces");
   const failed = failedOnLine(job.steps);
-  const page = jobHref(partnerId, job.id);
   const choose = (value: string) => setTab(value as Tab);
 
   return (
-    <PhotoLinksProvider link={(photo) => partnerPhotoUrl(partnerId, job.id, photo)} mayView>
-      <section aria-label="Work on this job" className="flex min-w-0 flex-col rounded-[20px] bg-card px-5 py-4">
-        <Tabs value={tab} onValueChange={choose} activationMode="manual" className="min-w-0">
-          <TabsList variant="line" aria-label="Pieces, quality and history" className={TAB_ROW}>
-            {TABS.map((value) => (
-              <TabsTrigger key={value} value={value} className={TAB}>
-                {TAB_LABEL[value]}
-                {value === "quality" && failed > 0 && (
-                  <>
-                    {" "}
-                    <span className="rounded-full bg-collect/20 px-1.5 text-caption font-medium text-ink tabular-nums">{`${failed} failed`}</span>
-                  </>
-                )}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          <TabsContent value="pieces">
-            <JobPieces job={job} partnerId={partnerId} />
-          </TabsContent>
-          <TabsContent value="quality">
-            <QualityTab progress={partnerProgress(job)} rules={partnerRules(job)} rulesState={LOADED} of="job" />
-          </TabsContent>
-          <TabsContent value="history">
-            <JobHistory job={job} partnerId={partnerId} />
-          </TabsContent>
-        </Tabs>
-      </section>
-      <PartnerPiecePanel id={search.get("piece")} onClose={() => router.replace(page, { scroll: false })} />
-    </PhotoLinksProvider>
+    <OpenPieceProvider key={job.id}>
+      <PhotoLinksProvider link={(photo) => partnerPhotoUrl(partnerId, job.id, photo)} mayView>
+        <section aria-label="Work on this job" className="flex min-w-0 flex-col rounded-[20px] bg-card px-5 py-4">
+          <Tabs value={tab} onValueChange={choose} activationMode="manual" className="min-w-0">
+            <TabsList variant="line" aria-label="Pieces, quality and history" className={TAB_ROW}>
+              {TABS.map((value) => (
+                <TabsTrigger key={value} value={value} className={TAB}>
+                  {TAB_LABEL[value]}
+                  {value === "quality" && failed > 0 && (
+                    <>
+                      {" "}
+                      <span className="rounded-full bg-collect/20 px-1.5 text-caption font-medium text-ink tabular-nums">{`${failed} failed`}</span>
+                    </>
+                  )}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <TabsContent value="pieces">
+              <JobPieces job={job} partnerId={partnerId} />
+            </TabsContent>
+            <TabsContent value="quality">
+              <QualityTab progress={partnerProgress(job)} rules={partnerRules(job)} rulesState={LOADED} of="job" />
+            </TabsContent>
+            <TabsContent value="history">
+              <JobHistory job={job} partnerId={partnerId} />
+            </TabsContent>
+          </Tabs>
+        </section>
+        <JobPiecePanel />
+      </PhotoLinksProvider>
+    </OpenPieceProvider>
   );
 }

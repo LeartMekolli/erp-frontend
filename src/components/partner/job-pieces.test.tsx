@@ -15,18 +15,16 @@ import { renderAs } from "../../../test/render";
 import { JobPage } from "./job-page";
 import { PartnerNoticeProvider } from "./notice";
 
-const navigation = vi.hoisted(() => ({ replace: vi.fn(), groupId: "", search: "" }));
+const navigation = vi.hoisted(() => ({ replace: vi.fn(), groupId: "" }));
 vi.mock("next/navigation", () => ({
   usePathname: () => `/partner-portal/${NORTHCAST_ID}/jobs/${navigation.groupId}`,
   useParams: () => ({ partnerId: NORTHCAST_ID, groupId: navigation.groupId }),
   useRouter: () => ({ push: vi.fn(), replace: navigation.replace, prefetch: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(navigation.search),
 }));
 
 beforeEach(() => {
   navigation.replace.mockReset();
   navigation.groupId = RING_BAND_JOB_ID;
-  navigation.search = "";
 });
 afterEach(() => {
   server.events.removeAllListeners();
@@ -177,29 +175,24 @@ describe("moving pieces on the Job page", () => {
     expect(await screen.findByRole("checkbox", { name: "Select 4/12" })).toBeEnabled();
     await userEvent.click(screen.getByRole("button", { name: /^Not with you yet\b/ }));
     await userEvent.click(screen.getByRole("button", { name: /^Your part done\b/ }));
-    expect(await screen.findByRole("link", { name: "History of 1/12" })).toBeInTheDocument();
-    expect(await screen.findByRole("link", { name: "History of 7/12" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "History of 1/12" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "History of 7/12" })).toBeInTheDocument();
     for (const label of ["1/12", "2/12", "7/12", "8/12", "9/12", "10/12"]) expect(screen.queryByRole("checkbox", { name: `Select ${label}` })).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox", { name: "Select all at Not with you yet" })).not.toBeInTheDocument();
     expect(screen.queryByText("Needs a skill you don't have")).not.toBeInTheDocument();
   });
 
-  it("opens a piece's story", async () => {
-    const id = pieceOf("3/12").id;
-    const { unmount } = renderPage();
-    expect(await screen.findByRole("link", { name: "History of 3/12" })).toHaveAttribute("href", `?piece=${id}`);
-    unmount();
-
-    // The link only changes the address; the page opens the panel from it.
-    navigation.search = `piece=${id}`;
+  it("opens a piece's story on the page, leaving the address alone", async () => {
     renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "History of 3/12" }));
     const panel = await screen.findByRole("dialog", { name: "Piece 3/12" });
     expect(within(panel).getByText("Being redone at Finish")).toBeInTheDocument();
     const moves = within(panel).getByRole("list", { name: "Moves" });
     expect(within(moves).getByText(/^Print passed/)).toBeInTheDocument();
     expect(within(moves).getByText("Final QC failed")).toBeInTheDocument();
     await userEvent.click(within(panel).getByRole("button", { name: "Close" }));
-    expect(navigation.replace).toHaveBeenCalledWith(`/partner-portal/${NORTHCAST_ID}/jobs/${RING_BAND_JOB_ID}`, { scroll: false });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Piece 3/12" })).not.toBeInTheDocument());
+    expect(navigation.replace).not.toHaveBeenCalled();
   });
 
   it("drops a piece moved on elsewhere", async () => {

@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { noAnswer } from "@/components/auth/copy";
 import { Freshness } from "@/components/data/freshness";
 import { RecordPaymentDialog } from "@/components/orders/record-payment-dialog";
+import { OpenPieceProvider, useOpenPiece } from "@/components/production/open-piece";
 import { ShipDialog } from "@/components/orders/ship-dialog";
 import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,12 @@ export function OrderDetailPage() {
   const { data: me } = useMe();
   if (!me) return null;
   if (!can(me, "order.read")) notFound();
-  return <OrderDetail id={id} />;
+  // Keyed by the order, so opening another order on this page starts with no piece open.
+  return (
+    <OpenPieceProvider key={id}>
+      <OrderDetail id={id} />
+    </OpenPieceProvider>
+  );
 }
 
 function Message({ children }: { children: ReactNode }) {
@@ -62,8 +68,7 @@ function OrderDetail({ id }: { id: string }) {
   const query = useOrder(id);
   const router = useRouter();
   const params = useSearchParams();
-  // The open piece lives in the address, so its panel can be sent to someone.
-  const pieceId = params.get("piece");
+  const piece = useOpenPiece();
   const [shipping, setShipping] = useState(false);
   const [paying, setPaying] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -81,7 +86,7 @@ function OrderDetail({ id }: { id: string }) {
   const placedNumber = placed !== null && placed.id === id ? placed.number : null;
   useEffect(() => {
     if (!justPlaced || placedNumber === null) return;
-    // Everything else in the address stays, such as an open piece.
+    // Everything else in the address stays.
     const rest = new URLSearchParams(searchText);
     rest.delete("placed");
     const kept = rest.toString();
@@ -185,7 +190,7 @@ function OrderDetail({ id }: { id: string }) {
         <ShipDialog order={order} open={shipping} onOpenChange={setShipping} onShipped={setNotice} />
         <RecordPaymentDialog order={order} open={paying} onOpenChange={setPaying} onRecorded={setNotice} />
         {cancelling && <CancelDialog order={order} open onOpenChange={setCancelling} onCancelled={setNotice} />}
-        <StaffPiecePanel id={pieceId} onClose={() => router.replace(`/orders/${id}`, { scroll: false })} />
+        <StaffPiecePanel id={piece.id} onClose={piece.close} />
       </StaffSelectionProvider>
     </>
   );
