@@ -22,7 +22,8 @@ const offersTile = (page: Page) => page.getByRole("region", { name: "Waiting for
 /** Signs in as Northcast's owner and opens Jobs on its Offers tab, with both offers. */
 async function openJobs(page: Page) {
   await signIn(page, PARTNER.email);
-  await expect(page).toHaveURL(JOBS);
+  await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
+  await page.goto(JOBS);
   await expect(page.getByRole("heading", { level: 1, name: "Jobs" })).toBeVisible();
   await expect(offersTile(page)).toContainText("2 offers");
   await offersTile(page).getByRole("button", { name: "Review" }).click();
@@ -76,6 +77,8 @@ test("a partner declines an offer", async ({ page }) => {
 test("a suspended workshop can't answer", async ({ page, request }) => {
   await request.post(`${FAKE_URL}/__suspend-partner/${NORTHCAST_ID}`);
   await signIn(page, PARTNER.email);
+  await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
+  await page.goto(JOBS);
   await expect(
     page.getByText("Your workshop is suspended. You can finish the jobs you have, but you can't take new ones."),
   ).toBeVisible();

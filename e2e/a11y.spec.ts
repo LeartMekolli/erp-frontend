@@ -187,6 +187,8 @@ const jobRow = (page: Page, title: string) => page.getByRole("region", { name: "
 /** Signs in as Northcast's owner and waits for both offers and the jobs in progress, the 60-character one among them. */
 async function openPartnerJobs(page: Page) {
   await signIn(page, PARTNER.email);
+  await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
+  await page.goto(`/partner-portal/${NORTHCAST_ID}/jobs`);
   await expect(page.getByRole("heading", { level: 1, name: "Jobs" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Waiting for your answer" })).toContainText("2 offers");
   await expect(jobRow(page, LONG_JOB_TITLE)).toBeVisible();
@@ -237,7 +239,7 @@ async function checkTab(page: Page, name: string | RegExp, shows: Locator) {
 
 test("partner earnings: accessible and fits the screen", async ({ page }) => {
   await signIn(page, PARTNER.email);
-  await expect(page.getByRole("heading", { level: 1, name: "Jobs" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
   await page.goto(`/partner-portal/${NORTHCAST_ID}/earnings`);
   const pending = page.getByRole("button", { name: /^On its way/ });
   await expect(pending).toBeVisible();

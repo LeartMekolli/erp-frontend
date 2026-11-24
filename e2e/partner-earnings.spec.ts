@@ -7,13 +7,14 @@ import { expect, expectNoSideScroll, signIn, test } from "./helpers";
 
 // Run on a desktop and on Safari at phone size, as the partner Jobs flows are.
 
+const DASHBOARD = `/partner-portal/${NORTHCAST_ID}/dashboard`;
 const JOBS = `/partner-portal/${NORTHCAST_ID}/jobs`;
 const EARNINGS = `/partner-portal/${NORTHCAST_ID}/earnings`;
 
 /** Signs in as Northcast's owner and opens Earnings, with what's owed and the payouts loaded. */
 async function openEarnings(page: Page) {
   await signIn(page, PARTNER.email);
-  await expect(page).toHaveURL(JOBS);
+  await expect(page).toHaveURL(DASHBOARD);
   await page.goto(EARNINGS);
   await expect(page.getByRole("heading", { level: 1, name: "Earnings" })).toBeVisible();
   await expect(page.getByText("€1,240.00")).toBeVisible();
@@ -67,8 +68,8 @@ test("an owner reads a payout and a job's pay", async ({ page }) => {
 
 test("a member doesn't see earnings", async ({ page }) => {
   await signIn(page, NORTHCAST_MEMBER.email);
-  await expect(page).toHaveURL(JOBS);
-  await expect(page.getByRole("heading", { level: 1, name: "Jobs" })).toBeVisible();
+  await expect(page).toHaveURL(DASHBOARD);
+  await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
   // On a phone the sidebar is a closed menu, so no link shows there for anyone; on a desktop only the member's lacks it.
   await expect(page.getByRole("link", { name: "Earnings" })).toHaveCount(0);
 
@@ -79,7 +80,7 @@ test("a member doesn't see earnings", async ({ page }) => {
 
 test("a payout notice opens earnings", async ({ page }) => {
   await signIn(page, PARTNER.email);
-  await expect(page).toHaveURL(JOBS);
+  await expect(page).toHaveURL(DASHBOARD);
 
   await page.getByRole("button", { name: /^Notifications/ }).click();
   await page.getByRole("dialog", { name: "Notifications" }).getByRole("button", { name: /You have been paid/ }).click();
