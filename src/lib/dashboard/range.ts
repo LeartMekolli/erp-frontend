@@ -1,6 +1,6 @@
 /**
- * The dashboard's date range: what the person picked, how it is written in the address, which
- * calendar days it covers and how it reads in words. Ranges are calendar days (`YYYY-MM-DD`) in
+ * The dashboard's date range: what the person picked, whether erp-api would take a custom range,
+ * which calendar days it covers and how it reads in words. Ranges are calendar days (`YYYY-MM-DD`) in
  * the workspace's time zone, both ends included, so nothing here uses a time or a time zone.
  */
 
@@ -11,8 +11,8 @@ export type RangeChoice = { preset: RangePreset } | { from: string; to: string }
 /** The longest range erp-api answers for (`MAX_RANGE_DAYS`). */
 export const MAX_RANGE_DAYS = 366;
 
-const PRESETS: readonly RangePreset[] = ["7d", "30d", "quarter", "year"];
-const DEFAULT_CHOICE: RangeChoice = { preset: "30d" };
+/** What the dashboard opens on, a reload too: the range is kept on the page, never in the address. */
+export const DEFAULT_CHOICE: RangeChoice = { preset: "30d" };
 const DAY_MS = 24 * 3_600_000;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
@@ -24,10 +24,6 @@ function utc(date: string): number {
 function isDate(value: string | null): value is string {
   if (value === null || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   return new Date(utc(value)).toISOString().slice(0, 10) === value;
-}
-
-function isPreset(value: string | null): value is RangePreset {
-  return PRESETS.some((one) => one === value);
 }
 
 /** The date `days` after `date` (before it when negative). */
@@ -46,24 +42,6 @@ export function checkCustomRange(from: string, to: string): string | null {
   if (to < from) return "The end is before the start.";
   if (spanDays(from, to) > MAX_RANGE_DAYS) return `Pick at most ${MAX_RANGE_DAYS} days.`;
   return null;
-}
-
-/** The choice an address names; anything missing, unknown or refused by `checkCustomRange` gives the last 30 days. */
-export function parseRange(search: URLSearchParams): RangeChoice {
-  const from = search.get("from");
-  const to = search.get("to");
-  if (from !== null || to !== null) {
-    if (isDate(from) && isDate(to) && checkCustomRange(from, to) === null) return { from, to };
-    return DEFAULT_CHOICE;
-  }
-  const preset = search.get("range");
-  return isPreset(preset) ? { preset } : DEFAULT_CHOICE;
-}
-
-/** The address's query for a choice; the default (last 30 days) is left out. */
-export function rangeSearch(choice: RangeChoice): string {
-  if ("preset" in choice) return choice.preset === "30d" ? "" : `range=${choice.preset}`;
-  return `from=${choice.from}&to=${choice.to}`;
 }
 
 /** The days a choice covers, ending `today` (the workspace's local date) for a preset. */

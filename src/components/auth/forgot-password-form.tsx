@@ -9,6 +9,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api/client";
+import { useArrivalNote } from "@/lib/navigation/arrival-note";
 
 import { UNKNOWN, noAnswer } from "./copy";
 import { Field } from "./field";
@@ -30,6 +31,18 @@ function BackToSignIn() {
       <Link href="/sign-in">Back to sign in</Link>
     </Button>
   );
+}
+
+/**
+ * `/forgot-password`, always at its plain address. The workspace typed on Sign in comes in an arrival
+ * note; without one, it's the last one this browser used.
+ */
+export function ForgotPassword({ lastWorkspace }: { lastWorkspace: string }) {
+  const [workspace, setWorkspace] = useState<string | null>(null);
+  useArrivalNote("/forgot-password", (note) => {
+    if (note.workspace) setWorkspace(note.workspace);
+  });
+  return <ForgotPasswordForm key={workspace ?? ""} initialWorkspace={workspace ?? lastWorkspace} />;
 }
 
 export function ForgotPasswordForm({ initialWorkspace }: { initialWorkspace: string }) {

@@ -413,7 +413,7 @@ describe("OrderTicket", () => {
     await userEvent.click(place);
     await waitFor(() => expect(navigation.push).toHaveBeenCalledTimes(1));
     expect(orders).toBe(2);
-    const order = fakeState().orders.all().find((candidate) => navigation.push.mock.calls[0]?.[0] === `/orders/${candidate.id}?placed=1`);
+    const order = fakeState().orders.all().find((candidate) => navigation.push.mock.calls[0]?.[0] === `/orders/${candidate.id}`);
     expect(order?.total).toBe("38.40");
   });
 });

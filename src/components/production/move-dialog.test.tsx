@@ -23,6 +23,7 @@ import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
 import { MoveDialog } from "./move-dialog";
+import { OpenPieceProvider } from "./open-piece";
 
 const GROUP = groupIdOf(1048, 0);
 const MOVES = `${FAKE_API_URL}/workflow/moves`;
@@ -64,7 +65,11 @@ afterEach(() => {
 });
 
 function WithMe({ children }: { children: ReactNode }) {
-  return useMe().data ? <StaffSelectionProvider>{children}</StaffSelectionProvider> : null;
+  return useMe().data ? (
+    <OpenPieceProvider>
+      <StaffSelectionProvider>{children}</StaffSelectionProvider>
+    </OpenPieceProvider>
+  ) : null;
 }
 
 interface DialogOptions {

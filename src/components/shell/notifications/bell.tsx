@@ -12,18 +12,22 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { errorMessage } from "@/lib/api/error-message";
 import type { FeedEntry } from "@/lib/api/schema-types";
 import { useFormat } from "@/lib/format/use-format";
+import { leaveArrivalNote, type ArrivalNote } from "@/lib/navigation/arrival-note";
 import { useMediaQuery } from "@/lib/use-media-query";
 
 import { useFeed, useMarkAllRead, useMarkRead, useUnreadCount } from "./queries";
 
 const TITLE = "Notifications";
 
+/** Where a notification opens: a plain address, and what that page should open on. */
+export type Destination = { href: string; note?: ArrivalNote };
+
 /**
  * The bell in the top bar: how many are unread, and the panel of
  * notifications, a popover from 768 px and full screen below. Opening one
  * marks it read and goes to its record, when there is one to go to.
  */
-export function Bell({ hrefFor }: { hrefFor: (entry: FeedEntry) => string | null }) {
+export function Bell({ hrefFor }: { hrefFor: (entry: FeedEntry) => Destination | null }) {
   const { data: me } = useMe();
   const unread = useUnreadCount();
   const wide = useMediaQuery("(min-width: 768px)");
@@ -42,10 +46,11 @@ export function Bell({ hrefFor }: { hrefFor: (entry: FeedEntry) => string | null
         // Still unread, so the count stays; going to the record matters more.
       }
     }
-    const href = hrefFor(entry);
-    if (!href) return;
+    const destination = hrefFor(entry);
+    if (!destination) return;
     setOpen(false);
-    router.push(href);
+    if (destination.note) leaveArrivalNote(destination.href, destination.note);
+    router.push(destination.href);
   }
 
   const trigger = (

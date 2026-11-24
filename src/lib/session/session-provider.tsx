@@ -4,6 +4,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
+import { markSignedOut } from "@/lib/auth/auth-note";
+import { leaveArrivalNote } from "@/lib/navigation/arrival-note";
 import { createQueryClient } from "@/lib/query/query-client";
 
 import { clientSession } from "./client-session";
@@ -22,10 +24,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const stopWatching = session.watch();
     const stopListening = session.onSessionEnded((reason) => {
       queryClient.clear();
-      const params = new URLSearchParams({ reason });
       // After a deliberate sign-out, the next person shouldn't land on this page.
-      if (reason !== "signed-out") params.set("next", window.location.pathname + window.location.search);
-      router.replace(`/sign-in?${params}`);
+      // Per tab: each tab signed out together keeps its own way back.
+      leaveArrivalNote("/sign-in", reason === "signed-out" ? { reason } : { reason, next: window.location.pathname + window.location.search });
+      markSignedOut();
+      router.replace("/sign-in");
     });
     return () => {
       stopWatching();

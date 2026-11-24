@@ -67,7 +67,12 @@ test("a wrong password gets one message for every kind of mistake", async ({ pag
 
 test("asking for a reset says the same thing for any email", async ({ page }) => {
   for (const email of [STAFF.email, "nobody@demo.example.test"]) {
-    await page.goto("/forgot-password?workspace=demo");
+    // The workspace typed on sign-in carries over, and the address stays plain.
+    await page.goto("/sign-in");
+    await page.getByLabel("Workspace").fill("demo");
+    await page.getByRole("link", { name: "Forgot password?" }).click();
+    await expect(page).toHaveURL("/forgot-password");
+    await expect(page.getByLabel("Workspace")).toHaveValue("demo");
     await page.getByLabel("Email").fill(email);
     await page.getByRole("button", { name: "Send reset link" }).click();
     await expect(page.getByRole("status")).toHaveText(

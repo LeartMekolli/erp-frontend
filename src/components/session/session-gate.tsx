@@ -9,6 +9,8 @@ import { FormMessage } from "@/components/auth/form-message";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api/client";
 import type { MeResponse } from "@/lib/api/schema-types";
+import { markSignedOut } from "@/lib/auth/auth-note";
+import { leaveArrivalNote } from "@/lib/navigation/arrival-note";
 import { resolveDestination } from "@/lib/auth/destination";
 import { WORKSPACE_HINT_COOKIE } from "@/lib/routes";
 import { OfflineError, SessionEndedError, clientSession } from "@/lib/session/client-session";
@@ -32,6 +34,7 @@ function readCookie(name: string): string | null {
   return entry ? decodeURIComponent(entry.slice(name.length + 1)) : null;
 }
 
+// AMI's own pages have no query; this keeps one added outside AMI (the payment provider's `?onboarding=`).
 const here = () => window.location.pathname + window.location.search;
 
 /** Whether this person may be in this area, and on this workshop's pages. */
@@ -61,13 +64,18 @@ export function SessionGate({ area, children }: { area: Area; children: ReactNod
   const noSession = me.error instanceof SessionEndedError && me.error.reason === "none";
 
   useEffect(() => {
-    if (noSession) router.replace(`/sign-in?${new URLSearchParams({ next: here() })}`);
+    if (!noSession) return;
+    leaveArrivalNote("/sign-in", { next: here() });
+    router.replace("/sign-in");
   }, [noSession, router]);
 
   useEffect(() => {
     if (!otherWorkspace || !hint) return;
     void clientSession().signOut("signed-out", { quiet: true });
-    router.replace(`/sign-in?${new URLSearchParams({ workspace: hint, next: here() })}`);
+    leaveArrivalNote("/sign-in", { workspace: hint, next: here() });
+    // Its session cookie may not be cleared yet: the sign-in page mustn't send it home.
+    markSignedOut();
+    router.replace("/sign-in");
   }, [otherWorkspace, hint, router]);
 
   if (me.error && !(me.error instanceof SessionEndedError)) {

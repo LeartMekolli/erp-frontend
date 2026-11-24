@@ -1,12 +1,14 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { leaveArrivalNote, resetArrivalNotes } from "@/lib/navigation/arrival-note";
 
 import { FAKE_API_URL, STAFF } from "../../../test/fake-erp-api/seed";
 import { server } from "../../../test/msw";
 
-import { ForgotPasswordForm } from "./forgot-password-form";
+import { ForgotPassword, ForgotPasswordForm } from "./forgot-password-form";
 
 const RESET_URL = `${FAKE_API_URL}/auth/password-reset`;
 const SENT = "If that email has an account in this workspace, a reset link is on its way.";
@@ -29,7 +31,23 @@ async function fillAndSubmit(email: string, user = userEvent.setup()) {
   return user;
 }
 
+describe("ForgotPassword", () => {
+  afterEach(() => resetArrivalNotes());
+
+  it("fills in the workspace typed on Sign in, once", () => {
+    leaveArrivalNote("/forgot-password", { workspace: "sandbox" });
+    const { unmount } = render(<ForgotPassword lastWorkspace="demo" />);
+    expect(screen.getByLabelText("Workspace")).toHaveValue("sandbox");
+    unmount();
+
+    // A reload: the note is used, so it's the workspace this browser used last.
+    render(<ForgotPassword lastWorkspace="demo" />);
+    expect(screen.getByLabelText("Workspace")).toHaveValue("demo");
+  });
+});
+
 describe("ForgotPasswordForm", () => {
+
   it("has the fields in tab order, then the back link", async () => {
     const user = userEvent.setup();
     render(<ForgotPasswordForm initialWorkspace="" />);

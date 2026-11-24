@@ -2,6 +2,8 @@ import type { FeedEntry, MeResponse } from "@/lib/api/schema-types";
 
 import { navAllows } from "../nav";
 
+import type { Destination } from "./bell";
+
 /** Where each kind of subject opens: its section, and whether the link names the record. */
 const TARGETS: Record<string, { section: string; withId: boolean }> = {
   order: { section: "orders", withId: true },
@@ -19,14 +21,16 @@ const TARGETS: Record<string, { section: string; withId: boolean }> = {
 
 /**
  * The page a notification opens, or null when it has none this person may see. A failed payout opens its
- * partner's Payouts tab, and the weekly payouts reminder (about the workspace) opens Partners.
+ * partner's Payouts tab (through an arrival note: the address stays plain), and the weekly payouts
+ * reminder (about the workspace) opens Partners.
  */
-export function subjectHref(entry: Pick<FeedEntry, "subject" | "payout" | "event_key">, me: MeResponse): string | null {
+export function subjectHref(entry: Pick<FeedEntry, "subject" | "payout" | "event_key">, me: MeResponse): Destination | null {
   if (navAllows(me, "partners")) {
-    if (entry.payout) return `/partners/${encodeURIComponent(entry.payout.partner_id)}?tab=payouts`;
-    if (entry.event_key === "payouts.reminder") return "/partners";
+    if (entry.payout) return { href: `/partners/${encodeURIComponent(entry.payout.partner_id)}`, note: { partnerTab: "payouts" } };
+    if (entry.event_key === "payouts.reminder") return { href: "/partners" };
   }
-  return plainHref(entry.subject, me);
+  const href = plainHref(entry.subject, me);
+  return href ? { href } : null;
 }
 
 function plainHref(subject: { type: string; id: string }, me: MeResponse): string | null {

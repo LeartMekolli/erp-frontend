@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { leaveArrivalNote, resetArrivalNotes } from "@/lib/navigation/arrival-note";
 import { FAKE_API_URL, NORTHCAST_ID, PAYER, STAFF, STAFF_MEMBER } from "../../../test/fake-erp-api/seed";
 import { fakeState, resetFakeState } from "../../../test/fake-erp-api/state";
 import { server } from "../../../test/msw";
@@ -11,11 +12,10 @@ import { settle, until } from "../../../test/wait";
 
 import { PartnerPage } from "./partner-page";
 
-const navigation = vi.hoisted(() => ({ id: "", search: "", replace: vi.fn(), notFound: vi.fn() }));
+const navigation = vi.hoisted(() => ({ id: "", replace: vi.fn(), notFound: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: navigation.id }),
   useRouter: () => ({ push: vi.fn(), replace: navigation.replace }),
-  useSearchParams: () => new URLSearchParams(navigation.search),
   notFound: navigation.notFound,
 }));
 
@@ -35,7 +35,6 @@ const settledPaid = () => fakeState().earnings.settlePending(NORTHCAST_ID, "paid
 
 beforeEach(() => {
   navigation.id = NORTHCAST_ID;
-  navigation.search = "";
   navigation.replace.mockReset();
   navigation.notFound.mockReset();
   pays = 0;
@@ -45,6 +44,7 @@ beforeEach(() => {
   northcastReady();
 });
 afterEach(() => {
+  resetArrivalNotes();
   server.events.removeAllListeners();
   vi.useRealTimers();
   setOnline(true);
@@ -165,7 +165,7 @@ describe("PartnerPay", () => {
   });
 
   it("hides Pay without payment.read", async () => {
-    navigation.search = "tab=payouts";
+    leaveArrivalNote(`/partners/${NORTHCAST_ID}`, { partnerTab: "payouts" });
     renderAs(PAYER, <PartnerPage />);
 
     expect(within(await owedRegion()).getByText("€1,240.00")).toBeInTheDocument();

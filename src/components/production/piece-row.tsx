@@ -1,12 +1,12 @@
 "use client";
 
 import { CircleX, RotateCcw } from "lucide-react";
-import Link from "next/link";
-
 import { cn } from "cn";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import type { LastMove, Piece } from "@/lib/production/shape";
+
+import { useOpenPiece } from "./open-piece";
 
 const STATUS: Record<Piece["status"], { word: string; dot: string }> = {
   active: { word: "Active", dot: "bg-violet" },
@@ -38,6 +38,7 @@ export function PieceRow({
   /** A scrapped piece in the lost colour with an icon, apart from amber's "being redone". Partner pages only. */
   lostLook?: boolean;
 }) {
+  const openPiece = useOpenPiece().open;
   const status = STATUS[piece.status];
   const lost = lostLook && piece.status === "scrapped";
   return (
@@ -51,15 +52,14 @@ export function PieceRow({
           className="after:-inset-3.5"
         />
       )}
-      <Link
-        href={`?piece=${piece.id}`}
-        scroll={false}
-        prefetch={false}
+      <button
+        type="button"
+        onClick={() => openPiece(piece.id)}
         aria-label={`History of ${piece.label}`}
-        className="inline-flex min-h-11 items-center font-medium tabular-nums underline-offset-2 hover:underline"
+        className="inline-flex min-h-11 cursor-pointer items-center font-medium tabular-nums underline-offset-2 hover:underline"
       >
         {piece.label}
-      </Link>
+      </button>
       {lost ? (
         <span data-look="lost" className="inline-flex items-center gap-1.5 font-medium text-lost-ink">
           <CircleX aria-hidden className="size-3.5 shrink-0" />

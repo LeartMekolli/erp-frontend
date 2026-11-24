@@ -76,9 +76,10 @@ test("a failed piece goes back with its defect, and its history shows it", async
   await expect(stripStep(page, 1)).toContainText("2 being redone");
 
   await section(page, /^Finish\b/).click();
-  await page.getByRole("link", { name: "History of 7/12" }).click();
-  await expect(page).toHaveURL(/\?piece=/);
+  await page.getByRole("button", { name: "History of 7/12" }).click();
   const panel = page.getByRole("dialog", { name: "Piece 7/12" });
+  await expect(panel).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/orders/${orderId(1048)}$`));
   await expect(panel.getByText("Being redone at Finish")).toBeVisible();
   await expect(panel.getByText("Pitted on the inside")).toBeVisible();
   await panel.getByRole("button", { name: "Close" }).click();

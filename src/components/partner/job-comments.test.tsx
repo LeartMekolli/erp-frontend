@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { useMe } from "@/components/session/session-gate";
 
@@ -13,18 +13,11 @@ import { renderAs } from "../../../test/render";
 import { JobPage } from "./job-page";
 import { PartnerNoticeProvider } from "./notice";
 
-const navigation = vi.hoisted(() => ({ search: "" }));
 vi.mock("next/navigation", () => ({
   usePathname: () => `/partner-portal/${NORTHCAST_ID}/jobs/${RING_BAND_JOB_ID}`,
   useParams: () => ({ partnerId: NORTHCAST_ID, groupId: RING_BAND_JOB_ID }),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(navigation.search),
 }));
-
-beforeEach(() => {
-  // An old link to the Comments tab: it opens Pieces, with the comments in the side column.
-  navigation.search = "tab=comments";
-});
 
 function WithMe({ children }: { children: ReactNode }) {
   return useMe().data ? children : null;
@@ -65,7 +58,6 @@ describe("comments on the Job page", () => {
     expect(screen.queryByText(/will read this\.$/)).not.toBeInTheDocument();
     unmount();
 
-    navigation.search = "";
     renderPage();
     await userEvent.click(await screen.findByRole("checkbox", { name: "Select 4/12" }));
     const bar = await screen.findByRole("region", { name: "Selected pieces" });

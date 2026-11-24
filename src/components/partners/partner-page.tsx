@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { notFound, useParams, useRouter, useSearchParams } from "next/navigation";
+import { notFound, useParams } from "next/navigation";
+import { useState } from "react";
 
 import { LoadFailure } from "@/components/data/load-failure";
 import { PayoutsTab } from "@/components/earnings/payouts-tab";
@@ -10,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isApiProblem } from "@/lib/api/problem";
 import { can } from "@/lib/auth/permissions";
+import { useArrivalNote } from "@/lib/navigation/arrival-note";
 import { usePartner } from "@/lib/partners/queries";
 
 import { JobOrderRef } from "./job-order-ref";
@@ -22,7 +24,10 @@ type Tab = "jobs" | "payouts";
 
 const TAB_LABEL: Record<Tab, string> = { jobs: "Jobs", payouts: "Payouts" };
 
-/** `/partners/:id`: one workshop and what it is owed. The tab is in the address (`?tab=payouts`); Jobs has no parameter. */
+/**
+ * `/partners/:id`: one workshop and what it is owed. The tab is kept on the page, so a reload opens Jobs;
+ * a payout notification opens Payouts through an arrival note, the address staying plain.
+ */
 export function PartnerPage() {
   const { id } = useParams<{ id: string }>();
   const { data: me } = useMe();
@@ -43,14 +48,12 @@ function Partner({ id, canReadPayments }: { id: string; canReadPayments: boolean
   const query = usePartner(id);
   // Read beside the partner, not after it: the numbers, Pay and both tabs share this one poll.
   const money = usePartnerMoney(id);
-  const router = useRouter();
-  const search = useSearchParams();
-
   const tabs: Tab[] = canReadPayments ? ["jobs", "payouts"] : ["jobs"];
-  const tab: Tab = canReadPayments && search.get("tab") === "payouts" ? "payouts" : "jobs";
-  const choose = (value: string) => {
-    router.replace(value === "payouts" ? `/partners/${id}?tab=payouts` : `/partners/${id}`, { scroll: false });
-  };
+  const [tab, setTab] = useState<Tab>("jobs");
+  useArrivalNote(`/partners/${id}`, (note) => {
+    if (note.partnerTab === "payouts" && canReadPayments) setTab("payouts");
+  });
+  const choose = (value: string) => setTab(value as Tab);
 
   if (query.isPending) {
     return (

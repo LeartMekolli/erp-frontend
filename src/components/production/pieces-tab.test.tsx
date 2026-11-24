@@ -16,6 +16,8 @@ import { fakeState } from "../../../test/fake-erp-api/state";
 import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
+import { OpenPieceProvider } from "./open-piece";
+
 const GROUP = groupIdOf(1048, 0);
 
 const order = (number: number): Order => fakeState().orders.all().find((o) => o.number === number)!;
@@ -27,7 +29,11 @@ function groupBody(id = GROUP) {
 }
 
 function WithMe({ children }: { children: ReactNode }) {
-  return useMe().data ? <StepSelectionProvider>{children}</StepSelectionProvider> : null;
+  return useMe().data ? (
+    <OpenPieceProvider>
+      <StepSelectionProvider>{children}</StepSelectionProvider>
+    </OpenPieceProvider>
+  ) : null;
 }
 
 function renderTabs(user = STAFF) {

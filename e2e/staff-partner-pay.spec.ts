@@ -98,8 +98,8 @@ test("a failed payout notice opens the partner's payouts", async ({ page }) => {
     .getByRole("button", { name: /A payout to Northcast Foundry failed/ })
     .click();
 
-  await expect(page).toHaveURL(`${PARTNER_PAGE}?tab=payouts`);
   await expect(page.getByRole("tab", { name: "Payouts" })).toHaveAttribute("aria-selected", "true");
+  await expect(page).toHaveURL(PARTNER_PAGE);
   await expect(page.getByText("Failed. Owed again", { exact: true })).toBeVisible();
   await expect(page.getByText("The payment provider said: The partner's bank refused the transfer")).toBeVisible();
   await expectNoSideScroll(page);

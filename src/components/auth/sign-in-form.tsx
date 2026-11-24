@@ -9,7 +9,9 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { clearSignedOut } from "@/lib/auth/auth-note";
 import { safeNext } from "@/lib/auth/safe-next";
+import { leaveArrivalNote, useArrivalNote, type ArrivalNote } from "@/lib/navigation/arrival-note";
 import { clientSession } from "@/lib/session/client-session";
 
 import { OFFLINE, UNKNOWN, UNREACHABLE } from "./copy";
@@ -37,6 +39,25 @@ const REASONS: Record<string, string> = {
   revoked: "Your session ended. Sign in again to continue.",
   "signed-out": "You've signed out.",
 };
+
+/**
+ * `/sign-in`, always at its plain address. Why this tab was signed out, the page to go back to and the
+ * workspace come in an arrival note, left by the tab that moved here, so each tab keeps its own and a
+ * reload starts clean. Without one, the workspace is the last one this browser used.
+ */
+export function SignIn({ lastWorkspace }: { lastWorkspace: string }) {
+  const [note, setNote] = useState<ArrivalNote>({});
+  useArrivalNote("/sign-in", setNote);
+  // Keyed, so a note that arrives after the form is up fills the workspace in too.
+  return (
+    <SignInForm
+      key={note.workspace ?? ""}
+      initialWorkspace={note.workspace ?? lastWorkspace}
+      next={note.next ?? null}
+      reason={note.reason ?? null}
+    />
+  );
+}
 
 export function SignInForm({
   initialWorkspace,
@@ -81,6 +102,8 @@ export function SignInForm({
           expiresAt: body.expiresAt,
           signedInAt: body.signedInAt,
         });
+        // Signed in again: the sign-in page may send this browser home once more.
+        clearSignedOut();
         // Stays locked: the page is about to change.
         router.push(safeNext(next, body.destination.path));
         return;
@@ -125,7 +148,10 @@ export function SignInForm({
           error={errors.password?.message}
           after={
             <Link
-              href={workspace ? `/forgot-password?workspace=${encodeURIComponent(workspace)}` : "/forgot-password"}
+              href="/forgot-password"
+              onClick={() => {
+                if (workspace) leaveArrivalNote("/forgot-password", { workspace });
+              }}
               className="inline-flex min-h-11 items-center self-end text-caption font-medium underline underline-offset-[3px]"
             >
               Forgot password?

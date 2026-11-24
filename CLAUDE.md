@@ -12,6 +12,15 @@
 - Agents never install packages and never run project tooling. This covers, at minimum: `pnpm`, `npm`, `yarn`, `npx`, `node`, `next`, `tsc`, `eslint`, `vitest`, `playwright`, `openapi-typescript`, `shadcn`, and any other package manager, build, codegen or test command — in any form, including through a script alias. Write out the exact command, hand it to the user, stop, wait for their output, then continue. This applies inside plans and specs too: a step whose body is one of these commands is a step the user executes. A hook enforces it.
 - The project uses npm (`package-lock.json`). Every command handed to the user uses `npm run <script>` from `package.json` (`test`, `typecheck`, `lint`, `e2e`, `dev`, `build`) or `npx`, never `pnpm` or `yarn`.
 
+## Addresses
+
+- An address is only the page: `/orders`, `/orders/:id`, `/partner-portal/:partnerId/earnings`. AMI never adds a `?` part (`?tab=`, `?piece=`, `?range=`, `?next=`…) or a `#` part to an address it builds.
+- What's on screen (a tab, filters, sort, a date range, an open panel) is kept in React state. A reload opens the page's default view; the Orders list set the pattern.
+- A one-time message for the next page (why someone was signed out, where to go after sign-in, "just placed", the tab a notification opens) is handed over out of sight with `leaveArrivalNote` (`src/lib/navigation/arrival-note.ts`). It lives in the tab's memory, so each tab keeps its own and a reload starts clean. The only cookie is the shared "just signed out" mark (`src/lib/auth/auth-note.ts`), which tells the sign-in page's server half not to send someone home; it carries nothing per tab.
+- Something that truly needs its own link gets its own path (`/partners/:id/payouts`), and only after the user agrees.
+- Only addresses made outside AMI carry a `?` or `#` part: the payment provider's `?onboarding=`, erp-api's `#token=` and `/<workspace>/...` email links. AMI reads them once and moves to the plain address.
+- ESLint enforces it: no `useSearchParams`, no page `searchParams` and no `?key=` in a string, outside tests and the one page that receives `?onboarding=`.
+
 ## Tests and CI
 
 - Never make a flaky test pass by working around it: no raised timeouts, extra retries or waits added to cover a race. A longer timeout is fine only for genuinely slow work (a real upload in the fake API), with a comment saying why.

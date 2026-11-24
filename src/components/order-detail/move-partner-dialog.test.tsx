@@ -4,6 +4,7 @@ import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { OpenPieceProvider } from "@/components/production/open-piece";
 import { useMe } from "@/components/session/session-gate";
 import type { Order } from "@/lib/api/schema-types";
 
@@ -18,7 +19,11 @@ import { StaffSelectionProvider as StepSelectionProvider } from "./staff-pieces"
 const order = (number: number): Order => fakeState().orders.all().find((o) => o.number === number)!;
 
 function WithMe({ children }: { children: ReactNode }) {
-  return useMe().data ? <StepSelectionProvider>{children}</StepSelectionProvider> : null;
+  return useMe().data ? (
+    <OpenPieceProvider>
+      <StepSelectionProvider>{children}</StepSelectionProvider>
+    </OpenPieceProvider>
+  ) : null;
 }
 
 let moves: unknown[] = [];

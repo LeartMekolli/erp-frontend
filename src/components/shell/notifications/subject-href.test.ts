@@ -34,7 +34,7 @@ describe("subjectHref", () => {
     ["material", "/catalog"],
     ["credit_campaign", "/payments"],
   ])("sends a %s notification to %s", (type, href) => {
-    expect(subjectHref(entryFor({ type, id: "x" }), everything)).toBe(href);
+    expect(subjectHref(entryFor({ type, id: "x" }), everything)).toEqual({ href });
   });
 
   it.each(["tenant", "file_version", "something_new"])("has nowhere to send a %s notification", (type) => {
@@ -42,19 +42,19 @@ describe("subjectHref", () => {
   });
 
   it("has nowhere to send a notification about a section the person can't open", () => {
-    expect(subjectHref(entryFor({ type: "order", id: "x" }), ordersOnly)).toBe("/orders/x");
+    expect(subjectHref(entryFor({ type: "order", id: "x" }), ordersOnly)).toEqual({ href: "/orders/x" });
     expect(subjectHref(entryFor({ type: "partner", id: "x" }), ordersOnly)).toBeNull();
   });
 
-  it("opens the failed payout's partner", () => {
+  it("opens the failed payout's partner on Payouts, with a plain address", () => {
     const entry = entryFor({ type: "payout", id: "pay1" }, { payout: { id: "pay1", partner_id: "p1" }, event_key: "payout.failed" });
-    expect(subjectHref(entry, everything)).toBe("/partners/p1?tab=payouts");
+    expect(subjectHref(entry, everything)).toEqual({ href: "/partners/p1", note: { partnerTab: "payouts" } });
     expect(subjectHref(entry, ordersOnly)).toBeNull();
   });
 
   it("opens Partners for the weekly reminder", () => {
     const entry = entryFor({ type: "tenant", id: "t1" }, { event_key: "payouts.reminder" });
-    expect(subjectHref(entry, everything)).toBe("/partners");
+    expect(subjectHref(entry, everything)).toEqual({ href: "/partners" });
     expect(subjectHref(entry, ordersOnly)).toBeNull();
   });
 });

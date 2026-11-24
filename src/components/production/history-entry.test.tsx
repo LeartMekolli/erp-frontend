@@ -16,6 +16,7 @@ import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
 import { HistoryEntry } from "./history-entry";
+import { OpenPieceProvider, useOpenPiece } from "./open-piece";
 
 const stepRef = (n: number, key: string, name: string) => ({ id: `b0b0b0b0-0000-4000-8000-00000000000${n}`, key, name });
 const PRINT = stepRef(1, "print", "Print");
@@ -73,7 +74,16 @@ function steps(): StepRules[] {
 }
 
 function WithMe({ children }: { children: ReactNode }) {
-  return useMe().data ? <StaffPhotoLinks>{children}</StaffPhotoLinks> : null;
+  return useMe().data ? (
+    <OpenPieceProvider>
+      <StaffPhotoLinks>{children}</StaffPhotoLinks>
+    </OpenPieceProvider>
+  ) : null;
+}
+
+/** Which piece the page would show in its panel. */
+function OpenId() {
+  return <p data-testid="open-piece">{useOpenPiece().id ?? "none"}</p>;
 }
 
 /** A staff action as erp-api sends it, shown through staff's translation. */
@@ -85,6 +95,7 @@ function renderEntry(shown: LineAction, user = STAFF) {
       <ol>
         <HistoryEntry action={entry} steps={steps()} />
       </ol>
+      <OpenId />
     </WithMe>,
   );
 }
@@ -104,13 +115,16 @@ describe("HistoryEntry", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
-  it("opens the pieces as links", async () => {
+  it("lists the pieces, each opening its own story", async () => {
     renderEntry(action());
     await userEvent.click(await screen.findByRole("button", { name: "9 pieces" }));
     const list = screen.getByRole("list", { name: "Pieces in this move" });
-    expect(within(list).getByRole("link", { name: "1/10" })).toHaveAttribute("href", `?piece=${pieceId(1)}`);
-    expect(within(list).getAllByRole("link")).toHaveLength(9);
+    expect(within(list).getAllByRole("button")).toHaveLength(9);
+    expect(within(list).queryByRole("link")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "9 pieces" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("open-piece")).toHaveTextContent("none");
+    await userEvent.click(within(list).getByRole("button", { name: "1/10" }));
+    expect(screen.getByTestId("open-piece")).toHaveTextContent(pieceId(1));
   });
 
   it("shows a fail with everything that came with it", async () => {

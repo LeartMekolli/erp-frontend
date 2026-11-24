@@ -4,6 +4,7 @@ import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
+import { OpenPieceProvider } from "@/components/production/open-piece";
 import { useMe } from "@/components/session/session-gate";
 import type { Group, WorkflowVersion } from "@/lib/api/schema-types";
 
@@ -39,7 +40,11 @@ function withStep(key: string, fields: Partial<Group["steps"][number]>): Group {
 }
 
 function WithMe({ children }: { children: ReactNode }) {
-  return useMe().data ? <StepSelectionProvider>{children}</StepSelectionProvider> : null;
+  return useMe().data ? (
+    <OpenPieceProvider>
+      <StepSelectionProvider>{children}</StepSelectionProvider>
+    </OpenPieceProvider>
+  ) : null;
 }
 
 function renderTab(shown: Group = group()) {

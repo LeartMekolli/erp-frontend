@@ -64,6 +64,45 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    // An address is only the page: no `?` part (CLAUDE.md § Addresses). What's on screen is React state;
+    // a one-time message travels in an arrival note or the auth note. Only the return from payout setup
+    // reads the `?onboarding=` the payment provider adds. `no-restricted-syntax`, because the blocks above
+    // set `no-restricted-imports` and flat config would let one replace the other.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["**/*.test.ts", "**/*.test.tsx", "src/components/partner/earnings/payout-return.tsx"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ImportSpecifier[imported.name='useSearchParams']",
+          message: "Keep what's on screen in React state, not the address (CLAUDE.md § Addresses).",
+        },
+        {
+          selector: "Identifier[name='searchParams']",
+          message: "Pages don't read a `?` part: pass one-time messages with an arrival note or the auth note (CLAUDE.md § Addresses).",
+        },
+        {
+          selector: "Literal[value=/\\?[A-Za-z0-9_-]+=/]",
+          message: "An address is only the page: no `?key=` part (CLAUDE.md § Addresses).",
+        },
+        {
+          selector: "TemplateElement[value.raw=/\\?[A-Za-z0-9_-]+=/]",
+          message: "An address is only the page: no `?key=` part (CLAUDE.md § Addresses).",
+        },
+        {
+          // A path ending in `?`, with the query added after it: `/sign-in?${params}`. Starting with `/`, so
+          // a question in the copy ("Forgot password?") isn't caught.
+          selector: "Literal[value=/^\\/\\S*\\?$/]",
+          message: "An address is only the page: no `?` part (CLAUDE.md § Addresses).",
+        },
+        {
+          selector: "TemplateElement[value.raw=/^\\/\\S*\\?$/]",
+          message: "An address is only the page: no `?` part (CLAUDE.md § Addresses).",
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

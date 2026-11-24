@@ -157,7 +157,7 @@ test("move bar and dialog: accessible and fit the screen", async ({ page }) => {
 
 test("piece history: accessible and fits the screen", async ({ page }) => {
   await openOrder(page);
-  await page.getByRole("link", { name: "History of 1/12" }).click();
+  await page.getByRole("button", { name: "History of 1/12" }).click();
   await expect(page.getByRole("dialog", { name: "Piece 1/12" })).toBeVisible();
   await expectAccessibleAndFits(page);
 });
@@ -311,7 +311,7 @@ test("partner job tabs: accessible and fits the screen", async ({ page }) => {
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
   // A piece's story, from the right or up from the bottom.
-  await page.getByRole("link", { name: "History of 3/12" }).click();
+  await page.getByRole("button", { name: "History of 3/12" }).click();
   await expect(page.getByRole("dialog", { name: "Piece 3/12" })).toBeVisible();
   await expectAccessibleAndFits(page);
   await page.getByRole("dialog", { name: "Piece 3/12" }).getByRole("button", { name: "Close" }).click();

@@ -26,8 +26,8 @@ async function openJobs(page: Page) {
   await expect(page.getByRole("heading", { level: 1, name: "Jobs" })).toBeVisible();
   await expect(offersTile(page)).toContainText("2 offers");
   await offersTile(page).getByRole("button", { name: "Review" }).click();
-  await expect(page).toHaveURL(`${JOBS}?tab=offers`);
   await expect(jobList(page).getByRole("tab", { name: "Offers 2" })).toHaveAttribute("aria-selected", "true");
+  await expect(page).toHaveURL(JOBS);
 }
 
 test("a partner accepts an offer", async ({ page }) => {
@@ -151,7 +151,7 @@ test("a partner fails a piece into rework", async ({ page }) => {
   await dialog.getByRole("button", { name: "Fail", exact: true }).click();
 
   await expect(page.getByText("1 piece failed at Finish.")).toBeVisible();
-  const row = page.getByRole("listitem").filter({ has: page.getByRole("link", { name: "History of 4/12" }) });
+  const row = page.getByRole("listitem").filter({ has: page.getByRole("button", { name: "History of 4/12" }) });
   await expect(row).toContainText("Being redone");
 });
 
@@ -175,18 +175,19 @@ test("a partner comments and staff read it", async ({ page }) => {
   await expect(comments.getByRole("listitem").filter({ hasText: "Polished, packing tomorrow." })).toContainText(PARTNER.name);
 });
 
-test("the tab is in the address", async ({ page }) => {
+test("the tabs switch on the page, and the address stays plain", async ({ page }) => {
   await openJobs(page);
   await jobList(page).getByRole("tab", { name: "In progress" }).click();
-  await expect(page).toHaveURL(JOBS);
   await expect(row(page, "Ring band · Brass")).toBeVisible();
+  await expect(page).toHaveURL(JOBS);
 
   await jobList(page).getByRole("tab", { name: "Finished" }).click();
-  await expect(page).toHaveURL(`${JOBS}?tab=finished`);
   await expect(row(page, "Earring · Silver 925")).toBeVisible();
   await expect(row(page, "Ring band · Brass")).toHaveCount(0);
+  await expect(page).toHaveURL(JOBS);
 
+  // A reload opens the default tab.
   await page.reload();
-  await expect(jobList(page).getByRole("tab", { name: "Finished" })).toHaveAttribute("aria-selected", "true");
-  await expect(row(page, "Earring · Silver 925")).toBeVisible();
+  await expect(jobList(page).getByRole("tab", { name: "In progress" })).toHaveAttribute("aria-selected", "true");
+  await expect(row(page, "Ring band · Brass")).toBeVisible();
 });

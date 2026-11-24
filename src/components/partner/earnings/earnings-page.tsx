@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { OwedTotals } from "@/components/earnings/owed-totals";
 import { PayoutsTab } from "@/components/earnings/payouts-tab";
@@ -10,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isApiProblem } from "@/lib/api/problem";
 import { partnerRoleAtLeast, usePartnerRole } from "@/lib/auth/permissions";
+import { useArrivalNote } from "@/lib/navigation/arrival-note";
 import { partnerEarningsKeys, usePartnerOwed, usePartnerPayouts, usePayoutAccount } from "@/lib/partner-earnings/queries";
 import { useOwedCatchUp } from "@/lib/payouts/poll";
 
@@ -39,29 +39,20 @@ type Tab = "payouts" | "jobs";
 
 const TAB_LABEL: Record<Tab, string> = { payouts: "Payouts", jobs: "Jobs" };
 
-const onboardingOf = (value: string | null): Onboarding => (value === "done" || value === "expired" ? value : null);
-
 /**
  * `/partner-portal/:partnerId/earnings`: what the workshop is owed, its payout account, its payouts and
  * its jobs' pay. Admins and owners only: a member, or anyone erp-api answers 403, reads why instead,
- * and a member's page asks erp-api for nothing. `?onboarding=` (from the provider, through
- * `/payout-account`) is read once and dropped from the address, so a reload doesn't check again.
+ * and a member's page asks erp-api for nothing. How payout setup ended comes in an arrival note from
+ * `/payout-account` (`payout-return.tsx`) and is used up, so a reload doesn't say it again.
  */
 export function EarningsPage() {
   const { partnerId, suspended } = useWorkshop();
-  const router = useRouter();
-  const search = useSearchParams();
-  const [onboarding] = useState(() => onboardingOf(search.get("onboarding")));
+  const [onboarding, setOnboarding] = useState<Onboarding>(null);
+  useArrivalNote(partnerHref(partnerId, "earnings"), (note) => {
+    if (note.onboarding) setOnboarding(note.onboarding);
+  });
   const role = usePartnerRole(partnerId);
   const allowed = role !== undefined && partnerRoleAtLeast(role, "admin");
-
-  useEffect(() => {
-    if (!search.has("onboarding")) return;
-    const rest = new URLSearchParams(search);
-    rest.delete("onboarding");
-    const query = rest.toString();
-    router.replace(`${partnerHref(partnerId, "earnings")}${query ? `?${query}` : ""}`, { scroll: false });
-  }, [search, router, partnerId]);
 
   const payouts = usePartnerPayouts(partnerId, allowed);
   const owed = usePartnerOwed(partnerId, { enabled: allowed, poll: payouts.anyPending });
@@ -70,11 +61,9 @@ export function EarningsPage() {
 
   useOwedCatchUp(payouts.anyPending, partnerEarningsKeys.owed(partnerId));
 
-  const tab: Tab = search.get("tab") === "jobs" ? "jobs" : "payouts";
-  const choose = (value: string) => {
-    const earnings = partnerHref(partnerId, "earnings");
-    router.replace(value === "jobs" ? `${earnings}?tab=jobs` : earnings, { scroll: false });
-  };
+  // Kept on the page: a reload opens Payouts.
+  const [tab, setTab] = useState<Tab>("payouts");
+  const choose = (value: string) => setTab(value as Tab);
 
   return (
     <>

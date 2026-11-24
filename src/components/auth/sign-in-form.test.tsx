@@ -3,10 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type JsonBodyType } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { SIGNED_OUT_COOKIE, clearSignedOut, markSignedOut } from "@/lib/auth/auth-note";
+import { leaveArrivalNote, resetArrivalNotes } from "@/lib/navigation/arrival-note";
 import { clientSession } from "@/lib/session/client-session";
+
+import { takeArrivalNote } from "../../../test/arrival-note";
 import { server } from "../../../test/msw";
 
-import { SignInForm } from "./sign-in-form";
+import { SignIn, SignInForm } from "./sign-in-form";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace: push }) }));
@@ -40,7 +44,13 @@ beforeEach(() => {
   startSession.mockReset();
   vi.spyOn(clientSession(), "startSession").mockImplementation(startSession);
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  clearSignedOut();
+  resetArrivalNotes();
+});
+
+const markedSignedOut = () => document.cookie.split("; ").includes(`${SIGNED_OUT_COOKIE}=1`);
 
 describe("SignInForm", () => {
   it("has the fields in the agreed tab order", async () => {
@@ -144,10 +154,62 @@ describe("SignInForm", () => {
     expect(screen.getByRole("status")).toHaveTextContent(copy);
   });
 
-  it("links to the password reset with the workspace filled in", async () => {
+  it("links to the plain password reset page, handing it the workspace out of sight", async () => {
     const user = userEvent.setup();
     render(<SignInForm initialWorkspace="" next={null} reason={null} />);
     await user.type(screen.getByLabelText("Workspace"), "demo");
-    expect(screen.getByRole("link", { name: "Forgot password?" })).toHaveAttribute("href", "/forgot-password?workspace=demo");
+    const link = screen.getByRole("link", { name: "Forgot password?" });
+    expect(link).toHaveAttribute("href", "/forgot-password");
+    await user.click(link);
+    expect(takeArrivalNote("/forgot-password")).toEqual({ workspace: "demo" });
+  });
+
+  it("leaves no note for the reset page when the workspace is empty", async () => {
+    const user = userEvent.setup();
+    render(<SignInForm initialWorkspace="" next={null} reason={null} />);
+    await user.click(screen.getByRole("link", { name: "Forgot password?" }));
+    expect(takeArrivalNote("/forgot-password")).toBeNull();
+  });
+
+  it("clears the signed-out mark once signed in", async () => {
+    markSignedOut();
+    answerLogin(200, { ...tokens, destination: { kind: "staff", path: "/" } });
+    render(<SignInForm initialWorkspace="" next="/orders/1" reason="idle" />);
+    await fillAndSubmit();
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/orders/1"));
+    expect(markedSignedOut()).toBe(false);
+  });
+});
+
+describe("SignIn", () => {
+  it("shows why this tab was signed out and goes back where it was, from the note it was left", async () => {
+    leaveArrivalNote("/sign-in", { reason: "idle", next: "/orders/1", workspace: "sandbox" });
+    answerLogin(200, { ...tokens, destination: { kind: "staff", path: "/" } });
+    render(<SignIn lastWorkspace="demo" />);
+    expect(screen.getByRole("status")).toHaveTextContent("You were signed out after 3 hours without activity.");
+    expect(screen.getByLabelText("Workspace")).toHaveValue("sandbox");
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Email"), "owner@demo.example.test");
+    await user.type(screen.getByLabelText("Password"), "fake-password-1");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/orders/1"));
+  });
+
+  it("uses the note once: opening the page again shows no message", () => {
+    leaveArrivalNote("/sign-in", { reason: "signed-out" });
+    const { unmount } = render(<SignIn lastWorkspace="" />);
+    expect(screen.getByRole("status")).toHaveTextContent("You've signed out.");
+    unmount();
+
+    render(<SignIn lastWorkspace="demo" />);
+    expect(screen.queryByText("You've signed out.")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Workspace")).toHaveValue("demo");
+  });
+
+  it("ignores a note left for another page", () => {
+    leaveArrivalNote("/forgot-password", { workspace: "sandbox" });
+    render(<SignIn lastWorkspace="demo" />);
+    expect(screen.getByLabelText("Workspace")).toHaveValue("demo");
   });
 });

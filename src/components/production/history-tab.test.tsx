@@ -12,6 +12,7 @@ import { STAFF } from "../../../test/fake-erp-api/seed";
 import { renderAs } from "../../../test/render";
 
 import { HistoryTab } from "./history-tab";
+import { OpenPieceProvider } from "./open-piece";
 
 const NOW = Date.parse("2026-11-12T15:00:00Z");
 const FINISH = { id: "b0b0b0b0-0000-4000-8000-000000000002", key: "finish", name: "Finish" };
@@ -39,7 +40,11 @@ function pass(n: number, created_at: string): MoveEntry {
 }
 
 function WithMe({ children }: { children: ReactNode }) {
-  return useMe().data ? <StaffPhotoLinks>{children}</StaffPhotoLinks> : null;
+  return useMe().data ? (
+    <OpenPieceProvider>
+      <StaffPhotoLinks>{children}</StaffPhotoLinks>
+    </OpenPieceProvider>
+  ) : null;
 }
 
 function renderHistory(items: MoveEntry[], cameAt: string | null, hasNextPage = false) {
