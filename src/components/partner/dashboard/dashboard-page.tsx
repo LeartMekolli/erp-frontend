@@ -18,6 +18,9 @@ import { useWorkshop } from "../use-workshop";
 
 import { CountTiles } from "./count-tiles";
 import { OffersTile } from "./offers-tile";
+import { RatingsTile } from "./ratings-tile";
+import { ScoreTile } from "./score-tile";
+import { StepsTile } from "./steps-tile";
 import { WorkloadTile } from "./workload-tile";
 
 /**
@@ -65,6 +68,9 @@ export function PartnerDashboardPage() {
         <WorkloadTile partnerId={partnerId} range={range} words={words} />
         <OffersTile />
         <CountTiles summary={summary.data} words={words} />
+        <ScoreTile />
+        <StepsTile summary={summary.data} />
+        <RatingsTile />
       </div>
     </>
   );
