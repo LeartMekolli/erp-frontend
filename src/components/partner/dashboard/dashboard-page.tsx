@@ -8,6 +8,7 @@ import { Freshness } from "@/components/data/freshness";
 import { greeting } from "@/components/dashboard/greeting";
 import { RangePicker } from "@/components/dashboard/range-picker";
 import { useMe } from "@/components/session/session-gate";
+import { partnerRoleAtLeast, usePartnerRole } from "@/lib/auth/permissions";
 import { DEFAULT_CHOICE, rangeWords, resolveRange, type RangeChoice } from "@/lib/dashboard/range";
 import { dayKey } from "@/lib/format/dates";
 import { useFormat } from "@/lib/format/use-format";
@@ -16,10 +17,13 @@ import { useNow } from "@/lib/use-now";
 
 import { useWorkshop } from "../use-workshop";
 
+import { ActivityTile } from "./activity-tile";
 import { CountTiles } from "./count-tiles";
+import { EarnedTile, PayoutsTile } from "./money-tiles";
 import { OffersTile } from "./offers-tile";
 import { RatingsTile } from "./ratings-tile";
 import { ScoreTile } from "./score-tile";
+import { SetupTile } from "./setup-tile";
 import { StepsTile } from "./steps-tile";
 import { WorkloadTile } from "./workload-tile";
 
@@ -39,6 +43,8 @@ export function PartnerDashboardPage() {
   const summary = usePartnerSummary(partnerId, range);
   const capacity = usePartnerCapacity(partnerId, range);
   const busy = summary.isPlaceholderData || capacity.isPlaceholderData;
+  const role = usePartnerRole(partnerId);
+  const seesMoney = role !== undefined && partnerRoleAtLeast(role, "admin");
   const firstName = me ? (me.user.name.split(" ")[0] ?? me.user.name) : null;
 
   return (
@@ -64,13 +70,17 @@ export function PartnerDashboardPage() {
           busy && "opacity-60",
         )}
       >
-        {/* Reading order on a phone: the hero, the offers, then the counts. */}
+        {/* Reading order on a phone: the hero, the offers, then the counts. Below admin there is no money at all. */}
         <WorkloadTile partnerId={partnerId} range={range} words={words} />
         <OffersTile />
+        {seesMoney && summary.data ? <EarnedTile summary={summary.data} words={words} /> : null}
         <CountTiles summary={summary.data} words={words} />
         <ScoreTile />
         <StepsTile summary={summary.data} />
         <RatingsTile />
+        {seesMoney ? <PayoutsTile /> : null}
+        <SetupTile />
+        <ActivityTile wide={!seesMoney} />
       </div>
     </>
   );
