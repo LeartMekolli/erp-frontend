@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useId, useState, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useState, type PointerEvent, type ReactNode } from "react";
 import { localPoint } from "@visx/event";
 import { scaleLinear, scaleTime } from "@visx/scale";
 import { LinePath } from "@visx/shape";
-import { Threshold } from "@visx/threshold";
 import { bisector } from "d3-array";
-import { curveMonotoneX, curveStepAfter } from "d3-shape";
+import { curveLinear, curveStepAfter } from "d3-shape";
 
 import { useMediaQuery } from "@/lib/use-media-query";
 
@@ -24,7 +23,12 @@ export type CapacityPoint = {
   load: number;
   /** The capacity as the partner set it; null or 0 draws no line at that point. */
   capacity: number | null;
+  /** The unit the capacity was set in that day, for `capacityWords`; a step can change it. */
+  period?: "day" | "week";
 };
+
+/** A capacity in words, in the day's unit: "45 a day", "200 a week". */
+type CapacityWords = (capacity: number, period?: CapacityPoint["period"]) => string;
 
 const MARGIN = { left: 40, right: 12, top: 22, bottom: 26 };
 const OVER = "▲ Over your capacity";
@@ -74,26 +78,56 @@ function layoutFor(points: CapacityPoint[], { width, height }: Size) {
 
 type Layout = ReturnType<typeof layoutFor>;
 
-/** The capacity's first label, and one wherever it changes: "Capacity 45 a day", "raised to 50 on 5 Nov". */
-function capacityLabels(points: CapacityPoint[], capacityWords: (capacity: number) => string, dateLabel: (iso: string) => string) {
+/**
+ * The capacity's first label, and one wherever it changes: "Capacity 45 a day", "raised to 50 on 5 Nov",
+ * or "changed to 200 a week on 5 Nov" when the unit changed, as a number alone would compare a day with a week.
+ */
+function capacityLabels(points: CapacityPoint[], capacityWords: CapacityWords, dateLabel: (iso: string) => string) {
   const labels: { index: number; text: string }[] = [];
-  let last: number | null = null;
+  let last: CapacityPoint | null = null;
   points.forEach((p, index) => {
     if (!hasCapacity(p)) {
       last = null;
       return;
     }
-    if (last === null) labels.push({ index, text: `Capacity ${capacityWords(p.capacity)}` });
-    else if (p.capacity !== last) labels.push({ index, text: `${p.capacity > last ? "raised" : "lowered"} to ${p.capacity} on ${dateLabel(p.at)}` });
-    last = p.capacity;
+    if (last === null || last.capacity === null) labels.push({ index, text: `Capacity ${capacityWords(p.capacity, p.period)}` });
+    else if (p.period !== last.period) labels.push({ index, text: `changed to ${capacityWords(p.capacity, p.period)} on ${dateLabel(p.at)}` });
+    else if (p.capacity !== last.capacity)
+      labels.push({ index, text: `${p.capacity > last.capacity ? "raised" : "lowered"} to ${p.capacity} on ${dateLabel(p.at)}` });
+    last = p;
   });
   return labels;
 }
 
-function tooltipRows(p: CapacityPoint, capacityWords: (capacity: number) => string, tone: "light" | "dark"): ChartTooltipRow[] {
+/**
+ * Where the load is over the capacity, one shape per day to the next: the capacity holds from a day to
+ * the next (a step, as drawn) and the load runs straight between them, so the tint's edges are the lines'.
+ */
+function tintsOf(points: CapacityPoint[], x: (p: CapacityPoint) => number, y: (value: number) => number): string[] {
+  const tints: string[] = [];
+  for (let i = 0; i + 1 < points.length; i += 1) {
+    const from = points[i]!;
+    const to = points[i + 1]!;
+    if (!hasCapacity(from) || !hasCapacity(to)) continue;
+    const c = from.capacity;
+    if (from.load <= c && to.load <= c) continue;
+    const [x0, x1] = [x(from), x(to)];
+    const crossAt = x0 + ((c - from.load) / (to.load - from.load)) * (x1 - x0);
+    const corners =
+      from.load > c && to.load > c
+        ? [[x0, c], [x0, from.load], [x1, to.load], [x1, c]]
+        : from.load > c
+          ? [[x0, c], [x0, from.load], [crossAt, c]]
+          : [[crossAt, c], [x1, to.load], [x1, c]];
+    tints.push(`M${corners.map(([px, value]) => `${px},${y(value!)}`).join("L")}Z`);
+  }
+  return tints;
+}
+
+function tooltipRows(p: CapacityPoint, capacityWords: CapacityWords, tone: "light" | "dark"): ChartTooltipRow[] {
   const rows: ChartTooltipRow[] = [
     { key: TONES[tone].load, label: "Waiting", value: String(p.load), strong: true },
-    { key: TONES[tone].capacity, label: "Capacity", value: hasCapacity(p) ? capacityWords(p.capacity) : "None set" },
+    { key: TONES[tone].capacity, label: "Capacity", value: hasCapacity(p) ? capacityWords(p.capacity, p.period) : "None set" },
   ];
   if (isOver(p)) rows.push({ label: OVER, value: "" });
   return rows;
@@ -112,13 +146,12 @@ function Drawing({
   size: Size;
   points: CapacityPoint[];
   tone: "light" | "dark";
-  capacityWords: (capacity: number) => string;
+  capacityWords: CapacityWords;
   dateLabel: (iso: string) => string;
   active: number | null;
   onActive: (index: number | null) => void;
   onSize: (size: Size) => void;
 }) {
-  const thresholdId = useId();
   const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const colours = TONES[tone];
   const { width, height } = size;
@@ -133,6 +166,7 @@ function Drawing({
   const x = (p: CapacityPoint) => xScale(toDate(p.at));
   const capacityRuns = runsOf(points, (p) => (hasCapacity(p) ? { x: x(p), y: yScale(p.capacity) } : null));
   const labels = capacityLabels(points, capacityWords, dateLabel);
+  const tints = tintsOf(points, x, yScale);
   const drawIn = reduceMotion ? undefined : { strokeDasharray: 1, strokeDashoffset: 0, animation: DRAW_IN };
 
   const activePoint = active !== null ? points[active] : undefined;
@@ -163,21 +197,9 @@ function Drawing({
           </text>
         ))}
 
-        {points.some(isOver) ? (
-          <Threshold<CapacityPoint>
-            id={thresholdId}
-            data={points}
-            defined={hasCapacity}
-            x={x}
-            y0={(p) => yScale(p.load)}
-            y1={(p) => yScale(p.capacity ?? 0)}
-            clipAboveTo={0}
-            clipBelowTo={innerHeight}
-            curve={curveMonotoneX}
-            aboveAreaProps={{ fill: CHART.status.collect, fillOpacity: colours.tint }}
-            belowAreaProps={{ fill: "transparent" }}
-          />
-        ) : null}
+        {tints.map((d) => (
+          <path key={d} data-tint="" d={d} fill={CHART.status.collect} fillOpacity={colours.tint} />
+        ))}
 
         {capacityRuns.map((run, i) =>
           run.length > 1 ? (
@@ -219,7 +241,7 @@ function Drawing({
             data={points}
             x={x}
             y={(p) => yScale(p.load)}
-            curve={curveMonotoneX}
+            curve={curveLinear}
             fill="none"
             stroke={colours.load}
             strokeWidth={2.5}
@@ -288,7 +310,7 @@ export function CapacityChart({
 }: {
   label: string;
   points: CapacityPoint[];
-  capacityWords: (capacity: number) => string;
+  capacityWords: CapacityWords;
   dateLabel: (iso: string) => string;
   height: number;
   tone: "light" | "dark";
@@ -331,7 +353,7 @@ export function CapacityChart({
         rows: points.map((p) => [
           dateLabel(p.at),
           isOver(p) ? `${p.load} (${OVER})` : String(p.load),
-          hasCapacity(p) ? capacityWords(p.capacity) : "None set",
+          hasCapacity(p) ? capacityWords(p.capacity, p.period) : "None set",
         ]),
       }}
     >

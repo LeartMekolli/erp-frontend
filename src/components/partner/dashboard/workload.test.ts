@@ -38,8 +38,8 @@ describe("workloadSteps", () => {
     const [casting] = workloadSteps(rows);
     expect(casting).toMatchObject({ key: "casting", name: "Casting" });
     expect(casting!.points).toEqual([
-      { at: "2026-11-01", load: 10, capacity: 50 },
-      { at: "2026-11-02", load: 46, capacity: 50 },
+      { at: "2026-11-01", load: 10, capacity: 50, period: "day" },
+      { at: "2026-11-02", load: 46, capacity: 50, period: "day" },
     ]);
     expect(casting!.latest).toEqual(rows[4]);
   });

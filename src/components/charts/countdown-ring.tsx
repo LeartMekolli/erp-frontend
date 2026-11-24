@@ -18,7 +18,8 @@ export function CountdownRing({ left, text }: { left: number; text: string }) {
   return (
     <span className="relative inline-grid shrink-0 place-items-center" style={{ width: SIZE, height: SIZE }}>
       <svg width={SIZE} height={SIZE} aria-hidden="true" className="absolute inset-0">
-        <circle cx={SIZE / 2} cy={SIZE / 2} r={radius} fill="none" stroke={CHART.lilac} strokeWidth={STROKE} />
+        {/* White, not lilac: the ring sits on the lilac Offers tile, where a lilac track would vanish. */}
+        <circle data-track="" cx={SIZE / 2} cy={SIZE / 2} r={radius} fill="none" stroke={CHART.surface} strokeWidth={STROKE} />
         {share > 0 ? (
           <circle
             data-arc=""

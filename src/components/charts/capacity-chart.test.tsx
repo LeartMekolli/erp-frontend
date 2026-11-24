@@ -74,6 +74,47 @@ describe("CapacityChart", () => {
     expect(svg.textContent?.match(/Capacity /g)).toHaveLength(1);
   });
 
+  it("tints over capacity against the capacity as drawn, a step per day", () => {
+    const { container } = renderChart([
+      { at: "2026-11-03", load: 40, capacity: 45 },
+      { at: "2026-11-04", load: 47, capacity: 45 },
+      // Capacity rises to 50 from here: 48 is under it, so the day after the change isn't over.
+      { at: "2026-11-05", load: 48, capacity: 50 },
+      { at: "2026-11-06", load: 44, capacity: 50 },
+    ]);
+    // Until 5 Nov the capacity is 45, and the load crosses it between the 3rd and the 4th and stays over to the 5th.
+    expect(container.querySelectorAll("[data-tint]")).toHaveLength(2);
+    expect(container.querySelectorAll("[data-over]")).toHaveLength(1);
+  });
+
+  it("words each day's capacity in that day's unit, and says so when the unit changes", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <CapacityChart
+        label="Waiting for Plating"
+        points={[
+          { at: "2026-11-03", load: 40, capacity: 45, period: "day" },
+          { at: "2026-11-04", load: 41, capacity: 45, period: "day" },
+          { at: "2026-11-05", load: 150, capacity: 200, period: "week" },
+        ]}
+        capacityWords={(capacity, period) => `${capacity} a ${period ?? "day"}`}
+        dateLabel={dateLabel}
+        height={220}
+        tone="dark"
+        width={760}
+      />,
+    );
+    const svg = container.querySelector("svg")!;
+    expect(svg.textContent).toContain("Capacity 45 a day");
+    expect(svg.textContent).toContain("changed to 200 a week on 11-05");
+    expect(screen.getAllByRole("row")[1]!.textContent).toContain("45 a day");
+    expect(screen.getAllByRole("row")[3]!.textContent).toContain("200 a week");
+
+    await user.tab();
+    await user.keyboard("{ArrowRight}");
+    expect(container.querySelector('[aria-live="polite"]')?.textContent).toContain("Capacity45 a day");
+  });
+
   it("draws no capacity, and never says over, where the capacity is 0", async () => {
     const user = userEvent.setup();
     const { container } = renderChart([

@@ -33,7 +33,7 @@ export function workloadSteps(rows: CapacityRow[]): WorkloadStep[] {
       step = { key, name, points: [], latest: row };
       steps.set(key, step);
     }
-    step.points.push({ at: row.date, load: row.load, capacity: row.capacity });
+    step.points.push({ at: row.date, load: row.load, capacity: row.capacity, period: row.capacity_period });
     step.latest = row;
   }
   return [...steps.values()].toSorted((a, b) => {

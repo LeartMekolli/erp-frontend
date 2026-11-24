@@ -64,11 +64,16 @@ export function OffersTile() {
         </p>
       ) : offers.isError && offers.items.length === 0 ? (
         <div className="mt-3 flex flex-col items-start gap-2">
-          <p className="text-sm text-ink-2">Couldn&apos;t load your offers.</p>
+          <p className="text-sm text-[#4d4570]">Couldn&apos;t load your offers.</p>
           <Button variant="secondary" onClick={() => void offers.refetch()}>
             Try again
           </Button>
         </div>
+      ) : shown.length === 0 && offers.hasNextPage ? (
+        // Every offer loaded so far has run out; `useOffersWaiting` is reading the next page.
+        <p role="status" className="mt-3 text-sm text-[#4d4570]">
+          Looking for more offers…
+        </p>
       ) : shown.length === 0 ? (
         <p className="mt-3 text-sm text-[#4d4570]">No offers waiting.</p>
       ) : (

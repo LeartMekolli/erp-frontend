@@ -8,6 +8,7 @@ import { CapacityChart } from "@/components/charts/capacity-chart";
 import { LoadFailure } from "@/components/data/load-failure";
 import { bucketLabel } from "@/components/dashboard/headline";
 import { Tile } from "@/components/dashboard/tile";
+import type { CapacityRow } from "@/lib/api/schema-types";
 import { usePartnerCapacity, type DayRange } from "@/lib/partner-dashboard/queries";
 
 import { capacityWords, workloadSteps } from "./workload";
@@ -15,12 +16,14 @@ import { capacityWords, workloadSteps } from "./workload";
 const CHIP = "min-h-8 rounded-full px-3 text-caption text-[#b9b6c9] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b7aaff] pointer-coarse:min-h-11";
 const NOTHING_KEPT = "No workload recorded yet. AMI records it each night for the steps you can do.";
 const dayLabel = (iso: string) => bucketLabel(iso, "day");
+/** The calendar day before `day` (`YYYY-MM-DD`). */
+const dayBefore = (day: string) => new Date(Date.parse(`${day}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
 
 /**
  * The dark hero: pieces waiting at the busiest step against the capacity the partner set, as erp-api
  * keeps it each night. Chips switch the step. It's the same for every role: nothing here is money.
  */
-export function WorkloadTile({ partnerId, range, words }: { partnerId: string; range: DayRange; words: string }) {
+export function WorkloadTile({ partnerId, range, words, today }: { partnerId: string; range: DayRange; words: string; today: string }) {
   const capacity = usePartnerCapacity(partnerId, range);
   const [picked, setPicked] = useState<string | null>(null);
   const steps = capacity.data ? workloadSteps(capacity.data) : [];
@@ -53,8 +56,11 @@ export function WorkloadTile({ partnerId, range, words }: { partnerId: string; r
   }
 
   const { latest } = shown;
-  const asSet = (amount: number) => capacityWords(amount, latest.capacity_period);
+  // Each day in the unit it was set in that day: a step can change from per day to per week.
+  const asSet = (amount: number, period?: CapacityRow["capacity_period"]) => capacityWords(amount, period ?? latest.capacity_period);
   const over = latest.capacity > 0 && latest.load > latest.capacity;
+  // erp-api keeps the row at 02:00 UTC, so yesterday's can be the newest; older than that, the figure says its day.
+  const on = latest.date < dayBefore(today) ? ` on ${dayLabel(latest.date)}` : "";
 
   return (
     <Tile
@@ -82,7 +88,7 @@ export function WorkloadTile({ partnerId, range, words }: { partnerId: string; r
     >
       <p className="mt-3 text-[clamp(40px,13vw,58px)] leading-none font-semibold tracking-[-0.04em] tabular-nums">{latest.load}</p>
       <p className="mt-2 text-sm text-[#b9b6c9]">
-        {latest.capacity > 0 ? `pieces waiting · capacity ${asSet(latest.capacity)}` : "pieces waiting · no capacity set"}
+        {latest.capacity > 0 ? `pieces waiting${on} · capacity ${asSet(latest.capacity)}` : `pieces waiting${on} · no capacity set`}
       </p>
       {over ? <p className="mt-1 text-sm font-semibold text-[#ffd27a]">▲ Over your capacity</p> : null}
       <div className="mt-3 min-w-0 flex-1">

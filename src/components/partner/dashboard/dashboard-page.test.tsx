@@ -77,9 +77,12 @@ describe("PartnerDashboardPage", () => {
     const bento = container.querySelector("[aria-busy]");
     expect(bento).toHaveAttribute("aria-busy", "true");
     expect(bento).toHaveClass("opacity-60");
-    expect(screen.getByRole("region", { name: /^Waiting for Casting/ })).toBeInTheDocument();
+    // The titles keep the words of the range whose numbers are still on screen.
+    expect(screen.getByRole("region", { name: "Waiting for Casting · last 30 days" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Finished · last 30 days" })).toBeInTheDocument();
     await waitFor(() => expect(container.querySelector("[aria-busy]")).toHaveAttribute("aria-busy", "false"));
     expect(screen.getByRole("region", { name: /^Waiting for Casting · last 7 days$/ })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Finished · last 7 days" })).toBeInTheDocument();
   });
 
   it("says no workload is recorded yet for a workshop with no steps", async () => {

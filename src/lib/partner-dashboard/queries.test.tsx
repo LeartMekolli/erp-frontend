@@ -29,6 +29,23 @@ describe("partner dashboard queries", () => {
     expect(result.current.data?.range).toMatchObject(SECOND);
   });
 
+  it("never keeps one workshop's range on another's page", async () => {
+    let partnerId = NORTHCAST_ID;
+    const summary = renderHookAs(PARTNER_TWO_SHOPS, () => usePartnerSummary(partnerId, FIRST));
+    await waitFor(() => expect(summary.result.current.data?.jobs_finished).toBe(14));
+    const capacity = renderHookAs(PARTNER_TWO_SHOPS, () => usePartnerCapacity(partnerId, FIRST), summary.client);
+    await waitFor(() => expect(capacity.result.current.isSuccess).toBe(true));
+
+    partnerId = LAYERLINE_ID;
+    summary.rerender();
+    capacity.rerender();
+
+    expect(summary.result.current.data).toBeUndefined();
+    expect(capacity.result.current.data).toBeUndefined();
+    await waitFor(() => expect(summary.result.current.data?.jobs_finished).toBe(2));
+    await waitFor(() => expect(capacity.result.current.data?.[0]?.step_type.key).toBe("print"));
+  });
+
   it("asks for the capacity history of the range", async () => {
     const urls: string[] = [];
     server.events.on("request:start", ({ request }) => {

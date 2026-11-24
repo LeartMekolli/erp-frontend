@@ -1,8 +1,9 @@
 import { screen, within } from "@testing-library/react";
+import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RING_OFFER_ID } from "../../../../test/fake-erp-api/partner-jobs";
-import { LAYERLINE_ID, NORTHCAST_ADMIN, NORTHCAST_ID, NORTHCAST_MEMBER, PARTNER, PARTNER_TWO_SHOPS, type FakeUser } from "../../../../test/fake-erp-api/seed";
+import { FAKE_API_URL, LAYERLINE_ID, NORTHCAST_ADMIN, NORTHCAST_ID, NORTHCAST_MEMBER, PARTNER, PARTNER_TWO_SHOPS, type FakeUser } from "../../../../test/fake-erp-api/seed";
 import { fakeState } from "../../../../test/fake-erp-api/state";
 import { server } from "../../../../test/msw";
 import { renderAs, WithMe } from "../../../../test/render";
@@ -107,6 +108,44 @@ describe("the dashboard by role", () => {
     renderPage(NORTHCAST_ADMIN);
     const activity = await screen.findByRole("region", { name: "Recent activity" });
     expect(await within(activity).findByText("Nothing yet.")).toBeInTheDocument();
+  });
+
+  it("gives each tile that reads the summary its own error and Try again when it fails", async () => {
+    server.use(
+      http.get(`${FAKE_API_URL}/partner-portal/partners/:partnerId/summary`, () =>
+        HttpResponse.json({ type: "about:blank", title: "Error", status: 500, detail: "The summary broke" }, { status: 500, headers: { "content-type": "application/problem+json" } }),
+      ),
+    );
+    renderPage(NORTHCAST_ADMIN);
+    for (const name of ["Finished · last 30 days", "Pieces at your steps now", "Earned · last 30 days"]) {
+      const tile = await screen.findByRole("region", { name });
+      expect(await within(tile).findByRole("button", { name: "Try again" })).toBeInTheDocument();
+      expect(within(tile).queryByRole("status")).toBeNull();
+    }
+    // The rest of the dashboard stays.
+    expect(await screen.findByRole("img", { name: "Score 4.4 out of 5" })).toBeInTheDocument();
+  });
+
+  it("waits for the person's role before laying out the tiles, so nothing moves when it arrives", async () => {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      http.get(`${FAKE_API_URL}/partner-portal/me`, async () => {
+        await gate;
+        return HttpResponse.json(fakeState().partnerMe(NORTHCAST_ADMIN));
+      }),
+    );
+    renderPage(NORTHCAST_ADMIN);
+    expect(await screen.findByText("Loading the dashboard…")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Recent activity" })).toBeNull();
+
+    release();
+
+    const activity = await screen.findByRole("region", { name: "Recent activity" });
+    expect(activity).toHaveClass("lg:col-span-6");
+    expect(screen.getByRole("region", { name: "Latest payouts" })).toBeInTheDocument();
   });
 
   it("tells a suspended workshop it can only read", async () => {

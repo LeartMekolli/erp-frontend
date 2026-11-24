@@ -1,6 +1,6 @@
 "use client";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryKey } from "@tanstack/react-query";
 
 import { partnerApi } from "@/lib/api/client";
 import { problemFrom } from "@/lib/api/problem";
@@ -18,6 +18,14 @@ export const partnerDashboardKeys = {
 
 /** How often the dashboard is read again while someone has it open, as the staff dashboard. */
 const DASHBOARD_POLL_MS = 60_000;
+
+/**
+ * While another range loads, the last one stays on screen, but only the same workshop's: a person working
+ * for two never sees one workshop's numbers, even dimmed, on the other's page.
+ */
+function sameWorkshopsLast<T>(partnerId: string) {
+  return (previous: T | undefined, query: { queryKey: QueryKey } | undefined) => (query?.queryKey[1] === partnerId ? previous : undefined);
+}
 
 /** A range of days, both included, in the workspace's calendar. */
 export interface DayRange {
@@ -40,7 +48,7 @@ export function usePartnerSummary(partnerId: string, { from, to }: DayRange) {
       if (!data) throw problemFrom(error, response);
       return data;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: sameWorkshopsLast<PartnerSummary>(partnerId),
     refetchInterval: DASHBOARD_POLL_MS,
     refetchOnWindowFocus: true,
   });
@@ -57,7 +65,7 @@ export function usePartnerCapacity(partnerId: string, { from, to }: DayRange) {
       if (!data) throw problemFrom(error, response);
       return data.data;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: sameWorkshopsLast<CapacityRow[]>(partnerId),
     refetchOnWindowFocus: true,
   });
 }

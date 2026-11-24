@@ -14,13 +14,15 @@ import { usePartnerJobCounts } from "@/lib/partner-dashboard/queries";
 
 import { useWorkshop } from "../use-workshop";
 
+import type { SummaryFailure } from "./summary-failure";
+
 const FIGURE = "mt-1 text-[34px] leading-tight font-semibold tracking-[-0.04em] tabular-nums";
 
 /**
  * Four counts: jobs in progress, late and due in 2 working days right now (they ignore the range), and
  * jobs finished in the range against the range before. Late says so in words, never by colour alone.
  */
-export function CountTiles({ summary, words }: { summary: PartnerSummary | undefined; words: string }) {
+export function CountTiles({ summary, words, failure }: { summary: PartnerSummary | undefined; words: string; failure?: SummaryFailure }) {
   const { partnerId } = useWorkshop();
   const counts = usePartnerJobCounts(partnerId);
 
@@ -73,6 +75,8 @@ export function CountTiles({ summary, words }: { summary: PartnerSummary | undef
               tone="light"
             />
           </>
+        ) : failure ? (
+          <LoadFailure error={failure.error} fallback="Couldn't count the jobs you finished." onRetry={failure.retry} />
         ) : (
           <p role="status" className="mt-1 text-sm text-ink-2">
             Loading…

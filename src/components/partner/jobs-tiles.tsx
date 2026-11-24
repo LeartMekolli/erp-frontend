@@ -2,6 +2,7 @@
 
 import { ArrowUpRight, Clock } from "lucide-react";
 import Link from "next/link";
+import { useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { PartnerJob } from "@/lib/api/schema-types";
@@ -9,7 +10,7 @@ import { partnerRoleAtLeast, usePartnerRole } from "@/lib/auth/permissions";
 import { owedNow } from "@/lib/partner-earnings/labels";
 import { usePartnerOwed } from "@/lib/partner-earnings/queries";
 import { timeLeft } from "@/lib/partner-jobs/labels";
-import { PAGE_SIZE, usePartnerJobs } from "@/lib/partner-jobs/queries";
+import { usePartnerJobs } from "@/lib/partner-jobs/queries";
 import { useNow } from "@/lib/use-now";
 
 import { partnerHref } from "./nav";
@@ -46,14 +47,21 @@ export function JobsTiles({ onReviewOffers }: { onReviewOffers: () => void }) {
 
 /**
  * The offers still open, and how many there are as words: exact when every offer is loaded, else a
- * floor (`20+`). The same query as the Offers tab, so the tile, the tab and the table agree.
+ * floor counted from the open ones loaded (`20+`). The same query as the Offers tab, so the tile, the tab
+ * and the table agree. When every offer loaded so far has run out but there are more, it reads on, so
+ * a count never sits next to an empty list.
  */
 export function useOffersWaiting() {
   const { partnerId } = useWorkshop();
   const offers = usePartnerJobs(partnerId, "offered");
   const now = useNow(TICK_MS);
   const waiting = offers.items.filter((job) => open(job, now));
-  const count = offers.hasNextPage ? `${PAGE_SIZE}+` : String(waiting.length);
+  const count = offers.hasNextPage ? `${waiting.length}+` : String(waiting.length);
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = offers;
+  const allRunOut = offers.isSuccess && waiting.length === 0;
+  useEffect(() => {
+    if (allRunOut && hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [allRunOut, hasNextPage, isFetchingNextPage, fetchNextPage]);
   return { offers, waiting, count, now };
 }
 

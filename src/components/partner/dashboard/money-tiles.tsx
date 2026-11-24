@@ -17,14 +17,26 @@ import { usePartnerOwed, usePartnerPayouts } from "@/lib/partner-earnings/querie
 import { partnerHref } from "../nav";
 import { useWorkshop } from "../use-workshop";
 
+import type { SummaryFailure } from "./summary-failure";
+
 /** How many payouts the tile lists. */
 const SHOWN = 3;
 
 /**
  * What the workshop earned in the range against the range before, then what it's owed now and what's
  * still being earned. Only when erp-api sent the money: it leaves it out below admin, and so does this.
+ * The page mounts it only for admins and owners, so a failed summary shows its error here rather than
+ * a gap where the money was.
  */
-export function EarnedTile({ summary, words }: { summary: PartnerSummary; words: string }) {
+export function EarnedTile({ summary, words, failure }: { summary: PartnerSummary | undefined; words: string; failure?: SummaryFailure }) {
+  if (!summary) {
+    if (!failure) return null;
+    return (
+      <Tile span={4} title={`Earned · ${words}`}>
+        <LoadFailure error={failure.error} fallback="Couldn't load what you earned." onRetry={failure.retry} />
+      </Tile>
+    );
+  }
   const { earned, previous_earned: previous, currency } = summary;
   if (earned === undefined || currency === undefined) return null;
   return <Earned earned={earned} previous={previous ?? null} currency={currency} range={summary.range} words={words} />;

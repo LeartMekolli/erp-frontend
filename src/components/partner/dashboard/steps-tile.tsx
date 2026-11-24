@@ -2,18 +2,23 @@ import { Columns } from "@/components/charts/columns";
 import { compactAxis } from "@/components/charts/scale-helpers";
 import { CHART } from "@/components/charts/tokens";
 import { Tile } from "@/components/dashboard/tile";
+import { LoadFailure } from "@/components/data/load-failure";
 import type { PartnerSummary } from "@/lib/api/schema-types";
+
+import type { SummaryFailure } from "./summary-failure";
 
 /**
  * The pieces at each of the workshop's steps right now, one column per step in erp-api's order. Late
  * pieces are part of each column, so they aren't stacked on it (a status colour is never a series):
  * they're named in words under the chart, as on the staff dashboard.
  */
-export function StepsTile({ summary, width }: { summary: PartnerSummary | undefined; width?: number }) {
+export function StepsTile({ summary, width, failure }: { summary: PartnerSummary | undefined; width?: number; failure?: SummaryFailure }) {
   const late = summary?.steps.filter((step) => step.late > 0) ?? [];
   return (
     <Tile span={5} title="Pieces at your steps now" aside={<span className="text-caption text-ink-2">live</span>}>
-      {!summary ? (
+      {!summary && failure ? (
+        <LoadFailure error={failure.error} fallback="Couldn't load the pieces at your steps." onRetry={failure.retry} />
+      ) : !summary ? (
         <p role="status" className="mt-3 text-sm text-ink-2">
           Loading your steps…
         </p>

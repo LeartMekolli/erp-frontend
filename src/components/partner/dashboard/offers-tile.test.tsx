@@ -120,6 +120,32 @@ describe("OffersTile", () => {
     expect(item.querySelector("[data-arc]")).toBeNull();
   });
 
+  it("words a failure in the tile's own ink, which keeps AA contrast on lilac", async () => {
+    server.use(http.get(JOBS_URL, () => HttpResponse.json({ type: "about:blank", title: "Error", status: 500 }, { status: 500, headers: { "content-type": "application/problem+json" } })));
+    renderTile();
+    const failure = await within(await tile()).findByText("Couldn't load your offers.");
+    // `text-ink-2` (#67647a) is about 4.3:1 on the lilac gradient's darker end; the tile's #4d4570 is over 7:1.
+    expect(failure).toHaveClass("text-[#4d4570]");
+    expect(failure).not.toHaveClass("text-ink-2");
+  });
+
+  it("looks past a page of offers that have all run out, so the count and the list agree", async () => {
+    const expired = Array.from({ length: 20 }, (_, i) => ({ ...offer(i + 1, -1), offered_at: new Date(NOW - 3 * HOUR).toISOString() }));
+    server.use(
+      http.get(JOBS_URL, ({ request }) =>
+        new URL(request.url).searchParams.get("cursor")
+          ? HttpResponse.json({ data: [offer(30, 5, "Late find")], next_cursor: null })
+          : HttpResponse.json({ data: expired, next_cursor: "20" }),
+      ),
+    );
+    renderTile();
+    const region = await tile();
+    // The job's name, not the Open link's hidden "Late find".
+    expect(await within(region).findByText("Late find", { selector: "p" })).toBeInTheDocument();
+    expect(region).toHaveTextContent(/Offers waiting for you\s*1/);
+    expect(region).not.toHaveTextContent("No offers waiting.");
+  });
+
   it("says so when no offer is waiting", async () => {
     offersAre([]);
     renderTile();
