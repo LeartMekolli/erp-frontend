@@ -9,7 +9,7 @@ import { FAKE_API_URL, NO_ACCESS, STAFF, WORKFLOW_READER } from "../../../../tes
 import { server } from "../../../../test/msw";
 import { renderAs } from "../../../../test/render";
 
-import { ProductionPage } from "./production-page";
+import { ProductionPage } from "@/components/staff-production/production-page";
 
 const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), notFound: vi.fn() }));
 vi.mock("next/navigation", () => ({

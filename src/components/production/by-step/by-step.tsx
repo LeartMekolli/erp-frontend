@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Freshness } from "@/components/data/freshness";
 import { LoadFailure } from "@/components/data/load-failure";
@@ -12,6 +12,7 @@ import type { LineSelection } from "@/lib/production/line-selection";
 import { useStepLines, useWorkflowCounts, useWorkflows } from "@/lib/production/queries";
 
 import { LinesTable } from "./lines-table";
+import { MoveFlow } from "./move-flow";
 import { StepTabs } from "./step-tabs";
 import { ByStepToolbar } from "./toolbar";
 
@@ -47,7 +48,7 @@ function Skeleton() {
  * By step: one product type's steps, and the order lines waiting at the picked one. It opens on the product
  * type with the most pieces in progress and that type's busiest step.
  */
-export function ByStep({ canMove }: { canMove: boolean }) {
+export function ByStep({ canMove, canUpload }: { canMove: boolean; canUpload: boolean }) {
   const { data: me } = useMe();
   const [view, setView] = useState<View>(DEFAULT_VIEW);
   const [selection, setSelection] = useState<LineSelection | null>(null);
@@ -68,6 +69,27 @@ export function ByStep({ canMove }: { canMove: boolean }) {
   const filter = { workflowId: workflowId ?? "", stepKey: stepKey ?? "", q: view.q, sort: view.sort, workable: view.workable };
   // The table's query, shared through the cache: Freshness reports on it.
   const lines = useStepLines(filter, workflowId !== null && stepKey !== null);
+  // What the last move did, or why the selection changed, announced politely.
+  const [notice, setNotice] = useState<string | null>(null);
+  // Bumped when the selection goes from under the person: focus then lands on the step, not on the page.
+  const [focusSteps, setFocusSteps] = useState(0);
+  const stepsRef = useRef<HTMLDivElement>(null);
+
+  // Every picked line has left the listed ones (someone else moved them on): the selection goes with them.
+  const left = selection !== null && lines.isSuccess && !lines.isFetching && !lines.items.some((line) => selection.lines.has(line.group.id));
+  if (left) {
+    setSelection(null);
+    setFocusSteps((n) => n + 1);
+  }
+
+  useEffect(() => {
+    const steps = stepsRef.current;
+    if (focusSteps === 0 || !steps) return;
+    // The tabs from 768 px; the picker on a phone, where the tabs are hidden and can't take focus.
+    const current = steps.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+    current?.focus();
+    if (!current || document.activeElement !== current) steps.querySelector<HTMLElement>("select")?.focus();
+  }, [focusSteps]);
 
   if (!me) return null;
 
@@ -146,17 +168,40 @@ export function ByStep({ canMove }: { canMove: boolean }) {
           />
         </div>
         {steps && (
-          <div className="pb-2 md:pb-0">
-            <StepTabs steps={steps} value={step ? stepKey : null} onChange={(key) => change({ stepKey: key })} />
+          <div ref={stepsRef} className="pb-2 md:pb-0">
+            <StepTabs
+              steps={steps}
+              value={step ? stepKey : null}
+              onChange={(key) => {
+                setSelection(null);
+                change({ stepKey: key });
+              }}
+            />
           </div>
         )}
       </div>
-      {step && lines.dataUpdatedAt > 0 && (
-        <div className="flex justify-end px-4 pt-2">
-          <Freshness query={lines} />
-        </div>
+      <div className="flex items-center justify-between gap-3 px-4 pt-2">
+        <p role="status" className="text-caption font-medium text-ink">
+          {notice}
+        </p>
+        {step && lines.dataUpdatedAt > 0 && <Freshness query={lines} />}
+      </div>
+      {/* On phones the bar is fixed to the screen's bottom: room for it under the last row. */}
+      <div id="production-lines" className={selection ? "pb-36 md:pb-0" : undefined}>
+        {body}
+      </div>
+      {canMove && selection && workflowId && step && (
+        <MoveFlow
+          mayUpload={canUpload}
+          workflowId={workflowId}
+          stepKey={step.key}
+          selection={selection}
+          lines={lines.items}
+          onSelection={setSelection}
+          onNotice={setNotice}
+          onMoved={() => setFocusSteps((n) => n + 1)}
+        />
       )}
-      <div id="production-lines">{body}</div>
     </Panel>
   );
 }
