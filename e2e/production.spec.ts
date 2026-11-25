@@ -118,7 +118,11 @@ test.describe("with a keyboard only", () => {
   test("picks a step, ticks a line and reaches Pass", async ({ page }) => {
     await openProduction(page);
     await page.getByRole("heading", { level: 1, name: "Production" }).click();
-    await tabTo(page, async () => (await focused(page)).role === "tab");
+    // The Board and By step tabs come first; the step tabs follow.
+    await tabTo(page, async () => {
+      const at = await focused(page);
+      return at.role === "tab" && at.label.startsWith("Print");
+    });
     await expect(page.getByRole("tab", { name: /^Print/ })).toBeFocused();
     await page.keyboard.press("ArrowRight");
     await expect(page.getByRole("tab", { name: /^Finish/ })).toBeFocused();
