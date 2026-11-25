@@ -94,6 +94,22 @@ export type Group = JsonOk<"/workflow/groups/{id}", "get">;
 /** One piece in a work list, from `GET /workflow/work-orders`. */
 export type WorkOrderListItem = JsonOk<"/workflow/work-orders", "get">["data"][number];
 
+/** `GET /workflow/workflows`: one product type's workflow and its current version (null before one is published). */
+export type WorkflowSummary = JsonOk<"/workflow/workflows", "get">["data"][number];
+
+/** `GET /workflow/work-orders/counts`: the active pieces at each step of one workflow. */
+export type StepCounts = JsonOk<"/workflow/work-orders/counts", "get">;
+export type StepCount = StepCounts["steps"][number];
+
+/** `GET /workflow/work-orders/groups`: one order line at a step, with how many of its pieces are there. */
+export type StepGroup = JsonOk<"/workflow/work-orders/groups", "get">["data"][number];
+
+/** Whose a line is and when it's due; `order`, `claim` and `customer` are left out without the permission to read them. */
+export type GroupSummary = StepGroup["group"];
+
+/** How a work list is sorted: due soonest, due latest, priority band, or as the pieces started. */
+export type PieceSort = "due_on" | "-due_on" | "priority" | "started";
+
 /** `GET /workflow/work-orders/{id}`: one piece, its path and every move it has made. */
 export type WorkOrderDetail = JsonOk<"/workflow/work-orders/{id}", "get">;
 export type Transition = WorkOrderDetail["history"][number];

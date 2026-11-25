@@ -9,6 +9,7 @@
 import type {
   ActionPiece,
   Group,
+  GroupSummary,
   LineAction,
   MoveBody,
   MoveHistory,
@@ -16,20 +17,48 @@ import type {
   PartnerMoveHistory,
   PartnerWorkOrder,
   paths,
+  PieceSort,
+  StepCounts,
+  StepGroup,
   Transition,
   WorkflowStep,
+  WorkflowSummary,
   WorkflowVersion,
   WorkOrderDetail,
   WorkOrderListItem,
 } from "../../src/lib/api/schema-types";
 
 import type { Answer, FieldError, Page } from "./orders";
-import { groupIdOf, uuid } from "./orders-seed";
+import { addDays, groupIdOf, seedOrders, uuid, type StoredOrder } from "./orders-seed";
 
 type MoveResponse = paths["/workflow/moves"]["post"]["responses"][200]["content"]["application/json"];
 type PieceStatus = WorkOrderListItem["status"];
 
 const WORKFLOW = { id: uuid("b2b2b2b2", 1), name: "Standard production", version: 1 };
+const WORKFLOW_KEY = "standard";
+
+/** Who is asking: what they may read decides what a line's summary shows (erp-api `group-summary.ts:91-92`). */
+export interface Viewer {
+  permissions: readonly string[];
+}
+
+/** Staff who may read orders and customers and move pieces: the fake's default caller. */
+const EVERYTHING: Viewer = { permissions: ["order.read", "customer.read", "workflow.move"] };
+
+/** A job's own date is this many days before the order's promise. */
+const PARTNER_BUFFER_DAYS = 2;
+
+const SORTS: readonly PieceSort[] = ["priority", "due_on", "-due_on", "started"];
+
+/** The work list's filters, as erp-api reads them (`piece-filters.ts`). */
+interface Filters {
+  workflowId: string | null;
+  q: string | null;
+  workable: boolean;
+  sort: PieceSort;
+}
+
+const ORDER_NUMBER = /^#?(\d{1,9})$/;
 const ACTOR = { id: uuid("55555555", 1), name: "Ana Ruiz" };
 const NO_EVIDENCE = { min_photos: 0, comment_required: false };
 const HOUR = 3_600_000;
@@ -163,7 +192,8 @@ function seedPieces(now: number): StoredPiece[] {
     const add = (fields: Pick<StoredPiece, "status" | "stepKey" | "history"> & { inRework?: boolean }) => {
       const number = pieces.length + 1;
       pieces.push({
-        id: uuid("c0c0c0c0", group.number * 1000 + number),
+        // A line after an order's first gets its own range, or 1049's three lines would share ids.
+        id: uuid("c0c0c0c0", group.position * 100_000_000 + group.number * 1000 + number),
         groupId,
         number,
         quantity,
@@ -264,8 +294,28 @@ function answerOf(step: WorkflowStep | undefined, answer: NonNullable<MoveBody["
 
 const invalid = (path: string, message: string): Answer<never> => ({ ok: false, status: 400, errors: [{ path, message }] });
 
-const LIST_KEYS = ["limit", "cursor", "group_id", "step_key", "status", "workable"];
+const FILTER_KEYS = ["workflow_id", "q", "workable"];
+const LIST_KEYS = ["limit", "cursor", "group_id", "step_key", "status", "sort", ...FILTER_KEYS];
+const COUNTS_KEYS = FILTER_KEYS;
+const GROUPS_KEYS = ["step_key", "sort", "limit", "cursor", ...FILTER_KEYS];
 const MOVES_KEYS = ["limit", "cursor", "only"];
+
+/** The filters in `params`, or the 400 erp-api answers: an unknown key, sort or `workable` value, or an empty search. */
+function readFilters(params: URLSearchParams, keys: string[]): Filters | Answer<never> {
+  const extra = [...params.keys()].find((key) => !keys.includes(key));
+  if (extra) return invalid(extra, `Unrecognized key: "${extra}"`);
+  const sort = params.get("sort") ?? "priority";
+  if (!SORTS.includes(sort as PieceSort)) return invalid("sort", `Invalid option: expected one of ${SORTS.join(", ")}`);
+  const workable = params.get("workable");
+  if (workable !== null && workable !== "true") return invalid("workable", 'Invalid input: expected "true"');
+  const q = params.get("q");
+  if (q !== null && q.trim() === "") return invalid("q", "Too small: expected string to have >=1 characters");
+  return { workflowId: params.get("workflow_id"), q: q?.trim() ?? null, workable: workable === "true", sort: sort as PieceSort };
+}
+
+const isAnswer = (value: Filters | Answer<never>): value is Answer<never> => "ok" in value;
+
+const can = (viewer: Viewer, permission: string) => viewer.permissions.includes(permission);
 
 type Row = { piece: StoredPiece; move: Transition };
 
@@ -372,12 +422,75 @@ export function createProductionStore(now: () => number) {
     created_at: piece.createdAt,
   });
 
-  const listItem = (piece: StoredPiece): WorkOrderListItem => {
+  const today = () => new Date(now()).toISOString().slice(0, 10);
+
+  /** Each grouped line's order, from the same seed as the orders store, promised relative to the day it was made. */
+  const lineOf = new Map<string, { order: StoredOrder; line: StoredOrder["lines"][number] }>();
+  for (const order of seedOrders(today(), now())) {
+    for (const line of order.lines) if (line.group_id) lineOf.set(line.group_id, { order, line });
+  }
+
+  /** The pieces of the line still on its path. */
+  const live = (groupId: string) => members(groupId).filter((piece) => piece.status === "active");
+
+  /** A line's summary as `viewer` may read it (erp-api `group-summary.ts:87-98`): the order and customer only with their reads. */
+  const summary = (groupId: string, viewer: Viewer): GroupSummary => {
+    const { order, line } = lineOf.get(groupId)!;
+    const active = live(groupId);
+    const accepted = line.partner?.status === "accepted" ? line.partner : null;
+    const jobDue = addDays(order.promised_on, -PARTNER_BUFFER_DAYS);
+    const atPartner = active.some((piece) => PARTNER_STEPS.some((s) => s.key === piece.stepKey));
+    return {
+      id: groupId,
+      workflow: WORKFLOW,
+      product: { id: line.product.id, name: line.product.name, options: [], size: null },
+      source: "order_line",
+      ...(can(viewer, "order.read") ? { order: { id: order.id, number: order.number, line_id: line.id }, claim: null } : {}),
+      ...(can(viewer, "customer.read") ? { customer: { id: order.customer.id, name: order.customer.name } } : {}),
+      due_on: order.promised_on,
+      late: order.promised_on < today() && active.length > 0,
+      priority: null,
+      partner: accepted ? { id: accepted.id, name: accepted.name, due_on: jobDue, late: jobDue < today() && atPartner } : null,
+    };
+  };
+
+  /** Whether the caller may pass or fail the piece where it is (`may_work`): active, at a step it has the skill for. */
+  const mayWork = (piece: StoredPiece) => piece.status === "active" && !skilled.has(piece.stepKey ?? "");
+
+  /** What `q` finds (erp-api `searchGroups`): the product, an order number with `order.read`, the customer with `customer.read`. */
+  const finds = (groupId: string, q: string, viewer: Viewer) => {
+    const { order, line } = lineOf.get(groupId)!;
+    const needle = q.toLowerCase();
+    const digits = ORDER_NUMBER.exec(q)?.[1];
+    return (
+      line.product.name.toLowerCase().includes(needle) ||
+      (digits !== undefined && can(viewer, "order.read") && order.number === Number(digits)) ||
+      (can(viewer, "customer.read") && order.customer.name.toLowerCase().includes(needle))
+    );
+  };
+
+  /** The pieces `filters` pick (erp-api `pieceWhere`); `workable` needs `workflow.move` and the step's skill. */
+  const picks = (piece: StoredPiece, filters: Filters, viewer: Viewer) =>
+    (filters.workflowId === null || filters.workflowId === WORKFLOW.id) &&
+    (filters.q === null || finds(piece.groupId, filters.q, viewer)) &&
+    (!filters.workable || (can(viewer, "workflow.move") && mayWork(piece)));
+
+  /** Lines in `sort`'s order: by due day with undated ones last, then by id (every line has the same priority band). */
+  const lineOrder = (sort: PieceSort) => (a: string, b: string) => {
+    if (sort === "due_on" || sort === "-due_on") {
+      const [dueA, dueB] = [lineOf.get(a)!.order.promised_on, lineOf.get(b)!.order.promised_on];
+      if (dueA !== dueB) return (sort === "due_on" ? 1 : -1) * dueA.localeCompare(dueB);
+    }
+    return a.localeCompare(b);
+  };
+
+  const listItem = (piece: StoredPiece, viewer: Viewer): WorkOrderListItem => {
     const last = piece.history.at(-1);
     return {
       ...base(piece),
+      group: summary(piece.groupId, viewer),
       to_inspect: null,
-      may_work: piece.status === "active" && !skilled.has(piece.stepKey ?? ""),
+      may_work: mayWork(piece),
       in_rework: piece.status === "active" && piece.inRework,
       last_move: last
         ? { kind: last.kind, outcome: last.outcome, from_step: last.from_step, defect: last.defect, actor: last.actor, partner: last.partner, created_at: last.created_at }
@@ -449,9 +562,13 @@ export function createProductionStore(now: () => number) {
     }
 
     const step = STEPS.find((s) => s.key === body.at_step);
-    if (!step || moved.some((piece) => piece.status !== "active" || piece.stepKey !== step.key)) {
-      return { ok: false, status: 409, detail: "Some pieces cannot make this move" };
-    }
+    if (!step) return { ok: false, status: 409, detail: "Some pieces cannot make this move" };
+    // Each piece that can't make the move, named under its place in the body (erp-api `moves.service.ts:236-259`).
+    const mismatched = moved.flatMap((piece, index) => {
+      const reason = piece.status !== "active" ? `is ${piece.status}` : piece.stepKey !== step.key ? `is at ${piece.stepKey}, not ${step.key}` : null;
+      return reason ? [{ path: `work_order_ids.${index}`, message: `${piece.number}/${piece.quantity} ${reason}` }] : [];
+    });
+    if (mismatched.length > 0) return { ok: false, status: 409, detail: "Some pieces cannot make this move", errors: mismatched };
 
     if (body.kind === "pass" && body.inspected === false) {
       if (!step.sampling) return { ok: false, status: 409, detail: "This step doesn't sample, so every piece is inspected" };
@@ -531,9 +648,9 @@ export function createProductionStore(now: () => number) {
       };
     },
 
-    pieces(params: URLSearchParams): Answer<Page<WorkOrderListItem>> {
-      const extra = [...params.keys()].find((key) => !LIST_KEYS.includes(key));
-      if (extra) return invalid(extra, `Unrecognized key: "${extra}"`);
+    pieces(params: URLSearchParams, viewer: Viewer = EVERYTHING): Answer<Page<WorkOrderListItem>> {
+      const filters = readFilters(params, LIST_KEYS);
+      if (isAnswer(filters)) return filters;
       const limit = Number(params.get("limit") ?? 50);
       if (!Number.isInteger(limit) || limit < 1 || limit > 200) return invalid("limit", "must be 1 to 200");
       const offset = Number(params.get("cursor") ?? 0);
@@ -541,11 +658,83 @@ export function createProductionStore(now: () => number) {
       const groupId = params.get("group_id");
       const stepKey = params.get("step_key");
       const status = params.get("status");
+      const order = lineOrder(filters.sort);
       const all = [...pieces.values()]
-        .filter((piece) => (!groupId || piece.groupId === groupId) && (!stepKey || piece.stepKey === stepKey) && (!status || piece.status === status))
-        .sort((a, b) => a.number - b.number);
-      const data = all.slice(offset, offset + limit).map(listItem);
+        .filter(
+          (piece) =>
+            (!groupId || piece.groupId === groupId) &&
+            (!stepKey || piece.stepKey === stepKey) &&
+            (!status || piece.status === status) &&
+            picks(piece, filters, viewer),
+        )
+        .sort((a, b) => order(a.groupId, b.groupId) || a.number - b.number);
+      const data = all.slice(offset, offset + limit).map((piece) => listItem(piece, viewer));
       return { ok: true, body: { data, next_cursor: offset + limit < all.length ? String(offset + limit) : null } };
+    },
+
+    /** `GET /workflow/workflows`: the one workflow, at its current version. */
+    workflows(): Answer<{ data: WorkflowSummary[] }> {
+      return { ok: true, body: { data: [{ id: WORKFLOW.id, key: WORKFLOW_KEY, name: WORKFLOW.name, version: WORKFLOW.version }] } };
+    },
+
+    /**
+     * `GET /workflow/work-orders/counts` (erp-api `work-orders.service.ts:555-605`): every step in path order, zeros
+     * included, counting the active pieces the filters pick; `workable` is 0 without `workflow.move`.
+     */
+    counts(params: URLSearchParams, viewer: Viewer = EVERYTHING): Answer<StepCounts> {
+      const filters = readFilters(params, COUNTS_KEYS);
+      if (isAnswer(filters)) return filters;
+      if (filters.workflowId === null) return invalid("workflow_id", "Invalid input: expected string, received undefined");
+      if (filters.workflowId !== WORKFLOW.id) return { ok: false, status: 404, detail: "Workflow not found" };
+      const active = [...pieces.values()].filter((piece) => piece.status === "active" && picks(piece, filters, viewer));
+      const mayMove = can(viewer, "workflow.move");
+      return {
+        ok: true,
+        body: {
+          steps: STEPS.map(({ key, name }) => {
+            const here = active.filter((piece) => piece.stepKey === key);
+            return {
+              key,
+              name,
+              active: here.length,
+              in_rework: here.filter((piece) => piece.inRework).length,
+              workable: mayMove ? here.filter(mayWork).length : 0,
+            };
+          }),
+        },
+      };
+    },
+
+    /**
+     * `GET /workflow/work-orders/groups` (erp-api `work-orders.service.ts:612`): one row per line with active pieces the
+     * filters pick at the step, paged by line. A cursor is kept to the sort it was made for.
+     */
+    stepGroups(params: URLSearchParams, viewer: Viewer = EVERYTHING): Answer<Page<StepGroup>> {
+      const filters = readFilters(params, GROUPS_KEYS);
+      if (isAnswer(filters)) return filters;
+      if (filters.workflowId === null) return invalid("workflow_id", "Invalid input: expected string, received undefined");
+      const stepKey = params.get("step_key");
+      if (stepKey === null) return invalid("step_key", "Invalid input: expected string, received undefined");
+      const limit = Number(params.get("limit") ?? 50);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 200) return invalid("limit", "must be 1 to 200");
+      const cursor = params.get("cursor");
+      const [madeFor, at] = cursor?.split("@") ?? [filters.sort, "0"];
+      const offset = Number(at);
+      if (madeFor !== filters.sort || !Number.isInteger(offset) || offset < 0) return invalid("cursor", "Invalid cursor: made for another sort or list");
+      const here = [...pieces.values()].filter((piece) => piece.status === "active" && piece.stepKey === stepKey && picks(piece, filters, viewer));
+      const ids = [...new Set(here.map((piece) => piece.groupId))].sort(lineOrder(filters.sort));
+      const mayMove = can(viewer, "workflow.move");
+      const data = ids.slice(offset, offset + limit).map((id) => {
+        const mine = here.filter((piece) => piece.groupId === id);
+        return {
+          group: summary(id, viewer),
+          count: mine.length,
+          in_rework: mine.filter((piece) => piece.inRework).length,
+          workable: mayMove ? mine.filter(mayWork).length : 0,
+          to_inspect: 0,
+        };
+      });
+      return { ok: true, body: { data, next_cursor: offset + limit < ids.length ? `${filters.sort}@${offset + limit}` : null } };
     },
 
     /** `GET /workflow/groups/{id}/moves`: one item per action, newest first, counts over every page. */

@@ -187,6 +187,114 @@ describe("fake erp-api production", () => {
   });
 });
 
+describe("fake erp-api: Production's lists", () => {
+  const counts = (s: Store, params: Record<string, string> = {}) => ok(s.counts(new URLSearchParams({ workflow_id: WORKFLOW_ID, ...params })));
+  const groups = (s: Store, params: Record<string, string> = {}) =>
+    ok(s.stepGroups(new URLSearchParams({ workflow_id: WORKFLOW_ID, step_key: "finish", ...params })));
+  const numbers = (page: { data: { group: { order?: { number: number } | null } }[] }) => page.data.map((row) => row.group.order?.number);
+
+  it("lists the workflows with their current version", () => {
+    expect(ok(store().workflows()).data).toEqual([{ id: WORKFLOW_ID, key: "standard", name: "Standard production", version: 1 }]);
+  });
+
+  it("counts the active pieces at each step in path order", () => {
+    expect(counts(store()).steps).toEqual([
+      { key: "print", name: "Print", active: 26, in_rework: 0, workable: 26 },
+      { key: "finish", name: "Finish", active: 24, in_rework: 1, workable: 24 },
+      { key: "final_qc", name: "Final QC", active: 13, in_rework: 0, workable: 13 },
+      { key: "packing", name: "Packing", active: 1, in_rework: 0, workable: 1 },
+    ]);
+  });
+
+  it("counts only what the caller may work with workable=true", () => {
+    const s = store();
+    s.requireSkill("finish");
+    expect(counts(s).steps[1]).toMatchObject({ active: 24, workable: 0 });
+    expect(counts(s, { workable: "true" }).steps[1]).toMatchObject({ active: 0, workable: 0 });
+    expect(ok(s.counts(new URLSearchParams({ workflow_id: WORKFLOW_ID }), { permissions: ["workflow.read"] })).steps[0]!.workable).toBe(0);
+  });
+
+  it("refuses counts for a workflow that doesn't exist, or without one", () => {
+    const s = store();
+    expect(s.counts(new URLSearchParams({ workflow_id: "00000000-0000-4000-8000-000000000000" }))).toMatchObject({ ok: false, status: 404 });
+    expect(s.counts(new URLSearchParams())).toMatchObject({ ok: false, status: 400, errors: [{ path: "workflow_id" }] });
+  });
+
+  it("lists the order lines at a step, due soonest first", () => {
+    const page = groups(store(), { sort: "due_on" });
+    expect(numbers(page)).toEqual([1041, 1048]);
+    const [first, second] = page.data;
+    expect(first).toMatchObject({
+      count: 20,
+      in_rework: 0,
+      workable: 20,
+      to_inspect: 0,
+      group: { due_on: "2026-11-02", late: true, customer: { name: "Fieldnote Studio" }, product: { name: "Bracket", options: [], size: null }, partner: null, priority: null },
+    });
+    expect(first!.group.workflow).toEqual({ id: WORKFLOW_ID, name: "Standard production", version: 1 });
+    expect(second).toMatchObject({
+      count: 4,
+      in_rework: 1,
+      group: { due_on: "2026-11-04", late: false, order: { number: 1048 }, partner: { name: "Northcast Foundry", due_on: "2026-11-02", late: true } },
+    });
+    expect(numbers(groups(store(), { sort: "-due_on" }))).toEqual([1048, 1041]);
+  });
+
+  it("pages the order lines with a cursor", () => {
+    const s = store();
+    const first = groups(s, { sort: "due_on", limit: "1" });
+    expect(numbers(first)).toEqual([1041]);
+    expect(numbers(groups(s, { sort: "due_on", limit: "1", cursor: first.next_cursor! }))).toEqual([1048]);
+  });
+
+  it("wants a step for the order lines", () => {
+    expect(store().stepGroups(new URLSearchParams({ workflow_id: WORKFLOW_ID }))).toMatchObject({ ok: false, status: 400, errors: [{ path: "step_key" }] });
+  });
+
+  it("leaves out the order and the customer the caller can't read", () => {
+    const row = ok(store().stepGroups(new URLSearchParams({ workflow_id: WORKFLOW_ID, step_key: "finish" }), { permissions: ["workflow.read"] })).data[0]!;
+    expect(row.group).not.toHaveProperty("order");
+    expect(row.group).not.toHaveProperty("customer");
+    expect(row.group.product?.name).toBeDefined();
+  });
+
+  it("searches by order number, product or customer", () => {
+    const s = store();
+    expect(numbers(groups(s, { q: "1041" }))).toEqual([1041]);
+    expect(numbers(groups(s, { q: "#1048" }))).toEqual([1048]);
+    expect(numbers(groups(s, { q: "fieldnote" }))).toEqual([1041]);
+    expect(numbers(groups(s, { q: "RING" }))).toEqual([1048]);
+    expect(counts(s, { q: "1041" }).steps.map((step) => step.active)).toEqual([10, 20, 10, 0]);
+  });
+
+  it("gives each listed piece its line's summary", () => {
+    const s = store();
+    const row = groups(s).data.find((one) => one.group.order?.number === 1048)!;
+    const piece = ok(s.pieces(new URLSearchParams({ group_id: GROUP, step_key: "finish", status: "active" }))).data[0]!;
+    expect(piece.group).toEqual(row.group);
+  });
+
+  it("narrows and sorts the work list", () => {
+    const s = store();
+    const listed = ok(s.pieces(new URLSearchParams({ workflow_id: WORKFLOW_ID, step_key: "finish", status: "active", sort: "-due_on", limit: "200", q: "luna" }))).data;
+    expect(listed).toHaveLength(4);
+    expect(listed.every((piece) => piece.group_id === GROUP)).toBe(true);
+  });
+
+  it("names every piece that already moved on a 409", () => {
+    const s = store();
+    const [first, second] = idsAt(s, "finish");
+    ok(s.move(passFinish([second!]), null));
+    expect(s.move(passFinish([first!, second!]), null)).toEqual({
+      ok: false,
+      status: 409,
+      detail: "Some pieces cannot make this move",
+      errors: [{ path: "work_order_ids.1", message: "4/12 is at final_qc, not finish" }],
+    });
+    expect(countAt(s, "finish")).toBe(3);
+  });
+});
+
 describe("fake erp-api: a line's moves", () => {
   const moves = (s: Store, params: Record<string, string> = {}) => ok(s.moves(GROUP, new URLSearchParams(params)));
 
