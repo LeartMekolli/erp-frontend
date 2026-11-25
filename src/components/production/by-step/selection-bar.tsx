@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { StepGroup } from "@/lib/api/schema-types";
 import type { MoveTarget } from "@/lib/production/move-body";
-import { pieceIds, type LineSelection } from "@/lib/production/line-selection";
+import { pickedLines, pieceIds, type LineSelection } from "@/lib/production/line-selection";
 import type { NextStep } from "@/lib/production/shape";
 
 import { lineName } from "./line-row";
@@ -18,9 +18,9 @@ const NAMED_LINES = 3;
 
 const count = (n: number, word: string) => `${n} ${n === 1 ? word : `${word}s`}`;
 
-/** "all 20 of #1041, 3 of 4 pieces of #1048", for the lines still listed. */
+/** "all 20 of #1041, 3 of 4 pieces of #1048", listed lines first, then those a search or a new sort hides. */
 function pickedText(selection: LineSelection, lines: StepGroup[]): string {
-  const parts = lines.flatMap((line) => {
+  const parts = pickedLines(selection, lines).flatMap((line) => {
     const picked = selection.lines.get(line.group.id)?.ids.size ?? 0;
     if (picked === 0) return [];
     const name = lineName(line);
@@ -44,6 +44,7 @@ export function SelectionBar({
   next,
   targets,
   blockedReason,
+  busy,
   versions,
   onPass,
   onTarget,
@@ -58,6 +59,11 @@ export function SelectionBar({
   targets: { rework: { key: string; name: string }[]; scrap: boolean } | null;
   /** Why nothing can be moved right now. */
   blockedReason: string | null;
+  /**
+   * The picked pieces are being read before the dialog opens. Pass and Move to… say they're unavailable
+   * (`aria-disabled`) rather than turn disabled, so the button just pressed keeps focus.
+   */
+  busy: boolean;
   /** The workflow versions the picked lines are on: more than one offers to keep one. */
   versions: number[];
   onPass: () => void;
@@ -65,7 +71,9 @@ export function SelectionBar({
   onKeepVersion: (version: number) => void;
   onClear: () => void;
 }) {
-  const disabled = blockedReason !== null;
+  const disabled = blockedReason !== null && !busy;
+  // Unavailable but focusable while busy: it looks disabled and ignores presses.
+  const waiting = busy ? { "aria-disabled": true, className: "opacity-50" } : null;
   const pieces = pieceIds(selection).length;
   const moveTo = targets ? [...targets.rework.map((step) => ({ kind: "rework" as const, step })), ...(targets.scrap ? [{ kind: "scrap" as const }] : [])] : [];
 
@@ -100,8 +108,23 @@ export function SelectionBar({
         </Button>
         {(moveTo.length > 0 || !targets) && (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="secondary" disabled={disabled || !targets} className={cn("flex-1 md:flex-none", onDark)}>
+            <DropdownMenuTrigger
+              asChild
+              // Radix opens the menu only when these weren't prevented: while busy, nothing opens.
+              onPointerDown={(event) => {
+                if (busy) event.preventDefault();
+              }}
+              onKeyDown={(event) => {
+                if (busy && ["Enter", " ", "ArrowDown"].includes(event.key)) event.preventDefault();
+              }}
+            >
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={disabled || !targets}
+                aria-disabled={waiting?.["aria-disabled"]}
+                className={cn("flex-1 md:flex-none", onDark, waiting?.className)}
+              >
                 Move to…
                 <ChevronDown aria-hidden />
               </Button>
@@ -115,7 +138,15 @@ export function SelectionBar({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        <Button type="button" disabled={disabled} className="flex-1 md:flex-none md:bg-white md:text-ink md:hover:bg-white/85" onClick={onPass}>
+        <Button
+          type="button"
+          disabled={disabled}
+          aria-disabled={waiting?.["aria-disabled"]}
+          className={cn("flex-1 md:flex-none md:bg-white md:text-ink md:hover:bg-white/85", waiting?.className)}
+          onClick={() => {
+            if (!busy) onPass();
+          }}
+        >
           {passLabel(next)}
         </Button>
       </div>

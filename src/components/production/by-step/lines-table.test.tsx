@@ -92,6 +92,26 @@ describe("LinesTable", () => {
     expect(pieceIds(last()!)).toHaveLength(3);
   });
 
+  it("offers to try again when a line's pieces can't be read for its tick", async () => {
+    server.use(
+      http.get(
+        `${FAKE_API_URL}/workflow/work-orders`,
+        () => HttpResponse.json({ type: "about:blank", title: "Unavailable", status: 503 }, { status: 503, headers: { "content-type": "application/problem+json" } }),
+        { once: true },
+      ),
+    );
+    renderTable();
+    await rowOf(1048);
+    await userEvent.click(lineBox(1048));
+    // The phone cell and the desktop cell each say it; CSS shows one.
+    const [retry] = await screen.findAllByRole("button", { name: "Try again to select #1048" });
+    expect(lineBox(1048)).toHaveAttribute("aria-checked", "false");
+    expect(screen.getAllByText(/Its pieces couldn.t be loaded\./)).not.toHaveLength(0);
+    await userEvent.click(retry!);
+    await waitFor(() => expect(lineBox(1048)).toHaveAttribute("aria-checked", "true"));
+    expect(screen.queryByRole("button", { name: "Try again to select #1048" })).not.toBeInTheDocument();
+  });
+
   it("ticks every piece of a line longer than one page", async () => {
     const answer = fakeState().production.pieces(new URLSearchParams({ group_id: groupIdOf(1048, 0), step_key: "finish", status: "active" }));
     if (!answer.ok) throw new Error("no piece");

@@ -293,6 +293,22 @@ describe("fake erp-api: Production's lists", () => {
     });
     expect(countAt(s, "finish")).toBe(3);
   });
+
+  it("refuses to move the pieces of an order waiting for payment, naming each", () => {
+    const s = store();
+    const [piece] = ok(s.pieces(new URLSearchParams({ group_id: groupIdOf(1045, 0), step_key: "print", status: "active" }))).data;
+    expect(s.move({ kind: "pass", work_order_ids: [piece!.id], at_step: "print" }, null)).toEqual({
+      ok: false,
+      status: 409,
+      detail: "The order is waiting for payment",
+      errors: [{ path: "work_order_ids.0", message: "1/1: The order is waiting for payment" }],
+    });
+  });
+
+  it("says no piece may be worked without workflow.move", () => {
+    const listed = ok(store().pieces(new URLSearchParams({ group_id: GROUP, step_key: "finish", status: "active" }), { permissions: ["workflow.read"] })).data;
+    expect(listed.every((piece) => piece.may_work === false)).toBe(true);
+  });
 });
 
 describe("fake erp-api: a line's moves", () => {

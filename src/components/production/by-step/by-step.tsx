@@ -11,7 +11,7 @@ import { busiestStep, busiestWorkflow } from "@/lib/production/by-step";
 import type { LineSelection } from "@/lib/production/line-selection";
 import { useStepLines, useWorkflowCounts, useWorkflows } from "@/lib/production/queries";
 
-import { LinesTable } from "./lines-table";
+import { LinesTable, type SelectionUpdate } from "./lines-table";
 import { MoveFlow } from "./move-flow";
 import { StepTabs } from "./step-tabs";
 import { ByStepToolbar } from "./toolbar";
@@ -20,12 +20,14 @@ import { ByStepToolbar } from "./toolbar";
 interface View {
   workflowId: string | null;
   stepKey: string | null;
+  /** The picked step's name as last counted, for when a search leaves it out of the counts. */
+  stepName: string | null;
   q: string | null;
   sort: PieceSort;
   workable: boolean;
 }
 
-const DEFAULT_VIEW: View = { workflowId: null, stepKey: null, q: null, sort: "due_on", workable: false };
+const DEFAULT_VIEW: View = { workflowId: null, stepKey: null, stepName: null, q: null, sort: "due_on", workable: false };
 
 function Panel({ children }: { children: ReactNode }) {
   return <section aria-label="By step" className="flex flex-col rounded-[20px] bg-card">{children}</section>;
@@ -62,34 +64,76 @@ export function ByStep({ canMove, canUpload }: { canMove: boolean; canUpload: bo
     (countsLoaded ? (busiestWorkflow(ids.map((id, index) => ({ workflowId: id, steps: counts[index]!.data!.steps }))) ?? ids[0]!) : null);
   const index = workflowId === null ? -1 : ids.indexOf(workflowId);
   const steps = counts[index]?.data?.steps ?? null;
-  const stepKey = view.stepKey ?? (steps ? busiestStep(steps) : null);
+  const filtered = view.q !== null || view.workable;
+  // A step only an older workflow version has drops out of the counts once it's empty. With no search or filter
+  // that means nothing waits there any more, so the busiest step takes its place.
+  const vanished = steps !== null && view.stepKey !== null && !filtered && !steps.some((s) => s.key === view.stepKey);
+  const stepKey = vanished ? busiestStep(steps) : (view.stepKey ?? (steps ? busiestStep(steps) : null));
+  const step = steps?.find((candidate) => candidate.key === stepKey) ?? null;
+  // A search can leave the picked step out of the counts too: it keeps the name it was last counted with.
+  const stepName = step?.name ?? (stepKey !== null && stepKey === view.stepKey ? view.stepName : null);
+  // What the last move did, or why the selection changed, announced politely.
+  const [notice, setNotice] = useState<string | null>(null);
   // The busiest product type and step, once known, are kept: a refetch never moves someone off what they're looking at.
-  if (workflowId !== view.workflowId || stepKey !== view.stepKey) setView({ ...view, workflowId, stepKey });
+  if (workflowId !== view.workflowId || stepKey !== view.stepKey || stepName !== view.stepName) {
+    if (vanished) {
+      setSelection(null);
+      setNotice(`Nothing is left at ${view.stepName ?? "that step"}.`);
+    }
+    setView({ ...view, workflowId, stepKey, stepName });
+  }
 
   const filter = { workflowId: workflowId ?? "", stepKey: stepKey ?? "", q: view.q, sort: view.sort, workable: view.workable };
   // The table's query, shared through the cache: Freshness reports on it.
   const lines = useStepLines(filter, workflowId !== null && stepKey !== null);
-  // What the last move did, or why the selection changed, announced politely.
-  const [notice, setNotice] = useState<string | null>(null);
-  // Bumped when the selection goes from under the person: focus then lands on the step, not on the page.
-  const [focusSteps, setFocusSteps] = useState(0);
+  // Bumped when the selection goes from under the person or a move of theirs went through: focus then lands
+  // where it belongs rather than on the page.
+  const [focusAsked, setFocusAsked] = useState(0);
+  const focusDone = useRef(0);
+  // After a move of theirs: the row where the first moved line was, once the list without it has loaded.
+  const afterMove = useRef<{ index: number; sentAt: number } | null>(null);
   const stepsRef = useRef<HTMLDivElement>(null);
+  const linesRef = useRef<HTMLDivElement>(null);
 
-  // Every picked line has left the listed ones (someone else moved them on): the selection goes with them.
-  const left = selection !== null && lines.isSuccess && !lines.isFetching && !lines.items.some((line) => selection.lines.has(line.group.id));
+  // Every picked line has left the step (someone else moved them on): the selection goes with them. Only told
+  // from the whole list at the step: a search hides lines without moving them, and a line can sit on a page not loaded.
+  const left =
+    selection !== null &&
+    view.q === null &&
+    lines.isSuccess &&
+    !lines.isFetching &&
+    !lines.hasNextPage &&
+    !lines.items.some((line) => selection.lines.has(line.group.id));
   if (left) {
     setSelection(null);
-    setFocusSteps((n) => n + 1);
+    setNotice("The picked lines have moved on, so nothing is picked now.");
+    setFocusAsked((n) => n + 1);
   }
 
   useEffect(() => {
+    if (focusAsked === focusDone.current) return;
+    const pending = afterMove.current;
+    // After a move, wait for the list fetched since it was sent.
+    if (pending && (lines.isFetching || lines.dataUpdatedAt < pending.sentAt)) return;
+    focusDone.current = focusAsked;
+    afterMove.current = null;
+    // Only focus that was lost, with the bar or the row it was in: someone typing or picking elsewhere keeps their place.
+    const lost = document.activeElement === null || document.activeElement === document.body;
+    if (!lost) return;
+    const rows = linesRef.current?.querySelectorAll<HTMLElement>("tr[data-line-row]") ?? [];
+    const row = pending && pending.index >= 0 && rows.length > 0 ? rows[Math.min(pending.index, rows.length - 1)] : undefined;
+    const control = row?.querySelector<HTMLElement>('[role="checkbox"]:not(:disabled)') ?? row?.querySelector<HTMLElement>("button[aria-expanded]");
+    if (control) {
+      control.focus();
+      return;
+    }
     const steps = stepsRef.current;
-    if (focusSteps === 0 || !steps) return;
+    if (!steps) return;
     // The tabs from 768 px; the picker on a phone, where the tabs are hidden and can't take focus.
     const current = steps.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
     current?.focus();
     if (!current || document.activeElement !== current) steps.querySelector<HTMLElement>("select")?.focus();
-  }, [focusSteps]);
+  }, [focusAsked, lines.isFetching, lines.dataUpdatedAt]);
 
   if (!me) return null;
 
@@ -112,15 +156,21 @@ export function ByStep({ canMove, canUpload }: { canMove: boolean; canUpload: bo
 
   const countsFailure = counts.find((query) => query.isError && query.data === undefined);
   const workflow = workflows.data?.find((candidate) => candidate.id === workflowId) ?? null;
-  const step = steps?.find((candidate) => candidate.key === stepKey) ?? null;
   const productTypes = (workflows.data ?? []).map((candidate, n) => ({
     id: candidate.id,
     name: candidate.name,
     active: counts[n]?.data?.steps.reduce((sum, s) => sum + s.active, 0) ?? null,
   }));
 
+  // What the person changes clears the last notice: it was about what they saw before.
   function change(next: Partial<View>) {
+    setNotice(null);
     setView((current) => ({ ...current, ...next }));
+  }
+
+  function pick(update: SelectionUpdate) {
+    setNotice(null);
+    setSelection(update);
   }
 
   let body: ReactNode;
@@ -132,15 +182,15 @@ export function ByStep({ canMove, canUpload }: { canMove: boolean; canUpload: bo
     );
   } else if (!workflow || !steps) {
     body = <Skeleton />;
-  } else if (!step) {
+  } else if (stepKey === null || stepName === null) {
     body = <p className="px-4 py-14 text-center text-sm text-ink-2">{`No pieces in progress for ${workflow.name}.`}</p>;
   } else {
     body = (
       <LinesTable
         filter={filter}
-        stepName={step.name}
+        stepName={stepName}
         selection={selection}
-        onSelection={setSelection}
+        onSelection={pick}
         selectable={canMove}
         today={workspaceToday(me.workspace.timezone)}
       />
@@ -184,22 +234,33 @@ export function ByStep({ canMove, canUpload }: { canMove: boolean; canUpload: bo
         <p role="status" className="text-caption font-medium text-ink">
           {notice}
         </p>
-        {step && lines.dataUpdatedAt > 0 && <Freshness query={lines} />}
+        {stepKey !== null && stepName !== null && lines.dataUpdatedAt > 0 && <Freshness query={lines} />}
       </div>
-      {/* On phones the bar is fixed to the screen's bottom: room for it under the last row. */}
-      <div id="production-lines" className={selection ? "pb-36 md:pb-0" : undefined}>
+      {/* The steps' tab panel: every tab filters this one list. On phones the bar is fixed to the screen's
+          bottom, so there's room for it under the last row. */}
+      <div
+        ref={linesRef}
+        id="production-lines"
+        role="tabpanel"
+        aria-label={stepName ? `Lines at ${stepName}` : "Lines"}
+        className={selection ? "pb-36 md:pb-0" : undefined}
+      >
         {body}
       </div>
-      {canMove && selection && workflowId && step && (
+      {canMove && selection && workflowId && stepKey !== null && stepName !== null && (
         <MoveFlow
           mayUpload={canUpload}
           workflowId={workflowId}
-          stepKey={step.key}
+          stepKey={stepKey}
           selection={selection}
           lines={lines.items}
           onSelection={setSelection}
           onNotice={setNotice}
-          onMoved={() => setFocusSteps((n) => n + 1)}
+          onMoved={(at) => {
+            afterMove.current = at;
+            setFocusAsked((n) => n + 1);
+          }}
+          onCleared={() => setFocusAsked((n) => n + 1)}
         />
       )}
     </Panel>

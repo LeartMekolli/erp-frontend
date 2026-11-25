@@ -59,6 +59,8 @@ interface Filters {
 }
 
 const ORDER_NUMBER = /^#?(\d{1,9})$/;
+/** erp-api's refusal for an order whose production hasn't started (`orders/payment-hold.ts:7`). */
+const WAITING_FOR_PAYMENT = "The order is waiting for payment";
 const ACTOR = { id: uuid("55555555", 1), name: "Ana Ruiz" };
 const NO_EVIDENCE = { min_photos: 0, comment_required: false };
 const HOUR = 3_600_000;
@@ -490,7 +492,8 @@ export function createProductionStore(now: () => number) {
       ...base(piece),
       group: summary(piece.groupId, viewer),
       to_inspect: null,
-      may_work: mayWork(piece),
+      // erp-api: `mayMove && …` (`work-orders.service.ts:542`).
+      may_work: can(viewer, "workflow.move") && mayWork(piece),
       in_rework: piece.status === "active" && piece.inRework,
       last_move: last
         ? { kind: last.kind, outcome: last.outcome, from_step: last.from_step, defect: last.defect, actor: last.actor, partner: last.partner, created_at: last.created_at }
@@ -534,6 +537,14 @@ export function createProductionStore(now: () => number) {
       if (!piece) return { ok: false, status: 404, detail: "Work order not found" };
       moved.push(piece);
     }
+    // Nothing of an order waiting for payment is made, whatever the move (erp-api `moves.service.ts:216-224`). The
+    // order's state is the seed's: recording a payment in the orders fake doesn't lift it here.
+    const unpaid = moved.flatMap((piece, index) =>
+      lineOf.get(piece.groupId)?.order.state === "awaiting_payment"
+        ? [{ path: `work_order_ids.${index}`, message: `${piece.number}/${piece.quantity}: ${WAITING_FOR_PAYMENT}` }]
+        : [],
+    );
+    if (unpaid.length > 0) return { ok: false, status: 409, detail: WAITING_FOR_PAYMENT, errors: unpaid };
     const respond = (): Answer<MoveResponse> => ({ ok: true, body: { data: moved.map(base) } });
     const atStep = STEPS.find((s) => s.key === body.at_step);
     const moveId = crypto.randomUUID();

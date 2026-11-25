@@ -3,16 +3,26 @@ import type { StepGroup } from "@/lib/api/schema-types";
 import type { Piece } from "./shape";
 
 /**
+ * One picked line: the line as it was listed when last ticked, so the bar can still name it while a search or
+ * a new sort hides it, and the workflow version its pieces started on.
+ */
+export interface PickedLine {
+  line: StepGroup;
+  version: number;
+  ids: Set<string>;
+}
+
+/**
  * What By step has ticked: pieces of one or more order lines, all at one step. Each line keeps the workflow
  * version its pieces started on, because a move's rules come from one version. Never empty: no ticks is null.
  */
 export interface LineSelection {
   stepKey: string;
-  lines: Map<string, { version: number; ids: Set<string> }>;
+  lines: Map<string, PickedLine>;
 }
 
 /** The selection without the lines that ended up empty; null when none is left. */
-function settled(stepKey: string, lines: Map<string, { version: number; ids: Set<string> }>): LineSelection | null {
+function settled(stepKey: string, lines: Map<string, PickedLine>): LineSelection | null {
   const kept = new Map([...lines].filter(([, line]) => line.ids.size > 0));
   return kept.size > 0 ? { stepKey, lines: kept } : null;
 }
@@ -32,7 +42,7 @@ export function lineState(selection: LineSelection | null, line: StepGroup): boo
 export function toggleLine(selection: LineSelection | null, stepKey: string, line: StepGroup, workableIds: string[]): LineSelection | null {
   const lines = linesAt(selection, stepKey);
   if (lineState(selection?.stepKey === stepKey ? selection : null, line) === true) lines.delete(line.group.id);
-  else lines.set(line.group.id, { version: line.group.workflow.version, ids: new Set(workableIds) });
+  else lines.set(line.group.id, { line, version: line.group.workflow.version, ids: new Set(workableIds) });
   return settled(stepKey, lines);
 }
 
@@ -43,8 +53,18 @@ export function togglePiece(selection: LineSelection | null, stepKey: string, li
   const ids = new Set(lines.get(line.group.id)?.ids);
   if (ids.has(piece.id)) ids.delete(piece.id);
   else ids.add(piece.id);
-  lines.set(line.group.id, { version: line.group.workflow.version, ids });
+  lines.set(line.group.id, { line, version: line.group.workflow.version, ids });
   return settled(stepKey, lines);
+}
+
+/**
+ * The picked lines, each as fresh as can be: as `listed` now has it, in the list's order, then the ones a
+ * search, a new sort or a page not loaded hides, as they were when ticked.
+ */
+export function pickedLines(selection: LineSelection, listed: StepGroup[]): StepGroup[] {
+  const shown = listed.filter((line) => selection.lines.has(line.group.id));
+  const ids = new Set(shown.map((line) => line.group.id));
+  return [...shown, ...[...selection.lines.values()].flatMap((picked) => (ids.has(picked.line.group.id) ? [] : [picked.line]))];
 }
 
 /** Every picked piece, line by line. */

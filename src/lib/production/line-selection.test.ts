@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { StepGroup } from "../api/schema-types";
 
-import { keepVersion, lineState, pieceIds, pruneLines, toggleLine, togglePiece, versions, type LineSelection } from "./line-selection";
+import { keepVersion, lineState, pickedLines, pieceIds, pruneLines, toggleLine, togglePiece, versions, type LineSelection } from "./line-selection";
 import type { Piece } from "./shape";
 
 function line(id: string, workable: number, version = 1): StepGroup {
@@ -44,6 +44,23 @@ describe("line selection", () => {
     expect(pieceIds(picked!)).toEqual(ids("a", 4));
     expect(lineState(picked, four)).toBe(true);
     expect(toggleLine(picked, "finish", four, ids("a", 4))).toBeNull();
+  });
+
+  it("keeps each picked line as it was listed, to name it while it's hidden", () => {
+    const four = line("a", 4);
+    const picked = togglePiece(toggleLine(null, "finish", line("b", 2), ids("b", 2)), "finish", four, piece("a-1"));
+    expect(picked!.lines.get("a")!.line).toBe(four);
+    expect(picked!.lines.get("b")!.line.group.id).toBe("b");
+    expect(pruneLines(picked, new Map([["a", new Set(["a-1"])]])).selection!.lines.get("a")!.line).toBe(four);
+  });
+
+  it("names the picked lines from the list first, then the hidden ones as they were ticked", () => {
+    const picked = toggleLine(toggleLine(null, "finish", line("a", 2), ids("a", 2)), "finish", line("b", 2), ids("b", 2));
+    const freshB = line("b", 1);
+    expect(pickedLines(picked!, [line("c", 1), freshB]).map((one) => [one.group.id, one.count])).toEqual([
+      ["b", 1],
+      ["a", 2],
+    ]);
   });
 
   it("is mixed once one piece is taken out", () => {

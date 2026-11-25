@@ -83,6 +83,23 @@ function Due({ line, today }: { line: StepGroup; today: string }) {
   );
 }
 
+/** Ticking the line failed because its pieces couldn't be read: says so, with a way to tick it again. */
+function TickFailed({ name, onRetry }: { name: string; onRetry: () => void }) {
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 text-caption text-late">
+      Its pieces couldn&apos;t be loaded.
+      <button
+        type="button"
+        aria-label={`Try again to select ${name}`}
+        onClick={onRetry}
+        className="min-h-6 cursor-pointer rounded font-semibold underline underline-offset-2 outline-none hover:text-ink focus-visible:ring-3 focus-visible:ring-ring/50 pointer-coarse:min-h-11"
+      >
+        Try again
+      </button>
+    </span>
+  );
+}
+
 function Here({ count }: { count: number }) {
   return (
     <span className="inline-flex shrink-0 items-center rounded-full bg-lilac px-2.5 py-0.5 text-caption font-semibold whitespace-nowrap text-violet-ink tabular-nums">
@@ -124,7 +141,7 @@ export function LineRow({
   const name = lineName(line);
   const due = group.due_on ? formatDayMonth(`${group.due_on}T00:00:00Z`, "UTC") : null;
   return (
-    <tr className={cn("text-sm", checked !== false && "bg-lilac/50")}>
+    <tr data-line-row className={cn("text-sm", checked !== false && "bg-lilac/50")}>
       {selectable && (
         <Cell className="w-10 pr-0">
           <span className="grid size-11 place-items-center md:size-6 pointer-coarse:size-11">
@@ -134,6 +151,8 @@ export function LineRow({
               aria-busy={busy}
               onCheckedChange={onTick}
               aria-label={`Select ${name}`}
+              // The box's hit area reaches 44 px on touch screens, filling the space kept for it.
+              className="pointer-coarse:after:-inset-3.5"
             />
           </span>
         </Cell>
@@ -165,7 +184,7 @@ export function LineRow({
             </span>
           )}
           {selectable && line.workable === 0 && <span className="text-caption text-ink-2">Needs a skill you don&apos;t have</span>}
-          {failed && <span className="text-caption text-late">Its pieces couldn&apos;t be loaded. Try again.</span>}
+          {failed && <TickFailed name={name} onRetry={onTick} />}
         </span>
       </Cell>
 
@@ -192,7 +211,7 @@ export function LineRow({
             {group.product.name}
           </span>
         )}
-        {failed && <span className="block text-caption text-late">Its pieces couldn&apos;t be loaded. Try again.</span>}
+        {failed && <TickFailed name={name} onRetry={onTick} />}
       </Cell>
       <Cell className="hidden md:table-cell">
         <Status line={line} selectable={selectable} />
