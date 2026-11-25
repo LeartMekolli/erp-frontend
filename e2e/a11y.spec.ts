@@ -175,6 +175,34 @@ test("production: accessible and fits the screen", async ({ page }) => {
   await expectAccessibleAndFits(page);
 });
 
+test("production board: accessible and fits the screen", async ({ page }) => {
+  await signIn(page, STAFF.email);
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+  await page.goto("/production");
+  const print = page.getByRole("region", { name: "Print", exact: true });
+  const menu = print.getByRole("button", { name: "Move #1041…" });
+  await expect(menu).toBeEnabled();
+  await expectAccessibleAndFits(page);
+
+  // A card open, with its pieces.
+  await print.getByRole("button", { name: "Pieces of #1041" }).click();
+  await expect(print.getByRole("list", { name: "Pieces at this step" })).toBeVisible();
+  await expectAccessibleAndFits(page);
+
+  // Its Move to… opens. Radix hides the page behind an open menu with aria-hidden while focus stays in the menu,
+  // which axe reads as hidden focusable content, so the page is checked after the choice, as the orders menu is.
+  await menu.click();
+  await expect(page.getByRole("menuitem", { name: "Pass to Finish" })).toBeVisible();
+
+  // The pass waiting with Undo; undone, so nothing is sent as the page closes.
+  await page.getByRole("menuitem", { name: "Pass to Finish" }).click();
+  const undo = page.getByRole("region", { name: "Finish", exact: true }).getByRole("button", { name: "Undo" });
+  await expect(undo).toBeAttached();
+  await expectAccessibleAndFits(page);
+  await undo.click();
+  await expect(undo).toHaveCount(0);
+});
+
 test("piece history: accessible and fits the screen", async ({ page }) => {
   await openOrder(page);
   await page.getByRole("button", { name: "History of 1/12" }).click();
