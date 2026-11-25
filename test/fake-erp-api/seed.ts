@@ -112,6 +112,16 @@ export const PRODUCTION_LEAD: FakeUser = {
   organisations: [],
 };
 
+/** Not in erp-api's seed: works pieces on the floor, with no orders and no customers to read. */
+export const FLOOR_WORKER: FakeUser = {
+  id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c27",
+  email: "floor@demo.example.test",
+  name: "Remy",
+  kind: "staff",
+  permissions: ["workflow.read", "workflow.move"],
+  organisations: [],
+};
+
 /** Not in erp-api's seed: reads the dashboard's money, with no partners and no production. */
 export const SALES_LEAD: FakeUser = {
   id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c26",
@@ -211,7 +221,7 @@ export const PAYER: FakeUser = {
   organisations: [],
 };
 
-export const USERS: readonly FakeUser[] = [STAFF, CLERK, STAFF_MEMBER, PAYER, WORKFLOW_READER, ORDER_WRITER, ORDER_TAKER, PRODUCTION_LEAD, SALES_LEAD, PARTNER, LAYERLINE_OWNER, NORTHCAST_ADMIN, NORTHCAST_MEMBER, PARTNER_TWO_SHOPS, CUSTOMER, NO_ACCESS];
+export const USERS: readonly FakeUser[] = [STAFF, CLERK, STAFF_MEMBER, PAYER, WORKFLOW_READER, ORDER_WRITER, ORDER_TAKER, PRODUCTION_LEAD, FLOOR_WORKER, SALES_LEAD, PARTNER, LAYERLINE_OWNER, NORTHCAST_ADMIN, NORTHCAST_MEMBER, PARTNER_TWO_SHOPS, CUSTOMER, NO_ACCESS];
 
 export const PARTNER_NAMES: Record<string, string> = {
   [NORTHCAST_ID]: "Northcast Foundry",
