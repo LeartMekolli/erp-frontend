@@ -5,15 +5,18 @@ import { useRef, useState, type ReactNode } from "react";
 
 import type { SelectionUpdate } from "@/components/production/by-step/lines-table";
 import { MoveDialog } from "@/components/production/move-dialog";
-import type { MoveBody, StepGroup } from "@/lib/api/schema-types";
+import { newIdempotencyKey } from "@/lib/api/idempotency";
+import type { MoveBody, StepGroup, WorkflowStep } from "@/lib/api/schema-types";
 import { isApiProblem } from "@/lib/api/problem";
+import { passesAtOnce } from "@/lib/production/board";
 import { moveTargets } from "@/lib/production/by-step";
 import { pickedLines, pieceIds, pruneLines, versions, type LineSelection } from "@/lib/production/line-selection";
-import type { MoveKind, MoveTarget } from "@/lib/production/move-body";
-import { fetchLinePieces, invalidateProduction, useMovePieces, useWorkflowVersion } from "@/lib/production/queries";
+import { emptyMoveValues, moveBody, type MoveKind, type MoveTarget } from "@/lib/production/move-body";
+import { fetchLinePieces, invalidateProduction, useMovePieces, useWorkflowVersion, workflowVersionQuery } from "@/lib/production/queries";
 import { nextStepName } from "@/lib/production/selection";
 import type { NextStep, Piece, StepRules } from "@/lib/production/shape";
 import { staffPiece, staffRules } from "@/lib/production/staff";
+import type { HeldMove } from "@/lib/production/use-held-move";
 import { useOnline } from "@/lib/query/use-online";
 import type { UploadTarget } from "@/lib/upload/upload";
 
@@ -86,6 +89,14 @@ export interface MoveFlowArgs {
   onCleared: () => void;
   /** Whether this person may add photos (`file.write`). */
   mayUpload: boolean;
+  /** The Board's 5 seconds with Undo: given, a pass that asks for nothing is held here instead of opening the dialog. */
+  hold?: (move: HeldMove) => void;
+}
+
+/** The partners a move of these lines counts for, at a partner's step; null when it counts for nobody. */
+function partnersOf(rules: StepRules, lines: StepGroup[]): string | null {
+  const partners = [...new Set(lines.flatMap((line) => (line.group.partner ? [line.group.partner.name] : [])))];
+  return rules.partnerStep && partners.length > 0 ? partners.join(" and ") : null;
 }
 
 export interface MoveFlow {
@@ -107,7 +118,7 @@ export interface MoveFlow {
  * yet, and the move dialog. A move of `only` lines (a card's own Move to…, a dropped card) leaves the page's
  * selection as it was, apart from those lines.
  */
-export function useMoveFlow({ workflowId, stepKey, selection, lines, onSelection, onNotice, onMoved, onCleared, mayUpload }: MoveFlowArgs): MoveFlow {
+export function useMoveFlow({ workflowId, stepKey, selection, lines, onSelection, onNotice, onMoved, onCleared, mayUpload, hold }: MoveFlowArgs): MoveFlow {
   const client = useQueryClient();
   const online = useOnline();
   const move = useMovePieces();
@@ -133,8 +144,7 @@ export function useMoveFlow({ workflowId, stepKey, selection, lines, onSelection
   const ids = subject ? pieceIds(subject) : [];
 
   const picked = subject ? pickedLines(subject, lines) : [];
-  const partners = [...new Set(picked.flatMap((line) => (line.group.partner ? [line.group.partner.name] : [])))];
-  const countsFor = rules?.partnerStep && partners.length > 0 ? partners.join(" and ") : null;
+  const countsFor = rules ? partnersOf(rules, picked) : null;
 
   let blockedReason: string | null = null;
   if (!online) blockedReason = "You're offline.";
@@ -161,6 +171,38 @@ export function useMoveFlow({ workflowId, stepKey, selection, lines, onSelection
     });
   }
 
+  /**
+   * The pass of `moving` as a move to hold, when its step asks for nothing and it counts for no partner; null
+   * when the dialog must open (it asks for something, it finishes the pieces, or the rules couldn't be read).
+   * The rules are read here, not from the render: a card's own move isn't the subject until it starts.
+   */
+  async function heldPass(moving: LineSelection): Promise<HeldMove | null> {
+    const on = versions(moving);
+    if (on.length !== 1) return null;
+    let steps: WorkflowStep[];
+    try {
+      steps = (await client.ensureQueryData(workflowVersionQuery(workflowId, on[0]!))).steps;
+    } catch {
+      return null;
+    }
+    const route = steps.map((step) => ({ key: step.key, name: step.name }));
+    const index = route.findIndex((step) => step.key === moving.stepKey);
+    const to = index >= 0 ? route[index + 1] : undefined;
+    if (!to) return null;
+    const stepRules = staffRules(steps[index]!, route);
+    const movingLines = pickedLines(moving, lines);
+    if (!passesAtOnce(stepRules, movingLines, partnersOf(stepRules, movingLines))) return null;
+    const ids = pieceIds(moving);
+    return {
+      body: moveBody("pass", stepRules, ids, emptyMoveValues(stepRules)),
+      key: newIdempotencyKey(),
+      fromStep: moving.stepKey,
+      toStep: to,
+      lines: movingLines,
+      pieces: ids.length,
+    };
+  }
+
   async function start(kind: MoveKind, target?: MoveTarget, lone?: LineSelection) {
     const moving = lone ?? selection;
     if (!moving) return;
@@ -176,8 +218,16 @@ export function useMoveFlow({ workflowId, stepKey, selection, lines, onSelection
       }
       // A move without a line that couldn't be read would leave it behind and still clear the selection.
       if (unread) onNotice("Some pieces couldn't be loaded. Try again.");
-      else if (pruned.selection) setOpen({ kind, target, pieces });
-      else if (lone) setOnly(null);
+      else if (pruned.selection) {
+        const passing = kind === "pass" && !target && hold ? await heldPass(pruned.selection) : null;
+        if (passing && hold) {
+          // The held card stands for these lines now: they leave the ticks, and Undo puts nothing back.
+          if (lone) without(lone);
+          else onSelection(() => null);
+          setOnly(null);
+          hold(passing);
+        } else setOpen({ kind, target, pieces });
+      } else if (lone) setOnly(null);
     } finally {
       setOpening(false);
     }

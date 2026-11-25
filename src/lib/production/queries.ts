@@ -197,9 +197,9 @@ export function useLineMoves(groupId: string, filter: MovesFilter) {
   return { ...list, counts: list.data?.pages[0]?.counts ?? other?.pages[0]?.counts ?? null };
 }
 
-/** Each step's checklist, defects and evidence, as the group's pieces were started on. */
-export function useWorkflowVersion(workflowId: string, version: number, enabled = true) {
-  return useQuery({
+/** A workflow version's query, for the hook below and for reading it outside a render (`client.fetchQuery`). */
+export function workflowVersionQuery(workflowId: string, version: number) {
+  return {
     queryKey: productionKeys.version(workflowId, version),
     queryFn: async (): Promise<WorkflowVersion> => {
       const { data, error, response } = await api.GET("/workflow/workflows/{id}/versions/{number}", {
@@ -208,8 +208,12 @@ export function useWorkflowVersion(workflowId: string, version: number, enabled 
       if (!data) throw problemFrom(error, response);
       return data;
     },
-    enabled,
-  });
+  };
+}
+
+/** Each step's checklist, defects and evidence, as the group's pieces were started on. */
+export function useWorkflowVersion(workflowId: string, version: number, enabled = true) {
+  return useQuery({ ...workflowVersionQuery(workflowId, version), enabled });
 }
 
 /** One piece, its path and every move it has made. */
@@ -242,6 +246,24 @@ export function useMovePieces() {
       },
     },
   );
+}
+
+/**
+ * Sends a move held on the Board with the key it was given when held, then refreshes Production and Orders.
+ * With `keepalive` the request outlives the page, for a tab closed while the move waited.
+ */
+export async function sendMoveNow(client: QueryClient, body: MoveBody, key: string, { keepalive }: { keepalive: boolean }): Promise<MoveResponse> {
+  try {
+    const { data, error, response } = await api.POST("/workflow/moves", {
+      body,
+      params: { header: idempotencyHeader(key) },
+      ...(keepalive ? { fetch: (request: Request) => fetch(new Request(request, { keepalive: true })) } : {}),
+    });
+    if (!data) throw problemFrom(error, response);
+    return data;
+  } finally {
+    void Promise.all([invalidateProduction(client), invalidateOrders(client)]);
+  }
 }
 
 /** After a move: every line's counts and pieces fetch again. */

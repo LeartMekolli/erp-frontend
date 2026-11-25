@@ -15,12 +15,18 @@ import type { PieceSort, StepGroup } from "@/lib/api/schema-types";
 import { workspaceToday } from "@/lib/orders/labels";
 import { boardColumns, type DropMove } from "@/lib/production/board";
 import { keepVersion, lineState, toggleLine, type LineSelection } from "@/lib/production/line-selection";
-import { fetchLinePieces, useStepLines, useWorkflowCounts, useWorkflows, useWorkflowVersion } from "@/lib/production/queries";
+import { fetchLinePieces, sendMoveNow, useStepLines, useWorkflowCounts, useWorkflows, useWorkflowVersion } from "@/lib/production/queries";
+import { useHeldMove, type HeldMove } from "@/lib/production/use-held-move";
+
+import { submitErrorText } from "../submit-error";
 
 import type { CardExtras } from "./board-column";
 import { BoardColumn } from "./board-column";
 import { CardMenu } from "./card-menu";
+import { HeldCard } from "./held-card";
 import { OlderLines } from "./older-lines";
+
+const count = (n: number) => `${n} ${n === 1 ? "piece" : "pieces"}`;
 
 export interface BoardProps {
   canMove: boolean;
@@ -54,10 +60,37 @@ export function Board({ canMove, canUpload, workflowId, onWorkflow }: BoardProps
   const [workable, setWorkable] = useState(false);
   const [phoneStep, setPhoneStep] = useState<string | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLElement>(null);
   // The ticked cards, in one column at a time; ticking in another column starts again.
   const [selection, setSelection] = useState<LineSelection | null>(null);
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
+
+  /** A held pass, sent: its notice, or erp-api's reason when it's refused, and the card stays where it was. */
+  async function sendHeld(move: HeldMove, keepalive: boolean) {
+    try {
+      await sendMoveNow(client, move.body, move.key, { keepalive });
+      setNotice(`${count(move.pieces)} passed to ${move.toStep.name}.`);
+    } catch (error) {
+      setNotice(submitErrorText(error));
+    }
+  }
+  const held = useHeldMove(sendHeld);
+
+  /** Undo: nothing is sent, and focus goes back to the card's Move to… where it still stands. */
+  function undoHeld() {
+    const move = held.held;
+    held.undo();
+    if (!move) return;
+    const names = move.lines.map((line) => lineName(line)).join(", ");
+    setNotice(`Undone. ${names} ${move.lines.length === 1 ? "stays" : "stay"} where ${move.lines.length === 1 ? "it was" : "they were"}.`);
+    const first = move.lines[0];
+    if (first) {
+      boardRef.current
+        ?.querySelector<HTMLElement>(`[data-step-column="${move.fromStep}"] button[aria-label="${`Move ${lineName(first)}…`}"]`)
+        ?.focus();
+    }
+  }
 
   // The ticked column's lines, from the same cache its column reads, to name the ticked cards in the bar.
   const pickedStep = selection?.stepKey ?? "";
@@ -72,6 +105,10 @@ export function Board({ canMove, canUpload, workflowId, onWorkflow }: BoardProps
     onMoved: () => {},
     onCleared: () => {},
     mayUpload: canUpload,
+    hold: (move) => {
+      held.hold(move);
+      setNotice(`Passing ${count(move.pieces)} to ${move.toStep.name}. Undo is on the card for 5 seconds.`);
+    },
   });
 
   /** The workable pieces of a line at a step, read from erp-api: ticking or moving a card takes all of them. */
@@ -205,6 +242,7 @@ export function Board({ canMove, canUpload, workflowId, onWorkflow }: BoardProps
               today={today}
               canMove={canMove}
               extras={cardExtras}
+              held={held.held?.toStep.key === step.key ? <HeldCard move={held.held} onUndo={undoHeld} /> : undefined}
             />
           ))}
           {canMove && (
@@ -222,7 +260,7 @@ export function Board({ canMove, canUpload, workflowId, onWorkflow }: BoardProps
   }
 
   return (
-    <section aria-label="Board" className="flex flex-col gap-3">
+    <section ref={boardRef} aria-label="Board" className="flex flex-col gap-3">
       <div className="rounded-[20px] bg-card px-3 py-3">
         <ByStepToolbar
           productTypes={productTypes}

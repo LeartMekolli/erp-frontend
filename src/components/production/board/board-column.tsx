@@ -32,7 +32,10 @@ export function BoardColumn({
   today,
   canMove,
   extras,
+  held,
 }: {
+  /** A pass on its way here, waiting with Undo: shown above the column's own cards. */
+  held?: ReactNode;
   workflowId: string;
   step: StepCount;
   label?: string;
@@ -96,6 +99,7 @@ export function BoardColumn({
         {step.name}{" "}
         <span className="ml-auto rounded-full bg-line px-2 text-xs font-semibold text-ink-2 tabular-nums">{step.active}</span>
       </h2>
+      {held}
       {body}
     </section>
   );
