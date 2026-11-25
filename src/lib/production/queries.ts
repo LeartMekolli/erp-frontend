@@ -198,7 +198,7 @@ export function useLineMoves(groupId: string, filter: MovesFilter) {
 }
 
 /** Each step's checklist, defects and evidence, as the group's pieces were started on. */
-export function useWorkflowVersion(workflowId: string, version: number) {
+export function useWorkflowVersion(workflowId: string, version: number, enabled = true) {
   return useQuery({
     queryKey: productionKeys.version(workflowId, version),
     queryFn: async (): Promise<WorkflowVersion> => {
@@ -208,6 +208,7 @@ export function useWorkflowVersion(workflowId: string, version: number) {
       if (!data) throw problemFrom(error, response);
       return data;
     },
+    enabled,
   });
 }
 

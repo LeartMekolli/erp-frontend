@@ -122,7 +122,8 @@ export function useMoveFlow({ workflowId, stepKey, selection, lines, onSelection
   const at = subject?.stepKey ?? stepKey;
   const onVersions = subject ? versions(subject) : [];
   const single = onVersions.length === 1 ? onVersions[0]! : null;
-  const version = useWorkflowVersion(workflowId, single ?? onVersions[0] ?? 1);
+  // Nothing picked (the Board before a card's own move): no rules to read yet.
+  const version = useWorkflowVersion(workflowId, single ?? onVersions[0] ?? 1, subject !== null);
   const path = version.data?.steps.map((step) => ({ key: step.key, name: step.name })) ?? [];
   const configured = single === null ? undefined : version.data?.steps.find((step) => step.key === at);
   const rules = configured ? staffRules(configured, path) : undefined;

@@ -253,3 +253,6 @@ export function LineRow({
     </tr>
   );
 }
+
+// The Board's cards say what a line needs in the same words.
+export { Due as LineDue, Here as HerePill, Status as LineStatus };
