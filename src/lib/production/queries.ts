@@ -126,6 +126,7 @@ export function useWorkflows() {
 
 /** The active pieces at each step, one query per workflow, so the busiest workflow can be picked from them all. */
 export function useWorkflowCounts(workflowIds: string[], workable: boolean, q: string | null) {
+  const client = useQueryClient();
   return useQueries({
     queries: workflowIds.map((workflowId) => ({
       queryKey: productionKeys.counts(workflowId, workable, q),
@@ -136,8 +137,21 @@ export function useWorkflowCounts(workflowIds: string[], workable: boolean, q: s
         return data;
       },
       refetchInterval: REFRESH_MS,
+      // A new search or "Only what I can work" keeps the step tabs on the latest counts until the new ones arrive.
+      // `keepPreviousData` can't: `useQueries` gives a changed key a new observer, with nothing previous.
+      placeholderData: () => latestCounts(client, workflowId),
     })),
   });
+}
+
+/** The counts most recently loaded for a workflow, whatever their search or filter. */
+function latestCounts(client: QueryClient, workflowId: string): StepCounts | undefined {
+  const loaded = client
+    .getQueryCache()
+    .findAll({ queryKey: ["production", "counts", workflowId] })
+    .filter((query) => query.state.data !== undefined)
+    .sort((a, b) => b.state.dataUpdatedAt - a.state.dataUpdatedAt);
+  return loaded[0]?.state.data as StepCounts | undefined;
 }
 
 /** The order lines at one step, `LINES_PAGE` a page, each with how many of its pieces wait there. */
