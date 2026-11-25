@@ -24,6 +24,8 @@ async function openProduction(page: Page) {
   await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
   await page.goto("/production");
   await expect(page.getByRole("heading", { level: 1, name: "Production" })).toBeVisible();
+  // The page opens on the Board: By step is the second tab.
+  await page.getByRole("tablist", { name: "Production views" }).getByRole("tab", { name: "By step" }).click();
   await expect(page.getByRole("checkbox", { name: "Select #1041" })).toBeVisible();
 }
 

@@ -32,6 +32,14 @@ afterEach(() => server.events.removeAllListeners());
 
 const sent = (path: string) => requests.filter((url) => url.pathname === path);
 const tab = (name: RegExp) => screen.getByRole("tab", { name });
+const views = () => screen.getByRole("tablist", { name: "Production views" });
+
+/** The page opens on the Board; By step is its second tab. */
+async function renderByStep(user = STAFF) {
+  const rendered = renderAs(user, <ProductionPage />);
+  await userEvent.click(await screen.findByRole("tab", { name: "By step" }));
+  return rendered;
+}
 const lineLinks = () => screen.getAllByRole("link").filter((link) => /^#\d+$/.test(link.textContent ?? ""));
 
 /** A second product type with more pieces in progress than the seed's. */
@@ -66,18 +74,72 @@ describe("ProductionPage", () => {
     await vi.waitFor(() => expect(navigation.notFound).toHaveBeenCalled());
   });
 
-  it("opens on the busiest product type and step, with each step's count", async () => {
+  it("opens on the Board, with By step beside it", async () => {
     renderAs(STAFF, <ProductionPage />);
     expect(await screen.findByRole("heading", { level: 1, name: "Production" })).toBeInTheDocument();
+    const row = await screen.findByRole("tablist", { name: "Production views" });
+    expect(within(row).getAllByRole("tab").map((view) => view.textContent)).toEqual(["Board", "By step"]);
+    expect(within(row).getByRole("tab", { name: "Board" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel", { name: "Board" })).toBeInTheDocument();
+    await userEvent.click(within(row).getByRole("tab", { name: "By step" }));
+    await waitFor(() => expect(tab(/^Print/)).toHaveAttribute("aria-selected", "true"));
+  });
+
+  it("opens on the Board again after a reload", async () => {
+    const first = await renderByStep();
+    first.unmount();
+    renderAs(STAFF, <ProductionPage />);
+    expect(within(await screen.findByRole("tablist", { name: "Production views" })).getByRole("tab", { name: "Board" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(window.location.search).toBe("");
+  });
+
+  it("keeps the product type picked on By step when coming back from the Board", async () => {
+    addCastMetal();
+    await renderByStep();
+    const productType = await screen.findByRole("combobox", { name: "Product type" });
+    await waitFor(() => expect(productType).toHaveValue(CAST_ID));
+    await userEvent.selectOptions(productType, WORKFLOW_ID);
+    await userEvent.click(within(views()).getByRole("tab", { name: "Board" }));
+    await userEvent.click(within(views()).getByRole("tab", { name: "By step" }));
+    expect(await screen.findByRole("combobox", { name: "Product type" })).toHaveValue(WORKFLOW_ID);
+  });
+
+  it("says once when Production can't load, with Try again", async () => {
+    server.use(
+      http.get(`${FAKE_API_URL}/workflow/workflows`, () =>
+        HttpResponse.json({ type: "about:blank", title: "Unavailable", status: 503 }, { status: 503, headers: { "content-type": "application/problem+json" } }),
+      ),
+    );
+    renderAs(STAFF, <ProductionPage />);
+    expect(await screen.findByText("Production couldn't be loaded.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Try again" })).toHaveLength(1);
+  });
+
+  it("says when there are no product types", async () => {
+    server.use(http.get(`${FAKE_API_URL}/workflow/workflows`, () => HttpResponse.json({ data: [] })));
+    renderAs(STAFF, <ProductionPage />);
+    expect(await screen.findByText("No product types yet.")).toBeInTheDocument();
+  });
+
+  it("opens By step on the busiest product type and step, with each step's count", async () => {
+    await renderByStep();
     await waitFor(() => expect(tab(/^Print/)).toHaveAttribute("aria-selected", "true"));
     expect(screen.getByRole("combobox", { name: "Product type" })).toHaveValue(WORKFLOW_ID);
-    expect(screen.getAllByRole("tab").map((step) => step.textContent)).toEqual(["Print 26", "Finish 24", "Final QC 13", "Packing 1"]);
+    expect(within(screen.getByRole("tablist", { name: "Steps" })).getAllByRole("tab").map((step) => step.textContent)).toEqual([
+      "Print 26",
+      "Finish 24",
+      "Final QC 13",
+      "Packing 1",
+    ]);
     expect(await screen.findByRole("link", { name: "#1045" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "#1048" })).toBeInTheDocument();
   });
 
   it("moves between steps with the arrow keys", async () => {
-    renderAs(STAFF, <ProductionPage />);
+    await renderByStep();
     await waitFor(() => expect(tab(/^Print/)).toHaveAttribute("aria-selected", "true"));
     act(() => tab(/^Print/).focus());
     await userEvent.keyboard("{ArrowRight}");
@@ -89,7 +151,7 @@ describe("ProductionPage", () => {
   });
 
   it("picks the step on a phone too", async () => {
-    renderAs(STAFF, <ProductionPage />);
+    await renderByStep();
     const picker = await screen.findByRole("combobox", { name: "Step" });
     await waitFor(() => expect(picker).toHaveValue("print"));
     expect(within(picker).getByRole("option", { name: "Finish · 24" })).toBeInTheDocument();
@@ -99,7 +161,7 @@ describe("ProductionPage", () => {
 
   it("opens on the product type with the most pieces in progress, and a change picks that type's busiest step", async () => {
     addCastMetal();
-    renderAs(STAFF, <ProductionPage />);
+    await renderByStep();
     const productType = await screen.findByRole("combobox", { name: "Product type" });
     await waitFor(() => expect(productType).toHaveValue(CAST_ID));
     expect(tab(/^Polishing/)).toHaveAttribute("aria-selected", "true");
@@ -110,7 +172,7 @@ describe("ProductionPage", () => {
   });
 
   it("searches the lines and the counts", async () => {
-    renderAs(STAFF, <ProductionPage />);
+    await renderByStep();
     await screen.findByRole("link", { name: "#1045" });
     await userEvent.type(screen.getByRole("searchbox", { name: "Search order, product or customer" }), "1041");
     await waitFor(() => expect(screen.queryByRole("link", { name: "#1045" })).not.toBeInTheDocument());
@@ -124,7 +186,7 @@ describe("ProductionPage", () => {
   });
 
   it("sorts the lines", async () => {
-    renderAs(STAFF, <ProductionPage />);
+    await renderByStep();
     await waitFor(() => expect(tab(/^Print/)).toHaveAttribute("aria-selected", "true"));
     await userEvent.click(tab(/^Finish/));
     await waitFor(() => expect(lineLinks().map((link) => link.textContent)).toEqual(["#1041", "#1048"]));
@@ -135,7 +197,7 @@ describe("ProductionPage", () => {
   });
 
   it("asks for only what the person can work", async () => {
-    renderAs(STAFF, <ProductionPage />);
+    await renderByStep();
     await screen.findByRole("link", { name: "#1045" });
     await userEvent.click(screen.getByRole("checkbox", { name: "Only what I can work" }));
     await waitFor(() => expect(sent("/workflow/work-orders/groups").at(-1)?.searchParams.get("workable")).toBe("true"));
@@ -145,7 +207,7 @@ describe("ProductionPage", () => {
   });
 
   it("offers no tick boxes and no Only what I can work without workflow.move", async () => {
-    renderAs(WORKFLOW_READER, <ProductionPage />);
+    await renderByStep(WORKFLOW_READER);
     await screen.findByRole("link", { name: "#1045" });
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
@@ -158,18 +220,18 @@ describe("ProductionPage", () => {
         }),
       ),
     );
-    renderAs(STAFF, <ProductionPage />);
+    await renderByStep();
     expect(await screen.findByText("No pieces in progress for Standard production.")).toBeInTheDocument();
     expect(sent("/workflow/work-orders/groups")).toHaveLength(0);
   });
 
   it("opens the default view again after a reload, at the same address", async () => {
-    const first = renderAs(STAFF, <ProductionPage />);
+    const first = await renderByStep();
     await waitFor(() => expect(tab(/^Print/)).toHaveAttribute("aria-selected", "true"));
     await userEvent.click(tab(/^Finish/));
     await userEvent.type(screen.getByRole("searchbox", { name: "Search order, product or customer" }), "1041");
     first.unmount();
-    renderAs(STAFF, <ProductionPage />);
+    await renderByStep();
     await waitFor(() => expect(tab(/^Print/)).toHaveAttribute("aria-selected", "true"));
     expect(screen.getByRole("searchbox", { name: "Search order, product or customer" })).toHaveValue("");
     expect(window.location.search).toBe("");

@@ -7,7 +7,7 @@ import { LoadFailure } from "@/components/data/load-failure";
 import { useMe } from "@/components/session/session-gate";
 import type { PieceSort } from "@/lib/api/schema-types";
 import { workspaceToday } from "@/lib/orders/labels";
-import { busiestStep, busiestWorkflow } from "@/lib/production/by-step";
+import { busiestStep } from "@/lib/production/by-step";
 import type { LineSelection } from "@/lib/production/line-selection";
 import { useStepLines, useWorkflowCounts, useWorkflows } from "@/lib/production/queries";
 
@@ -16,8 +16,9 @@ import { MoveFlow } from "./move-flow";
 import { StepTabs } from "./step-tabs";
 import { ByStepToolbar } from "./toolbar";
 
-/** What By step shows. Product type and step stay null until the counts pick the busiest. React state only: a reload opens the default. */
+/** What By step shows. The step stays null until the counts pick the busiest. React state only: a reload opens the default. */
 interface View {
+  /** The product type the step was picked on: another type starts again at its busiest step. */
   workflowId: string | null;
   stepKey: string | null;
   /** The picked step's name as last counted, for when a search leaves it out of the counts. */
@@ -47,10 +48,20 @@ function Skeleton() {
 }
 
 /**
- * By step: one product type's steps, and the order lines waiting at the picked one. It opens on the product
- * type with the most pieces in progress and that type's busiest step.
+ * By step: one product type's steps, and the order lines waiting at the picked one. The product type is the
+ * page's (`workflowId`, the busiest until someone picks one); By step opens on that type's busiest step.
  */
-export function ByStep({ canMove, canUpload }: { canMove: boolean; canUpload: boolean }) {
+export function ByStep({
+  canMove,
+  canUpload,
+  workflowId,
+  onWorkflow,
+}: {
+  canMove: boolean;
+  canUpload: boolean;
+  workflowId: string | null;
+  onWorkflow: (workflowId: string) => void;
+}) {
   const { data: me } = useMe();
   const [view, setView] = useState<View>(DEFAULT_VIEW);
   const [selection, setSelection] = useState<LineSelection | null>(null);
@@ -58,20 +69,18 @@ export function ByStep({ canMove, canUpload }: { canMove: boolean; canUpload: bo
   const ids = workflows.data?.map((workflow) => workflow.id) ?? [];
   const counts = useWorkflowCounts(ids, view.workable, view.q);
 
-  const countsLoaded = ids.length > 0 && counts.every((query) => query.data !== undefined);
-  const workflowId =
-    view.workflowId ??
-    (countsLoaded ? (busiestWorkflow(ids.map((id, index) => ({ workflowId: id, steps: counts[index]!.data!.steps }))) ?? ids[0]!) : null);
   const index = workflowId === null ? -1 : ids.indexOf(workflowId);
   const steps = counts[index]?.data?.steps ?? null;
   const filtered = view.q !== null || view.workable;
+  // The step was picked on another product type (the page's changed): start again at this type's busiest.
+  const ownStep = view.workflowId === workflowId ? view.stepKey : null;
   // A step only an older workflow version has drops out of the counts once it's empty. With no search or filter
   // that means nothing waits there any more, so the busiest step takes its place.
-  const vanished = steps !== null && view.stepKey !== null && !filtered && !steps.some((s) => s.key === view.stepKey);
-  const stepKey = vanished ? busiestStep(steps) : (view.stepKey ?? (steps ? busiestStep(steps) : null));
+  const vanished = steps !== null && ownStep !== null && !filtered && !steps.some((s) => s.key === ownStep);
+  const stepKey = vanished ? busiestStep(steps) : (ownStep ?? (steps ? busiestStep(steps) : null));
   const step = steps?.find((candidate) => candidate.key === stepKey) ?? null;
   // A search can leave the picked step out of the counts too: it keeps the name it was last counted with.
-  const stepName = step?.name ?? (stepKey !== null && stepKey === view.stepKey ? view.stepName : null);
+  const stepName = step?.name ?? (stepKey !== null && stepKey === ownStep ? view.stepName : null);
   // What the last move did, or why the selection changed, announced politely.
   const [notice, setNotice] = useState<string | null>(null);
   // The busiest product type and step, once known, are kept: a refetch never moves someone off what they're looking at.
@@ -135,24 +144,8 @@ export function ByStep({ canMove, canUpload }: { canMove: boolean; canUpload: bo
     if (!current || document.activeElement !== current) steps.querySelector<HTMLElement>("select")?.focus();
   }, [focusAsked, lines.isFetching, lines.dataUpdatedAt]);
 
+  // The page says when the product types can't load or there are none.
   if (!me) return null;
-
-  if (workflows.isError) {
-    return (
-      <Panel>
-        <div className="px-4 py-3">
-          <LoadFailure error={workflows.error} fallback="Production couldn't be loaded." onRetry={() => void workflows.refetch()} />
-        </div>
-      </Panel>
-    );
-  }
-  if (workflows.data?.length === 0) {
-    return (
-      <Panel>
-        <p className="px-4 py-14 text-center text-sm text-ink-2">No product types yet.</p>
-      </Panel>
-    );
-  }
 
   const countsFailure = counts.find((query) => query.isError && query.data === undefined);
   const workflow = workflows.data?.find((candidate) => candidate.id === workflowId) ?? null;
@@ -206,7 +199,8 @@ export function ByStep({ canMove, canUpload }: { canMove: boolean; canUpload: bo
             workflowId={workflowId}
             onWorkflow={(id) => {
               setSelection(null);
-              change({ workflowId: id, stepKey: null });
+              change({ stepKey: null });
+              onWorkflow(id);
             }}
             q={view.q}
             onSearch={(q) => change({ q })}

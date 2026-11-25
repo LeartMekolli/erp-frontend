@@ -159,6 +159,7 @@ test("production: accessible and fits the screen", async ({ page }) => {
   await signIn(page, STAFF.email);
   await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
   await page.goto("/production");
+  await page.getByRole("tablist", { name: "Production views" }).getByRole("tab", { name: "By step" }).click();
   await expect(page.getByRole("checkbox", { name: "Select #1048" })).toBeVisible();
   await expectAccessibleAndFits(page);
 

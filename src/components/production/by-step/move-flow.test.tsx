@@ -49,6 +49,8 @@ function piecesOf(number: number, stepKey: string): WorkOrderListItem[] {
 
 async function openAt(step: RegExp) {
   const rendered = renderAs(STAFF, <ProductionPage />);
+  // The page opens on the Board: By step is the second tab.
+  await userEvent.click(await screen.findByRole("tab", { name: "By step" }));
   await waitFor(() => expect(tab(/^Print/)).toHaveAttribute("aria-selected", "true"));
   if (!step.test("Print")) await userEvent.click(tab(step));
   return rendered;
@@ -319,6 +321,7 @@ describe("By step's moves", () => {
 
   it("offers nothing to pick without workflow.move", async () => {
     renderAs(WORKFLOW_READER, <ProductionPage />);
+    await userEvent.click(await screen.findByRole("tab", { name: "By step" }));
     await screen.findByRole("link", { name: "#1045" });
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Picked lines" })).not.toBeInTheDocument();
