@@ -153,6 +153,17 @@ export function LineRow({
           {(group.customer || due) && (
             <span className="truncate text-caption text-ink-2">{[group.customer?.name, due].filter(Boolean).join(" · ")}</span>
           )}
+          {(line.in_rework > 0 || line.to_inspect > 0 || group.partner) && (
+            <span className="truncate text-caption font-medium text-ink">
+              {[
+                line.in_rework > 0 && `${line.in_rework} being redone`,
+                line.to_inspect > 0 && `Check in full: ${line.to_inspect}`,
+                group.partner && `With ${group.partner.name}`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          )}
           {selectable && line.workable === 0 && <span className="text-caption text-ink-2">Needs a skill you don&apos;t have</span>}
           {failed && <span className="text-caption text-late">Its pieces couldn&apos;t be loaded. Try again.</span>}
         </span>
