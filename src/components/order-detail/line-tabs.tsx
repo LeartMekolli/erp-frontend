@@ -25,9 +25,6 @@ const LOADED_UP_FRONT = 5;
 /** Once an order has left the building, or been called off, its pieces stay where they are. */
 const NOT_MOVABLE: OrderState[] = ["shipped", "delivered", "cancelled"];
 
-/** erp-api's refusal for an order whose production hasn't started (`orders/payment-hold.ts:7`). */
-const WAITING_FOR_PAYMENT = "The order is waiting for payment";
-
 const PHOTOS: UploadTarget = { area: "staff", kind: "image" };
 
 const OFF_PATH = [
@@ -81,7 +78,6 @@ function StaffPieces({ group, orderState, partnerName }: { group: Group; orderSt
       selectable={mayMove && !NOT_MOVABLE.includes(orderState)}
       mayUpload={mayUpload}
       uploadTarget={PHOTOS}
-      blockedReason={orderState === "awaiting_payment" ? WAITING_FOR_PAYMENT : null}
       countsFor={partnerName}
       onMove={async (body: MoveBody) => {
         await move.mutateAsync(body);

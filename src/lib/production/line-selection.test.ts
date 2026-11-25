@@ -21,6 +21,8 @@ function line(id: string, workable: number, version = 1): StepGroup {
     in_rework: 0,
     workable,
     to_inspect: 0,
+    held: 0,
+    held_reason: null,
   };
 }
 
@@ -34,6 +36,7 @@ const piece = (id: string, mayWork = true): Piece => ({
   toInspect: null,
   inRework: false,
   mayWork,
+  held: null,
   lastMove: null,
 });
 

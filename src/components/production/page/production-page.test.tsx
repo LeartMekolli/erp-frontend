@@ -38,8 +38,8 @@ const lineLinks = () => screen.getAllByRole("link").filter((link) => /^#\d+$/.te
 function addCastMetal() {
   const cast: StepCounts = {
     steps: [
-      { key: "casting", name: "Casting", active: 40, in_rework: 0, workable: 40 },
-      { key: "polishing", name: "Polishing", active: 50, in_rework: 0, workable: 50 },
+      { key: "casting", name: "Casting", active: 40, in_rework: 0, workable: 40, held: 0 },
+      { key: "polishing", name: "Polishing", active: 50, in_rework: 0, workable: 50, held: 0 },
     ],
   };
   server.use(
@@ -140,6 +140,8 @@ describe("ProductionPage", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: "Only what I can work" }));
     await waitFor(() => expect(sent("/workflow/work-orders/groups").at(-1)?.searchParams.get("workable")).toBe("true"));
     expect(sent("/workflow/work-orders/counts").at(-1)?.searchParams.get("workable")).toBe("true");
+    // #1045 waits for payment, so nobody can work it.
+    await waitFor(() => expect(screen.queryByRole("link", { name: "#1045" })).not.toBeInTheDocument());
   });
 
   it("offers no tick boxes and no Only what I can work without workflow.move", async () => {
@@ -152,7 +154,7 @@ describe("ProductionPage", () => {
     server.use(
       http.get(`${FAKE_API_URL}/workflow/work-orders/counts`, () =>
         HttpResponse.json({
-          steps: ["print", "finish", "final_qc", "packing"].map((key) => ({ key, name: key, active: 0, in_rework: 0, workable: 0 })),
+          steps: ["print", "finish", "final_qc", "packing"].map((key) => ({ key, name: key, active: 0, in_rework: 0, workable: 0, held: 0 })),
         }),
       ),
     );

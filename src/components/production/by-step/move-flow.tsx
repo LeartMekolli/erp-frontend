@@ -36,15 +36,16 @@ function namesPieces(error: unknown): boolean {
 }
 
 /**
- * Each picked line's pieces still at the step that the person may work, read again from erp-api. `unread` is
- * true when a line couldn't be read: its picked pieces are kept, but nothing may be moved without them.
+ * Each picked line's pieces still at the step that the person may work, read again from erp-api. A piece held
+ * since it was ticked (its parts, its order's payment) hasn't moved on, so it stays, and erp-api's refusal says
+ * why. `unread` is true when a line couldn't be read: its picked pieces are kept, but nothing may be moved without them.
  */
 async function stillHere(client: QueryClient, selection: LineSelection): Promise<{ here: Map<string, Set<string>>; pieces: Piece[]; unread: boolean }> {
   const read = await Promise.all(
     [...selection.lines.keys()].map(async (groupId) => {
       try {
         const items = (await fetchLinePieces(client, groupId, selection.stepKey)).map(staffPiece);
-        return [groupId, items.filter((piece) => piece.status === "active" && piece.stepKey === selection.stepKey && piece.mayWork)] as const;
+        return [groupId, items.filter((piece) => piece.status === "active" && piece.stepKey === selection.stepKey && (piece.mayWork || piece.held !== null))] as const;
       } catch {
         return [groupId, null] as const;
       }

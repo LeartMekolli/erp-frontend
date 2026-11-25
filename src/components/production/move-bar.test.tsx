@@ -1,6 +1,5 @@
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -11,9 +10,8 @@ import type { OrderState } from "@/lib/api/schema-types";
 import { invalidateProduction } from "@/lib/production/queries";
 
 import { groupIdOf } from "../../../test/fake-erp-api/orders-seed";
-import { FAKE_API_URL, STAFF, WORKFLOW_READER } from "../../../test/fake-erp-api/seed";
+import { STAFF, WORKFLOW_READER } from "../../../test/fake-erp-api/seed";
 import { fakeState } from "../../../test/fake-erp-api/state";
-import { server } from "../../../test/msw";
 import { renderAs } from "../../../test/render";
 
 import { MoveBar } from "./move-bar";
@@ -138,21 +136,13 @@ describe("selecting pieces", () => {
     expect(screen.getByText("1 piece moved on and left your selection.")).toBeInTheDocument();
   });
 
-  it("disables the bar on an order waiting for payment and sends nothing", async () => {
-    const moves = vi.fn();
-    server.use(
-      http.post(`${FAKE_API_URL}/workflow/moves`, () => {
-        moves();
-        return HttpResponse.json({ data: [] });
-      }),
-    );
+  it("offers nothing to pick on an order waiting for payment, and says why", async () => {
     renderPieces("awaiting_payment", STAFF, groupIdOf(1045, 0));
-    await tick("Select 1/1");
-    expect(within(bar()!).getByText("The order is waiting for payment")).toBeInTheDocument();
-    const pass = within(bar()!).getByRole("button", { name: "Pass to Finish" });
-    expect(pass).toBeDisabled();
-    await userEvent.click(pass);
-    expect(moves).not.toHaveBeenCalled();
+    const piece = (await screen.findByText("1/1")).closest("li")!;
+    expect(piece).toHaveTextContent("Waiting for payment");
+    expect(screen.queryByRole("checkbox", { name: "Select 1/1" })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Select all at Print" })).toBeDisabled();
+    expect(bar()).not.toBeInTheDocument();
   });
 
   it.each(["shipped", "delivered", "cancelled"] as const)("offers no selection on a %s order", async (state) => {

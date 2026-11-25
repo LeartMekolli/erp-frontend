@@ -5,7 +5,7 @@
  * A move entry and a piece's story keep erp-api's field names, as both areas send them the same.
  */
 
-import type { LineAction, Transition, WorkflowStep, WorkOrderListItem } from "@/lib/api/schema-types";
+import type { HoldReason, LineAction, Transition, WorkflowStep, WorkOrderListItem } from "@/lib/api/schema-types";
 
 /**
  * Who made a move. Staff see every person, and the partner a move counted for. A partner sees names only
@@ -82,6 +82,8 @@ export interface Piece {
   toInspect: boolean | null;
   inRework: boolean;
   mayWork: boolean;
+  /** Why nobody can move it yet; never true of a partner's piece, as erp-api shows partners no job that waits. */
+  held: HoldReason | null;
   lastMove: LastMove | null;
 }
 

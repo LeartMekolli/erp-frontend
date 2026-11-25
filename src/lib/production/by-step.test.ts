@@ -9,7 +9,7 @@ import type { StepRules } from "./shape";
 
 const WORKFLOW_ID = "b2b2b2b2-0000-4000-8000-000000000001";
 
-const step = (key: string, active: number): StepCount => ({ key, name: key, active, in_rework: 0, workable: active });
+const step = (key: string, active: number): StepCount => ({ key, name: key, active, in_rework: 0, workable: active, held: 0 });
 
 function fakeCounts(): StepCount[] {
   const answer = createProductionStore(() => Date.parse("2026-11-04T10:00:00Z")).counts(new URLSearchParams({ workflow_id: WORKFLOW_ID }));

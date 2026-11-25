@@ -28,6 +28,10 @@ describe("partner job shape", () => {
     expect(pieces.filter((item) => partnerPiece(item).mayWork)).toHaveLength(4);
   });
 
+  it("holds none of a partner's pieces: erp-api never shows partners a job that waits", () => {
+    expect(ringBand().read().work_orders.every((item) => partnerPiece(item).held === null)).toBe(true);
+  });
+
   it("reads the partner's steps as its own, with named rework targets", () => {
     const [finish] = partnerRules(ringBand().read());
     expect(finish).toMatchObject({ key: "finish", partnerStep: true, reworkTargets: [{ key: "finish", name: "Finish" }], pass: { minPhotos: 1, commentRequired: false } });

@@ -134,18 +134,20 @@ describe("By step's moves", () => {
     await waitFor(() => expect(tab(/^Print/)).toHaveTextContent("Print 24"));
   });
 
-  it("shows the fake's payment refusal in the dialog and keeps the line picked", async () => {
+  it("shows the fake's refusal when the line comes to wait for its parts while the dialog is open, and keeps it picked", async () => {
     await openAt(/^Print/);
-    await tickLine("#1045");
+    await tickLine("#1048");
     await userEvent.click(await within(bar()).findByRole("button", { name: "Pass to Finish" }));
-    const dialog = await screen.findByRole("dialog", { name: "Pass 1 piece at Print" });
+    const dialog = await screen.findByRole("dialog", { name: "Pass 2 pieces at Print" });
+    // A part sent back for rework meanwhile: the assembly's parts aren't ready any more.
+    fakeState().production.waitForParts(groupIdOf(1048, 0));
     await userEvent.click(within(dialog).getByRole("button", { name: "Pass to Finish" }));
-    expect(await within(dialog).findByText("The order is waiting for payment 1/1: The order is waiting for payment")).toBeInTheDocument();
+    expect(await within(dialog).findByText(/The parts are not ready yet/)).toBeInTheDocument();
     expect(screen.queryByText(/Someone already moved/)).not.toBeInTheDocument();
     // The open dialog hides the page from the accessibility tree: close it to read the bar.
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(dialog).not.toBeInTheDocument());
-    expect(bar()).toHaveTextContent("1 line · 1 piece");
+    expect(bar()).toHaveTextContent("1 line · 2 pieces");
   });
 
   it("after a move, puts focus on the row where the moved line was", async () => {
@@ -204,35 +206,13 @@ describe("By step's moves", () => {
     expect(screen.queryByRole("region", { name: "Picked lines" })).not.toBeInTheDocument();
   });
 
-  it("shows erp-api's own reason for a refusal that isn't someone else's move", async () => {
-    await openAt(/^Print/);
-    await tickLine("#1045");
-    server.use(
-      http.post(`${FAKE_API_URL}/workflow/moves`, () =>
-        HttpResponse.json(
-          { type: "about:blank", title: "Conflict", status: 409, detail: "The parts are not ready yet", errors: [{ path: "work_order_ids.0", message: "1/1 waits for its parts" }] },
-          { status: 409, headers: { "content-type": "application/problem+json" } },
-        ),
-      ),
-    );
-    await userEvent.click(await within(bar()).findByRole("button", { name: "Pass to Finish" }));
-    const dialog = await screen.findByRole("dialog", { name: "Pass 1 piece at Print" });
-    await userEvent.click(within(dialog).getByRole("button", { name: "Pass to Finish" }));
-    expect(await within(dialog).findByText("The parts are not ready yet 1/1 waits for its parts")).toBeInTheDocument();
-    expect(screen.queryByText(/Someone already moved/)).not.toBeInTheDocument();
-    // The open dialog hides the page from the accessibility tree: close it to read the bar.
-    await userEvent.keyboard("{Escape}");
-    await waitFor(() => expect(dialog).not.toBeInTheDocument());
-    expect(bar()).toHaveTextContent("1 line · 1 piece");
-  });
-
   it("doesn't open the dialog when a picked line can't be read again", async () => {
     await openAt(/^Print/);
     await tickLine("#1041");
-    await tickLine("#1045");
+    await tickLine("#1048");
     server.use(
       http.get(`${FAKE_API_URL}/workflow/work-orders`, ({ request }) =>
-        new URL(request.url).searchParams.get("group_id") === groupIdOf(1045, 0)
+        new URL(request.url).searchParams.get("group_id") === groupIdOf(1048, 0)
           ? HttpResponse.json({ type: "about:blank", title: "Unavailable", status: 503 }, { status: 503, headers: { "content-type": "application/problem+json" } })
           : undefined,
       ),
@@ -240,7 +220,7 @@ describe("By step's moves", () => {
     await userEvent.click(await within(bar()).findByRole("button", { name: "Pass to Finish" }));
     expect(await screen.findByText("Some pieces couldn't be loaded. Try again.")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(bar()).toHaveTextContent("2 lines · 11 pieces");
+    expect(bar()).toHaveTextContent("2 lines · 12 pieces");
   });
 
   it("puts focus on the step when the picked pieces turn out to have moved on", async () => {
@@ -326,14 +306,14 @@ describe("By step's moves", () => {
 
   it("keeps the picked lines, and the person's place, while a search hides them", async () => {
     await openAt(/^Print/);
-    await tickLine("#1045");
+    await tickLine("#1048");
     const search = screen.getByRole("searchbox", { name: "Search order, product or customer" });
     await userEvent.type(search, "1041");
-    await waitFor(() => expect(screen.queryByRole("checkbox", { name: "Select #1045" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("checkbox", { name: "Select #1048" })).not.toBeInTheDocument());
     await screen.findByRole("checkbox", { name: "Select #1041" });
-    expect(bar()).toHaveTextContent("1 line · 1 piece");
+    expect(bar()).toHaveTextContent("1 line · 2 pieces");
     // Hidden, but still named.
-    expect(bar()).toHaveTextContent("all 1 of #1045");
+    expect(bar()).toHaveTextContent("all 2 of #1048");
     expect(search).toHaveFocus();
   });
 

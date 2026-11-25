@@ -24,7 +24,7 @@ async function openProduction(page: Page) {
   await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
   await page.goto("/production");
   await expect(page.getByRole("heading", { level: 1, name: "Production" })).toBeVisible();
-  await expect(page.getByRole("checkbox", { name: "Select #1045" })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "Select #1041" })).toBeVisible();
 }
 
 async function expectStep(page: Page, key: string, name: string, count: number) {

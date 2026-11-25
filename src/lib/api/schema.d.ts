@@ -4219,7 +4219,7 @@ export interface paths {
         };
         /**
          * Pieces in the order to work them, such as the work list of one step: first-in-line customers' first, then as they started.
-         * @description A customer whose priority band is first in line has its pieces listed first, higher bands before lower ones. Every step is listed to everyone who may read work lists; `may_work` says whether the caller may pass or fail the piece where it is, which at a step that requires a skill needs that skill (the owner always may). `workable=true` keeps only those pieces. `in_rework` says whether an active piece is being redone after a failed check, `last_move` is what last happened to it, and `group` whose the piece is and when it is due. `workflow_id` keeps the pieces of every version of one workflow, so a step key two workflows share can be told apart. `q` finds part of the product's name, any case, with `%` and `_` taken literally; with `order.read`, also an order's or a claim's number (`#` optional); with `customer.read`, also part of the customer's name. `sort` is `priority` when left out (first-in-line customers' groups first, then as the pieces started); `due_on` and `-due_on` order by `group.due_on`, soonest or latest first, with undated pieces last either way and ties as `priority`; `started` is as the pieces started. Every filter applies before paging; a cursor made for another sort is a 400.
+         * @description A customer whose priority band is first in line has its pieces listed first, higher bands before lower ones. Every step is listed to everyone who may read work lists; `may_work` says whether the caller may pass or fail the piece where it is, which at a step that requires a skill needs that skill (the owner always may). `held` says why a piece can't be passed or failed onward now by anyone: `waiting_for_payment` (its order hasn't started), or `waiting_for_parts` (an assembly's piece while a part isn't ready); payment wins when both apply. A held piece is never `may_work`. `workable=true` keeps only `may_work` pieces. `in_rework` says whether an active piece is being redone after a failed check, `last_move` is what last happened to it, and `group` whose the piece is and when it is due. `workflow_id` keeps the pieces of every version of one workflow, so a step key two workflows share can be told apart. `q` finds part of the product's name, any case, with `%` and `_` taken literally; with `order.read`, also an order's or a claim's number (`#` optional); with `customer.read`, also part of the customer's name. `sort` is `priority` when left out (first-in-line customers' groups first, then as the pieces started); `due_on` and `-due_on` order by `group.due_on`, soonest or latest first, with undated pieces last either way and ties as `priority`; `started` is as the pieces started. Every filter applies before paging; a cursor made for another sort is a 400.
          *
          *     Access: permission `workflow.read`.
          */
@@ -4241,7 +4241,7 @@ export interface paths {
         };
         /**
          * How many active pieces are at each step of one workflow, for the tabs over a work list.
-         * @description Every step of the workflow's current version, in path order and zeros included, then any step key only an older version still has pieces at. `workflow_id` is required and covers every version; `q` and `workable` filter as on `GET /workflow/work-orders`, so a step's `active` is the number of pieces that list pages through for it with `status=active`. `in_rework` and `workable` are the part of `active` being redone, and the part the caller may pass or fail there.
+         * @description Every step of the workflow's current version, in path order and zeros included, then any step key only an older version still has pieces at. `workflow_id` is required and covers every version; `q` and `workable` filter as on `GET /workflow/work-orders`, so a step's `active` is the number of pieces that list pages through for it with `status=active`. `in_rework` and `workable` are the part of `active` being redone, and the part the caller may pass or fail there. `held` is the part nobody can move now (waiting for payment or for parts, as `held` on the list says); it is never part of `workable`.
          *
          *     Access: permission `workflow.read`.
          */
@@ -4263,7 +4263,7 @@ export interface paths {
         };
         /**
          * The order lines with active pieces at one step, one row each, with how many are there and what they need.
-         * @description One row per group (an order line, an assembly part, a remake or a quote) with active pieces at `step_key` of `workflow_id` (every version). `count` is the group's pieces there that the filters pick; `in_rework`, `workable` and `to_inspect` are the part of `count` being redone, that the caller may pass or fail, and to inspect in full at a step that samples. `q`, `workable` and `sort` work as on `GET /workflow/work-orders`, by group: `started` is as the groups started. Pages are by group, so one is never split; a cursor made for another sort is a 400.
+         * @description One row per group (an order line, an assembly part, a remake or a quote) with active pieces at `step_key` of `workflow_id` (every version). `count` is the group's pieces there that the filters pick; `in_rework`, `workable` and `to_inspect` are the part of `count` being redone, that the caller may pass or fail, and to inspect in full at a step that samples. `held` is the part nobody can move now, never part of `workable`, and `held_reason` why (`waiting_for_payment` before `waiting_for_parts`; null when none is). `q`, `workable` and `sort` work as on `GET /workflow/work-orders`, by group: `started` is as the groups started. Pages are by group, so one is never split; a cursor made for another sort is a 400.
          *
          *     Access: permission `workflow.read`.
          */
@@ -28748,6 +28748,8 @@ export interface operations {
                             created_at: string;
                             to_inspect: boolean | null;
                             may_work: boolean;
+                            /** @enum {string|null} */
+                            held: "waiting_for_payment" | "waiting_for_parts" | null;
                             in_rework: boolean;
                             last_move: {
                                 /** @enum {string} */
@@ -28903,6 +28905,7 @@ export interface operations {
                             active: number;
                             in_rework: number;
                             workable: number;
+                            held: number;
                         }[];
                     };
                 };
@@ -29038,6 +29041,9 @@ export interface operations {
                             in_rework: number;
                             workable: number;
                             to_inspect: number;
+                            held: number;
+                            /** @enum {string|null} */
+                            held_reason: "waiting_for_payment" | "waiting_for_parts" | null;
                         }[];
                         next_cursor: string | null;
                     };

@@ -19,6 +19,7 @@ import { LinesTable } from "./lines-table";
 
 const WORKFLOW_ID = "b2b2b2b2-0000-4000-8000-000000000001";
 const FINISH: StepLinesFilter = { workflowId: WORKFLOW_ID, stepKey: "finish", q: null, sort: "due_on", workable: false };
+const PRINT: StepLinesFilter = { ...FINISH, stepKey: "print" };
 const today = () => new Date().toISOString().slice(0, 10);
 
 function Harness({ selectable, seen, filter }: { selectable: boolean; seen: (selection: LineSelection | null) => void; filter: StepLinesFilter }) {
@@ -136,6 +137,38 @@ describe("LinesTable", () => {
     const row = await rowOf(1048);
     expect(lineBox(1048)).toBeDisabled();
     expect(row).toHaveTextContent("Needs a skill you don't have");
+  });
+
+  it("says a line waits for payment, with no tick box", async () => {
+    renderTable({ filter: PRINT });
+    const row = await rowOf(1045);
+    expect(row).toHaveTextContent("Waiting for payment");
+    expect(row).not.toHaveTextContent("Needs a skill you don't have");
+    expect(within(row).queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(lineBox(1041)).toBeEnabled();
+  });
+
+  it("says a line waits for its parts, with no tick box", async () => {
+    fakeState().production.waitForParts(groupIdOf(1048, 0));
+    renderTable();
+    const row = await rowOf(1048);
+    expect(row).toHaveTextContent("Waiting for its parts");
+    expect(within(row).queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+
+  it("tells someone who can't move pieces why a line is waiting too", async () => {
+    renderTable({ user: WORKFLOW_READER, selectable: false, filter: PRINT });
+    expect(await rowOf(1045)).toHaveTextContent("Waiting for payment");
+  });
+
+  it("offers no tick box on a waiting line's pieces, and says why", async () => {
+    renderTable({ filter: PRINT });
+    await rowOf(1045);
+    await userEvent.click(screen.getByRole("button", { name: "Pieces of #1045" }));
+    const piece = (await screen.findByRole("button", { name: "History of 1/1" })).closest("li")!;
+    expect(piece).toHaveTextContent("Waiting for payment");
+    expect(piece).not.toHaveTextContent("Needs a skill you don't have");
+    expect(within(piece).queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
   it("shows no order or customer to staff who can't read them", async () => {
