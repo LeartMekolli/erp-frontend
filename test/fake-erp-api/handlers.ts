@@ -595,7 +595,29 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
     http.get("/workflow/work-orders", ({ request, response }) => {
       const caller = staffWith(request, "workflow.read");
       if (caller instanceof Response) return response.untyped(caller);
-      const answer = fakeState().production.pieces(new URL(request.url).searchParams);
+      const answer = fakeState().production.pieces(new URL(request.url).searchParams, caller);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    // Before `/workflow/work-orders/{id}`, which would otherwise take "counts" and "groups" for an id.
+    http.get("/workflow/work-orders/counts", ({ request, response }) => {
+      const caller = staffWith(request, "workflow.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().production.counts(new URL(request.url).searchParams, caller);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/workflow/work-orders/groups", ({ request, response }) => {
+      const caller = staffWith(request, "workflow.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().production.stepGroups(new URL(request.url).searchParams, caller);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/workflow/workflows", ({ request, response }) => {
+      const caller = staffWith(request, "workflow.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().production.workflows();
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 

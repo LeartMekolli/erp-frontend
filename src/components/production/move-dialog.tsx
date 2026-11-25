@@ -12,7 +12,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { applyFieldErrors, isApiProblem } from "@/lib/api/problem";
 import type { MoveBody } from "@/lib/api/schema-types";
-import { emptyMoveValues, fieldPath, moveBody, moveSchema, type MoveKind, type MoveValues } from "@/lib/production/move-body";
+import { emptyMoveValues, fieldPath, moveBody, moveSchema, type MoveKind, type MoveTarget, type MoveValues } from "@/lib/production/move-body";
 import type { NextStep, Piece, StepRules } from "@/lib/production/shape";
 import type { UploadTarget } from "@/lib/upload/upload";
 
@@ -41,6 +41,8 @@ interface MoveDialogProps {
   onMoved: (message: string) => void;
   /** Where the step's instructions open, under the title. Left out on staff pages. */
   instructions?: ReactNode;
+  /** With `kind: "fail"`: where the pieces go, chosen before the dialog opened, so the form doesn't ask. */
+  target?: MoveTarget;
 }
 
 const nounFor = (count: number) => `${count} ${count === 1 ? "piece" : "pieces"}`;
@@ -62,11 +64,33 @@ export function MoveDialog({ open, onOpenChange, ...form }: MoveDialogProps) {
   );
 }
 
-function OutcomeText({ defect, step, path }: { defect: StepRules["defects"][number]; step: StepRules; path: MoveDialogProps["path"] }) {
+type Defect = StepRules["defects"][number];
+
+/** The name of the step a defect usually sends pieces back to. */
+function reworkName(defect: Defect, step: StepRules, path: MoveDialogProps["path"]): string {
+  return [...step.reworkTargets, ...path].find((target) => target.key === defect.reworkTo)?.name ?? defect.reworkTo ?? "";
+}
+
+function OutcomeText({ defect, step, path }: { defect: Defect; step: StepRules; path: MoveDialogProps["path"] }) {
   if (defect.outcome === "scrap") return "The pieces are scrapped";
   if (defect.outcome === "continue") return "The pieces carry on to the next step";
-  const named = [...step.reworkTargets, ...path].find((target) => target.key === defect.reworkTo);
-  return `Goes back to ${named?.name ?? defect.reworkTo} to be redone`;
+  return `Goes back to ${reworkName(defect, step, path)} to be redone`;
+}
+
+/** Whether a chosen target is somewhere other than the defect's usual outcome, which erp-api wants a reason for. */
+function differs(defect: Defect, target: MoveTarget): boolean {
+  return target.kind === "scrap" ? defect.outcome !== "scrap" : defect.outcome !== "rework" || defect.reworkTo !== target.step.key;
+}
+
+/** What usually happens with a defect, and when the target differs, that a reason is needed. */
+function usualText(defect: Defect, target: MoveTarget, step: StepRules, path: MoveDialogProps["path"]): string {
+  const usual = {
+    rework: `${defect.name} is usually redone at ${reworkName(defect, step, path)}.`,
+    scrap: `${defect.name} is usually scrapped.`,
+    continue: `${defect.name} is usually let through.`,
+  }[defect.outcome];
+  if (!differs(defect, target)) return usual;
+  return `${usual} ${target.kind === "scrap" ? "Say why these are scrapped." : `Say why these go to ${target.step.name}.`}`;
 }
 
 function MoveForm({
@@ -81,7 +105,9 @@ function MoveForm({
   onMove,
   onDone,
   instructions,
+  target: given,
 }: Omit<MoveDialogProps, "open" | "onOpenChange" | "onMoved"> & { onDone: (message: string) => void }) {
+  const target = kind === "fail" ? given : undefined;
   const photos = usePhotos(uploadTarget);
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -94,7 +120,7 @@ function MoveForm({
     clearErrors,
     control,
     formState: { errors },
-  } = useForm<MoveValues>({ resolver: zodResolver(moveSchema(kind, step, photos.list.length)), defaultValues: emptyMoveValues(step) });
+  } = useForm<MoveValues>({ resolver: zodResolver(moveSchema(kind, step, photos.list.length)), defaultValues: emptyMoveValues(step, target) });
   const [defectId, changing, outcome] = useWatch({ control, name: ["defectId", "changing", "outcome"] });
 
   const noun = nounFor(pieces.length);
@@ -105,12 +131,15 @@ function MoveForm({
   const photosBlocked = evidence !== null && evidence.minPhotos > 0 && !mayUpload;
   const noDefects = kind === "fail" && step.defects.length === 0;
 
-  const title = { pass: `${next === null ? "Finish" : "Pass"} ${noun} at ${step.name}`, fail: `Fail ${noun} at ${step.name}`, correction: `Correct ${noun} at ${step.name}` }[kind];
+  const failTitle = !target ? `Fail ${noun} at ${step.name}` : target.kind === "scrap" ? `Scrap ${noun}` : `Send ${noun} back to ${target.step.name}`;
+  const title = { pass: `${next === null ? "Finish" : "Pass"} ${noun} at ${step.name}`, fail: failTitle, correction: `Correct ${noun} at ${step.name}` }[kind];
+  const failDone = !target ? `${noun} failed at ${step.name}.` : target.kind === "scrap" ? `${noun} scrapped.` : `${noun} sent back to ${target.step.name}.`;
   const done = {
     pass: next === "unknown" ? `${noun} passed at ${step.name}.` : next ? `${noun} passed to ${next.name}.` : `${noun} finished.`,
-    fail: `${noun} failed at ${step.name}.`,
+    fail: failDone,
     correction: `${noun} corrected.`,
   }[kind];
+  const failLabel = !target ? "Fail" : target.kind === "scrap" ? "Scrap" : "Send back";
   const fields = [
     ...step.checklist.map((item) => `answers.${item.key}` as Path<MoveValues>),
     "comment",
@@ -157,9 +186,9 @@ function MoveForm({
 
           {kind === "fail" && !noDefects && (
             <>
-              <Field id="move-defect" label="Defect" error={errors.defectId?.message}>
+              <Field id="move-defect" label="Defect" hint={target && defect ? usualText(defect, target, step, path) : undefined} error={errors.defectId?.message}>
                 {(props) => (
-                  <NativeSelect {...props} {...register("defectId", { onChange: () => setValue("changing", false) })}>
+                  <NativeSelect {...props} {...register("defectId", { onChange: () => !target && setValue("changing", false) })}>
                     <option value="">Choose a defect</option>
                     {step.defects.map((d) => (
                       <option key={d.id} value={d.id}>
@@ -169,7 +198,12 @@ function MoveForm({
                   </NativeSelect>
                 )}
               </Field>
-              {defect && !changing && (
+              {target && defect && differs(defect, target) && (
+                <Field id="move-reason" label="Reason" error={errors.overrideReason?.message}>
+                  {(props) => <Textarea {...props} {...register("overrideReason")} />}
+                </Field>
+              )}
+              {!target && defect && !changing && (
                 <div className="flex flex-wrap items-center justify-between gap-x-3">
                   <p className="text-sm text-ink">
                     <OutcomeText defect={defect} step={step} path={path} />
@@ -187,7 +221,7 @@ function MoveForm({
                   </Button>
                 </div>
               )}
-              {defect && changing && (
+              {!target && defect && changing && (
                 <>
                   <Field id="move-outcome" label="What should happen">
                     {(props) => (
@@ -253,7 +287,7 @@ function MoveForm({
               </Button>
             )}
             <Button type="submit" disabled={photos.busy || photosBlocked || noDefects}>
-              {kind === "pass" ? passLabel(next) : kind === "fail" ? "Fail" : "Correct"}
+              {kind === "pass" ? passLabel(next) : kind === "fail" ? failLabel : "Correct"}
             </Button>
           </div>
         </fieldset>

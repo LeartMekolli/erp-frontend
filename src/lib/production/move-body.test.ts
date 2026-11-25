@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createProductionStore } from "../../../test/fake-erp-api/production";
 import { groupIdOf } from "../../../test/fake-erp-api/orders-seed";
 
-import { emptyMoveValues, fieldPath, moveBody, moveSchema, type MoveValues } from "./move-body";
+import { emptyMoveValues, fieldPath, moveBody, moveSchema, type MoveTarget, type MoveValues } from "./move-body";
 import type { StepRules } from "./shape";
 import { staffRules } from "./staff";
 
@@ -114,6 +114,46 @@ describe("moveSchema", () => {
   it("wants a step and comment for a correction", () => {
     const step = finish();
     expect(problems(moveSchema("correction", step, 0), values(step))).toEqual(["toStep", "comment"]);
+  });
+});
+
+describe("a fail with its target already chosen", () => {
+  const FINISH: MoveTarget = { kind: "rework", step: { key: "finish", name: "Finish" } };
+  const PRINT: MoveTarget = { kind: "rework", step: { key: "print", name: "Print" } };
+  const SCRAP: MoveTarget = { kind: "scrap" };
+  const failWith = (step: StepRules, target: MoveTarget, changes: Partial<MoveValues> = {}) =>
+    ({ ...emptyMoveValues(step, target), defectId: step.defects[0]!.id, comment: "Pitted", ...changes }) satisfies MoveValues;
+
+  it("starts the form at the target", () => {
+    expect(emptyMoveValues(finalQc(), FINISH)).toMatchObject({ changing: true, outcome: "rework", reworkTo: "finish" });
+    expect(emptyMoveValues(finalQc(), SCRAP)).toMatchObject({ changing: true, outcome: "scrap", reworkTo: "" });
+    expect(emptyMoveValues(finalQc())).toMatchObject({ changing: false, outcome: "" });
+  });
+
+  it("sends nothing extra when the target is where the defect usually goes", () => {
+    const step = finalQc();
+    const body = moveBody("fail", step, ["a"], failWith(step, FINISH));
+    expect(body).not.toHaveProperty("outcome");
+    expect(body).not.toHaveProperty("rework_to");
+    expect(body).not.toHaveProperty("override_reason");
+  });
+
+  it("sends the other step and the reason when the target differs", () => {
+    const step = finish();
+    const body = moveBody("fail", step, ["a"], failWith(step, PRINT, { overrideReason: "Too deep" }));
+    expect(body).toMatchObject({ rework_to: "print", override_reason: "Too deep" });
+    expect(body).not.toHaveProperty("outcome");
+  });
+
+  it("sends a scrap with its reason", () => {
+    const step = finalQc();
+    expect(moveBody("fail", step, ["a"], failWith(step, SCRAP, { overrideReason: "Too deep" }))).toMatchObject({ outcome: "scrap", override_reason: "Too deep" });
+  });
+
+  it("asks why only when the target differs from the usual outcome", () => {
+    const step = finalQc();
+    expect(problems(moveSchema("fail", step, 0), failWith(step, FINISH))).toEqual([]);
+    expect(problems(moveSchema("fail", step, 0), failWith(step, SCRAP))).toEqual(["overrideReason"]);
   });
 });
 

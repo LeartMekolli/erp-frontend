@@ -205,7 +205,7 @@ describe("moving pieces on the Job page", () => {
     passElsewhere("4/12");
     await userEvent.click(within(dialog).getByRole("button", { name: "Pass" }));
 
-    expect(await screen.findByText("Some pieces cannot make this move")).toBeInTheDocument();
+    expect(await screen.findByText("Some pieces cannot make this move 4/12 is at final_qc, not finish")).toBeInTheDocument();
     expect(await screen.findByText("1 piece moved on and left your selection.")).toBeInTheDocument();
     expect(await screen.findByRole("dialog", { name: "Pass 1 piece at Finish" })).toBeInTheDocument();
   });

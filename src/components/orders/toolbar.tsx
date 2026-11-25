@@ -146,7 +146,18 @@ function Chips({ view, onChange }: { view: OrdersView; onChange: (change: ViewCh
   );
 }
 
-function SearchField({ q, onSearch }: { q: string | null; onSearch: (q: string | null) => void }) {
+/** A search box that searches 300 ms after the last key, and clears on Escape. Production's toolbar uses it too. */
+export function SearchField({
+  q,
+  onSearch,
+  label = "Search orders",
+  placeholder = "Order number or customer",
+}: {
+  q: string | null;
+  onSearch: (q: string | null) => void;
+  label?: string;
+  placeholder?: string;
+}) {
   const [text, setText] = useState(q ?? "");
   const [pending, setPending] = useState(false);
   const [seenQ, setSeenQ] = useState(q);
@@ -185,8 +196,8 @@ function SearchField({ q, onSearch }: { q: string | null; onSearch: (q: string |
       <Search aria-hidden className="pointer-events-none absolute left-3 size-4 text-ink-2" />
       <input
         type="search"
-        aria-label="Search orders"
-        placeholder="Order number or customer"
+        aria-label={label}
+        placeholder={placeholder}
         value={text}
         onChange={(event) => type(event.target.value)}
         onKeyDown={(event) => {

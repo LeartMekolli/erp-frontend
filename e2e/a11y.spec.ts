@@ -155,6 +155,25 @@ test("move bar and dialog: accessible and fit the screen", async ({ page }) => {
   await expectAccessibleAndFits(page);
 });
 
+test("production: accessible and fits the screen", async ({ page }) => {
+  await signIn(page, STAFF.email);
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+  await page.goto("/production");
+  await expect(page.getByRole("checkbox", { name: "Select #1048" })).toBeVisible();
+  await expectAccessibleAndFits(page);
+
+  // A line open, with its pieces, and the bar for a ticked one.
+  await page.getByRole("button", { name: "Pieces of #1048" }).click();
+  await page.getByRole("checkbox", { name: "Select 1/12" }).click();
+  const pass = page.getByRole("region", { name: "Picked lines" }).getByRole("button", { name: "Pass to Finish" });
+  await expect(pass).toBeEnabled();
+  await expectAccessibleAndFits(page);
+
+  await pass.click();
+  await expect(page.getByRole("dialog", { name: "Pass 1 piece at Print" })).toBeVisible();
+  await expectAccessibleAndFits(page);
+});
+
 test("piece history: accessible and fits the screen", async ({ page }) => {
   await openOrder(page);
   await page.getByRole("button", { name: "History of 1/12" }).click();

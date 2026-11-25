@@ -2209,7 +2209,7 @@ export interface paths {
         };
         /**
          * What a partner is owed, per job it has or had, newest first, a page at a time.
-         * @description A job is owed once every live piece has passed its workflow's payout step: the cost frozen when it was handed over, or what staff set instead. `due_total` is what Pay would transfer and `not_yet_total` what the jobs not owed yet will be, across every page. Each job names the order it is from, for a claim remake the claimed one.
+         * @description A job is owed once every live piece has passed its workflow's payout step: the cost frozen when it was handed over, or what staff set instead. `due_total` is what Pay would transfer and `not_yet_total` what the jobs not owed yet will be, across every page. Each job names the order it is from, for a claim remake the claimed one. A job's `paid` includes what payouts still pending hold; the partner summary shows those apart as `pending`.
          *
          *     Access: permission `partner.read`.
          */
@@ -2393,7 +2393,7 @@ export interface paths {
         };
         /**
          * You, and the partners you act for, with your role and each partner's status.
-         * @description For partner people only; staff and customer people get 403.
+         * @description For partner people only; staff and customer people get 403. `submitted_at` tells a partner still `setting_up` whether it is waiting for approval.
          *
          *     Access: any partner person.
          */
@@ -2617,7 +2617,7 @@ export interface paths {
         };
         /**
          * The partner's load and capacity per step type, as kept each day.
-         * @description Kept daily at 02:00 UTC for every step type the partner can do. `from` and `to` are UTC days, both included: by default the last 30 days, at most 366.
+         * @description Kept once a day for every step type the partner can do, under the workspace's day. `from` and `to` are workspace days, both included: by default the last 30 days, at most 366. `load` is the pieces offered to or accepted by the partner with the step still ahead. It is compared with one period's `capacity` as it is, whether `capacity_period` is `day` or `week`: offers go to a partner only while `load` plus the job fits within `capacity`.
          *
          *     Access: permission `partner.read`.
          */
@@ -2745,7 +2745,7 @@ export interface paths {
         };
         /**
          * The partner's load and capacity per step type, as kept each day.
-         * @description Kept daily at 02:00 UTC for every step type the partner can do. `from` and `to` are UTC days, both included: by default the last 30 days, at most 366.
+         * @description Kept once a day for every step type the partner can do, under the workspace's day. `from` and `to` are workspace days, both included: by default the last 30 days, at most 366. `load` is the pieces offered to or accepted by the partner with the step still ahead. It is compared with one period's `capacity` as it is, whether `capacity_period` is `day` or `week`: offers go to a partner only while `load` plus the job fits within `capacity`.
          *
          *     Access: a person acting for the partner, at least `member`; a suspended partner only reads.
          */
@@ -3059,7 +3059,7 @@ export interface paths {
         };
         /**
          * The partner's jobs finished and pieces at its steps for any dates; earnings per bucket for admins and owners.
-         * @description Dates are in the workspace time zone, both ends included. `earned`, `previous_earned`, `currency` and `series` are left out for a member.
+         * @description Dates are in the workspace time zone, both ends included. `pending` is money in a payout that has not been paid yet; a failed or reversed payout counts as owed again. `earned`, `previous_earned`, `paid_total`, `pending_total`, `owed_total`, `currency` and `series` are left out for a member.
          *
          *     Access: a person acting for the partner, at least `member`; a suspended partner only reads.
          */
@@ -3081,7 +3081,7 @@ export interface paths {
         };
         /**
          * What the partner is owed, per job it has or had, newest first, a page at a time.
-         * @description A job is owed once every live piece has passed the payout step: its cost, or an amount the workspace set. `due_total` is what the next payout pays and `not_yet_total` what the jobs not owed yet will be, across every page.
+         * @description A job is owed once every live piece has passed the payout step: its cost, or an amount the workspace set. `due_total` is what the next payout pays and `not_yet_total` what the jobs not owed yet will be, across every page. A job's `paid` includes what payouts still pending hold; the summary shows those apart as `pending`.
          *
          *     Access: a person acting for the partner, at least `admin`; a suspended partner only reads.
          */
@@ -4219,11 +4219,55 @@ export interface paths {
         };
         /**
          * Pieces in the order to work them, such as the work list of one step: first-in-line customers' first, then as they started.
-         * @description A customer whose priority band is first in line has its pieces listed first, higher bands before lower ones. Every step is listed to everyone who may read work lists; `may_work` says whether the caller may pass or fail the piece where it is, which at a step that requires a skill needs that skill (the owner always may). `workable=true` keeps only those pieces. `in_rework` says whether an active piece is being redone after a failed check, and `last_move` is what last happened to it.
+         * @description A customer whose priority band is first in line has its pieces listed first, higher bands before lower ones. Every step is listed to everyone who may read work lists; `may_work` says whether the caller may pass or fail the piece where it is, which at a step that requires a skill needs that skill (the owner always may). `workable=true` keeps only those pieces. `in_rework` says whether an active piece is being redone after a failed check, `last_move` is what last happened to it, and `group` whose the piece is and when it is due. `workflow_id` keeps the pieces of every version of one workflow, so a step key two workflows share can be told apart. `q` finds part of the product's name, any case, with `%` and `_` taken literally; with `order.read`, also an order's or a claim's number (`#` optional); with `customer.read`, also part of the customer's name. `sort` is `priority` when left out (first-in-line customers' groups first, then as the pieces started); `due_on` and `-due_on` order by `group.due_on`, soonest or latest first, with undated pieces last either way and ties as `priority`; `started` is as the pieces started. Every filter applies before paging; a cursor made for another sort is a 400.
          *
          *     Access: permission `workflow.read`.
          */
         get: operations["WorkOrdersController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workflow/work-orders/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How many active pieces are at each step of one workflow, for the tabs over a work list.
+         * @description Every step of the workflow's current version, in path order and zeros included, then any step key only an older version still has pieces at. `workflow_id` is required and covers every version; `q` and `workable` filter as on `GET /workflow/work-orders`, so a step's `active` is the number of pieces that list pages through for it with `status=active`. `in_rework` and `workable` are the part of `active` being redone, and the part the caller may pass or fail there.
+         *
+         *     Access: permission `workflow.read`.
+         */
+        get: operations["WorkOrdersController_counts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workflow/work-orders/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The order lines with active pieces at one step, one row each, with how many are there and what they need.
+         * @description One row per group (an order line, an assembly part, a remake or a quote) with active pieces at `step_key` of `workflow_id` (every version). `count` is the group's pieces there that the filters pick; `in_rework`, `workable` and `to_inspect` are the part of `count` being redone, that the caller may pass or fail, and to inspect in full at a step that samples. `q`, `workable` and `sort` work as on `GET /workflow/work-orders`, by group: `started` is as the groups started. Pages are by group, so one is never split; a cursor made for another sort is a 400.
+         *
+         *     Access: permission `workflow.read`.
+         */
+        get: operations["WorkOrdersController_groupsAtStep"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4239,7 +4283,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * The QC history one move at a time, newest first: each move whole, with every line it touched.
+         * @description Takes the filters of `GET /workflow/transitions`, plus `kind`, `workflow_id` (every version) and `q`, which matches as on `GET /workflow/work-orders`. A filter picks the moves with a row it matches, and each move is then listed whole: `groups` names every line the move touched, with how many of its pieces it moved and the partner it counts for there, even a line the filter didn't match. Pages are by move, so one is never split.
+         *
+         *     Access: permission `workflow.read`.
+         */
+        get: operations["WorkOrdersController_moveList"];
         put?: never;
         /**
          * Pass, fail or correct pieces at once, each writing a permanent transition with the same answers and photos.
@@ -4265,7 +4315,7 @@ export interface paths {
         };
         /**
          * The QC history: every move of every piece, newest first, filtered by piece, group, step, defect, design file, actor or time.
-         * @description `step_key` matches the step the move was made at. `from` is inclusive and `to` exclusive.
+         * @description `step_key` matches the step the move was made at. `from` is inclusive and `to` exclusive. `move_id` keeps the rows one move wrote.
          *
          *     Access: permission `workflow.read`.
          */
@@ -18017,6 +18067,8 @@ export interface operations {
                             role: "member" | "admin" | "owner";
                             /** @enum {string} */
                             status: "setting_up" | "approved" | "suspended";
+                            /** Format: date-time */
+                            submitted_at: string | null;
                         }[];
                     };
                 };
@@ -21208,12 +21260,16 @@ export interface operations {
                         }[];
                         earned?: string;
                         previous_earned?: string;
+                        paid_total?: string;
+                        pending_total?: string;
+                        owed_total?: string;
                         currency?: string;
                         series?: {
                             /** Format: date */
                             start: string;
                             days: number;
                             paid: string;
+                            pending: string;
                             owed: string;
                         }[];
                     };
@@ -28648,12 +28704,15 @@ export interface operations {
     WorkOrdersController_list: {
         parameters: {
             query?: {
+                workflow_id?: string;
+                q?: string;
+                workable?: "true";
                 limit?: number;
                 cursor?: string;
                 group_id?: string;
                 step_key?: string;
                 status?: "active" | "finished" | "scrapped" | "cancelled";
-                workable?: "true";
+                sort?: "priority" | "due_on" | "-due_on" | "started";
             };
             header?: never;
             path?: never;
@@ -28720,6 +28779,452 @@ export interface operations {
                                 /** Format: date-time */
                                 created_at: string;
                             } | null;
+                            group: {
+                                /** Format: uuid */
+                                id: string;
+                                workflow: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                    version: number;
+                                };
+                                product: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                    options: {
+                                        group: {
+                                            key: string;
+                                            name: string;
+                                        };
+                                        value: {
+                                            key: string;
+                                            name: string;
+                                        };
+                                    }[];
+                                    size: ({
+                                        scale: string;
+                                    } | {
+                                        named: string;
+                                    }) | null;
+                                } | null;
+                                /** @enum {string} */
+                                source: "order_line" | "order_line_part" | "claim_line" | "quote";
+                                order?: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    number: number;
+                                    /** Format: uuid */
+                                    line_id: string;
+                                } | null;
+                                claim?: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    number: number;
+                                } | null;
+                                customer?: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                } | null;
+                                /** Format: date */
+                                due_on: string | null;
+                                late: boolean;
+                                priority: {
+                                    key: string;
+                                    name: string;
+                                } | null;
+                                partner: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                    /** Format: date */
+                                    due_on: string | null;
+                                    late: boolean;
+                                } | null;
+                            };
+                        }[];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    WorkOrdersController_counts: {
+        parameters: {
+            query: {
+                workflow_id: string;
+                q?: string;
+                workable?: "true";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        steps: {
+                            key: string;
+                            name: string;
+                            active: number;
+                            in_rework: number;
+                            workable: number;
+                        }[];
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    WorkOrdersController_groupsAtStep: {
+        parameters: {
+            query: {
+                workflow_id: string;
+                q?: string;
+                workable?: "true";
+                step_key: string;
+                sort?: "priority" | "due_on" | "-due_on" | "started";
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            group: {
+                                /** Format: uuid */
+                                id: string;
+                                workflow: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                    version: number;
+                                };
+                                product: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                    options: {
+                                        group: {
+                                            key: string;
+                                            name: string;
+                                        };
+                                        value: {
+                                            key: string;
+                                            name: string;
+                                        };
+                                    }[];
+                                    size: ({
+                                        scale: string;
+                                    } | {
+                                        named: string;
+                                    }) | null;
+                                } | null;
+                                /** @enum {string} */
+                                source: "order_line" | "order_line_part" | "claim_line" | "quote";
+                                order?: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    number: number;
+                                    /** Format: uuid */
+                                    line_id: string;
+                                } | null;
+                                claim?: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    number: number;
+                                } | null;
+                                customer?: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                } | null;
+                                /** Format: date */
+                                due_on: string | null;
+                                late: boolean;
+                                priority: {
+                                    key: string;
+                                    name: string;
+                                } | null;
+                                partner: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                    /** Format: date */
+                                    due_on: string | null;
+                                    late: boolean;
+                                } | null;
+                            };
+                            count: number;
+                            in_rework: number;
+                            workable: number;
+                            to_inspect: number;
+                        }[];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    WorkOrdersController_moveList: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+                work_order_id?: string;
+                group_id?: string;
+                step_key?: string;
+                defect_key?: string;
+                file_version_id?: string;
+                actor_user_id?: string;
+                inspected?: "true" | "false";
+                from?: string;
+                to?: string;
+                move_id?: string;
+                kind?: "pass" | "fail" | "correction";
+                workflow_id?: string;
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** Format: uuid */
+                            id: string;
+                            /** @enum {string} */
+                            kind: "pass" | "fail" | "correction";
+                            /** @enum {string|null} */
+                            outcome: "rework" | "scrap" | "continue" | null;
+                            from_step: {
+                                /** Format: uuid */
+                                id: string;
+                                key: string;
+                                name: string;
+                            } | null;
+                            to_step: {
+                                /** Format: uuid */
+                                id: string;
+                                key: string;
+                                name: string;
+                            } | null;
+                            defect: {
+                                /** Format: uuid */
+                                id: string;
+                                key: string;
+                                name: string;
+                            } | null;
+                            override_reason: string | null;
+                            comment: string | null;
+                            answers: {
+                                item: string;
+                                label: string;
+                                value: string;
+                                value_label: string | null;
+                                note: string | null;
+                                passing: boolean;
+                            }[];
+                            photos: {
+                                /** Format: uuid */
+                                file_id: string;
+                                /** Format: uuid */
+                                file_version_id: string;
+                            }[];
+                            actor: {
+                                /** Format: uuid */
+                                id: string;
+                                name: string;
+                            };
+                            inspected: boolean;
+                            /** Format: date-time */
+                            created_at: string;
+                            groups: {
+                                group: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    workflow: {
+                                        /** Format: uuid */
+                                        id: string;
+                                        name: string;
+                                        version: number;
+                                    };
+                                    product: {
+                                        /** Format: uuid */
+                                        id: string;
+                                        name: string;
+                                        options: {
+                                            group: {
+                                                key: string;
+                                                name: string;
+                                            };
+                                            value: {
+                                                key: string;
+                                                name: string;
+                                            };
+                                        }[];
+                                        size: ({
+                                            scale: string;
+                                        } | {
+                                            named: string;
+                                        }) | null;
+                                    } | null;
+                                    /** @enum {string} */
+                                    source: "order_line" | "order_line_part" | "claim_line" | "quote";
+                                    order?: {
+                                        /** Format: uuid */
+                                        id: string;
+                                        number: number;
+                                        /** Format: uuid */
+                                        line_id: string;
+                                    } | null;
+                                    claim?: {
+                                        /** Format: uuid */
+                                        id: string;
+                                        number: number;
+                                    } | null;
+                                    customer?: {
+                                        /** Format: uuid */
+                                        id: string;
+                                        name: string;
+                                    } | null;
+                                    /** Format: date */
+                                    due_on: string | null;
+                                    late: boolean;
+                                    priority: {
+                                        key: string;
+                                        name: string;
+                                    } | null;
+                                    partner: {
+                                        /** Format: uuid */
+                                        id: string;
+                                        name: string;
+                                        /** Format: date */
+                                        due_on: string | null;
+                                        late: boolean;
+                                    } | null;
+                                };
+                                count: number;
+                                partner: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    name: string;
+                                } | null;
+                            }[];
                         }[];
                         next_cursor: string | null;
                     };
@@ -28881,6 +29386,7 @@ export interface operations {
                 inspected?: "true" | "false";
                 from?: string;
                 to?: string;
+                move_id?: string;
             };
             header?: never;
             path?: never;

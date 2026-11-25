@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useQueryClient, type InfiniteData, type QueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient, type InfiniteData, type QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
 import { idempotencyHeader } from "@/lib/api/idempotency";
@@ -11,13 +11,17 @@ import type {
   MoveBody,
   MoveHistory,
   MoveResponse,
+  PieceSort,
+  StepCounts,
+  StepGroup,
   WorkOrderDetail,
   WorkOrderListItem,
+  WorkflowSummary,
   WorkflowVersion,
 } from "@/lib/api/schema-types";
 import { invalidateOrders } from "@/lib/orders/queries";
 import { useApiMutation } from "@/lib/query/use-api-mutation";
-import { useCursorList } from "@/lib/query/use-cursor-list";
+import { useCursorList, type Page } from "@/lib/query/use-cursor-list";
 
 /** The pieces a step group can list: active ones at a step, or those off the path. */
 export type PieceListStatus = "active" | "finished" | "scrapped";
@@ -28,8 +32,25 @@ export type MovesFilter = "all" | "fails";
 const PIECES_PAGE = 200;
 const MOVES_PAGE = 25;
 
+/** How often Production's counts and lines read again while the tab is visible: other people move pieces too. */
+const REFRESH_MS = 30_000;
+const LINES_PAGE = 50;
+
+/** Which order lines By step lists: one workflow's step, searched, sorted, and only what the caller may work. */
+export interface StepLinesFilter {
+  workflowId: string;
+  stepKey: string;
+  q: string | null;
+  sort: PieceSort;
+  workable: boolean;
+}
+
 export const productionKeys = {
   all: ["production"] as const,
+  workflows: () => ["production", "workflows"] as const,
+  counts: (workflowId: string, workable: boolean, q: string | null) => ["production", "counts", workflowId, workable, q] as const,
+  lines: (workflowId: string, stepKey: string, q: string | null, sort: PieceSort, workable: boolean) =>
+    ["production", "lines", workflowId, stepKey, q, sort, workable] as const,
   group: (id: string) => ["production", "group", id] as const,
   pieces: (groupId: string, stepKey: string | null, status: PieceListStatus) => ["production", "pieces", groupId, stepKey, status] as const,
   moves: (groupId: string, filter: MovesFilter) => ["production", "moves", groupId, filter] as const,
@@ -50,23 +71,110 @@ export function useGroup(id: string, enabled: boolean) {
   });
 }
 
+/** One page of a line's pieces at a step, or of its finished or scrapped ones when `stepKey` is null. */
+async function piecesPage(groupId: string, stepKey: string | null, status: PieceListStatus, cursor: string | undefined): Promise<Page<WorkOrderListItem>> {
+  const query = {
+    group_id: groupId,
+    status,
+    limit: PIECES_PAGE,
+    ...(stepKey ? { step_key: stepKey } : {}),
+    ...(cursor ? { cursor } : {}),
+  };
+  const { data, error, response } = await api.GET("/workflow/work-orders", { params: { query } });
+  if (!data) throw problemFrom(error, response);
+  return data;
+}
+
 /** One step's pieces, or the finished or scrapped ones when `stepKey` is null. */
 export function useStepPieces(groupId: string, stepKey: string | null, status: PieceListStatus, enabled: boolean) {
   return useCursorList<WorkOrderListItem>({
     queryKey: productionKeys.pieces(groupId, stepKey, status),
+    fetchPage: (cursor) => piecesPage(groupId, stepKey, status, cursor),
+    enabled,
+  });
+}
+
+/**
+ * Every active piece of a line at a step, page after page, so ticking a line takes all of it and not only its
+ * first page. Kept under the same key `useStepPieces` reads, so opening the line afterwards shows them at once.
+ */
+export async function fetchLinePieces(client: QueryClient, groupId: string, stepKey: string): Promise<WorkOrderListItem[]> {
+  const pages: Page<WorkOrderListItem>[] = [];
+  const pageParams: (string | undefined)[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await piecesPage(groupId, stepKey, "active", cursor);
+    pages.push(page);
+    pageParams.push(cursor);
+    cursor = page.next_cursor ?? undefined;
+  } while (cursor);
+  client.setQueryData<InfiniteData<Page<WorkOrderListItem>>>(productionKeys.pieces(groupId, stepKey, "active"), { pages, pageParams });
+  return pages.flatMap((page) => page.data);
+}
+
+/** Every workflow (product type) with its current version. */
+export function useWorkflows() {
+  return useQuery({
+    queryKey: productionKeys.workflows(),
+    queryFn: async (): Promise<WorkflowSummary[]> => {
+      const { data, error, response } = await api.GET("/workflow/workflows");
+      if (!data) throw problemFrom(error, response);
+      return data.data;
+    },
+  });
+}
+
+/** The active pieces at each step, one query per workflow, so the busiest workflow can be picked from them all. */
+export function useWorkflowCounts(workflowIds: string[], workable: boolean, q: string | null) {
+  const client = useQueryClient();
+  return useQueries({
+    queries: workflowIds.map((workflowId) => ({
+      queryKey: productionKeys.counts(workflowId, workable, q),
+      queryFn: async (): Promise<StepCounts> => {
+        const query = { workflow_id: workflowId, ...(workable ? { workable: "true" as const } : {}), ...(q ? { q } : {}) };
+        const { data, error, response } = await api.GET("/workflow/work-orders/counts", { params: { query } });
+        if (!data) throw problemFrom(error, response);
+        return data;
+      },
+      refetchInterval: REFRESH_MS,
+      // A new search or "Only what I can work" keeps the step tabs on the latest counts until the new ones arrive.
+      // `keepPreviousData` can't: `useQueries` gives a changed key a new observer, with nothing previous.
+      placeholderData: () => latestCounts(client, workflowId),
+    })),
+  });
+}
+
+/** The counts most recently loaded for a workflow, whatever their search or filter. */
+function latestCounts(client: QueryClient, workflowId: string): StepCounts | undefined {
+  const loaded = client
+    .getQueryCache()
+    .findAll({ queryKey: ["production", "counts", workflowId] })
+    .filter((query) => query.state.data !== undefined)
+    .sort((a, b) => b.state.dataUpdatedAt - a.state.dataUpdatedAt);
+  return loaded[0]?.state.data as StepCounts | undefined;
+}
+
+/** The order lines at one step, `LINES_PAGE` a page, each with how many of its pieces wait there. */
+export function useStepLines(filter: StepLinesFilter, enabled: boolean) {
+  const { workflowId, stepKey, q, sort, workable } = filter;
+  return useCursorList<StepGroup>({
+    queryKey: productionKeys.lines(workflowId, stepKey, q, sort, workable),
     fetchPage: async (cursor) => {
       const query = {
-        group_id: groupId,
-        status,
-        limit: PIECES_PAGE,
-        ...(stepKey ? { step_key: stepKey } : {}),
+        workflow_id: workflowId,
+        step_key: stepKey,
+        sort,
+        limit: LINES_PAGE,
+        ...(workable ? { workable: "true" as const } : {}),
+        ...(q ? { q } : {}),
         ...(cursor ? { cursor } : {}),
       };
-      const { data, error, response } = await api.GET("/workflow/work-orders", { params: { query } });
+      const { data, error, response } = await api.GET("/workflow/work-orders/groups", { params: { query } });
       if (!data) throw problemFrom(error, response);
       return data;
     },
     enabled,
+    refetchInterval: REFRESH_MS,
   });
 }
 

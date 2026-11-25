@@ -293,6 +293,8 @@ export function createFakeState(now: () => number = Date.now) {
           display_name: PARTNER_NAMES[id] ?? "Workshop",
           role: user.partnerRole ?? ("owner" as const),
           status: suspended.has(id) ? ("suspended" as const) : ("approved" as const),
+          // Seeded partners were approved by staff without submitting (erp-api `partner-response.ts:539`).
+          submitted_at: null,
         })),
       };
     },

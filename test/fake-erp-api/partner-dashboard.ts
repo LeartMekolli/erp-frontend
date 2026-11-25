@@ -165,7 +165,8 @@ export function createPartnerDashboardStore(now: () => number) {
         const amount = n === buckets.length - 1 ? left : Math.floor((total * bucketDays) / days);
         left -= amount;
         const recent = spanDays(start, to) <= 7;
-        return { start, days: bucketDays, paid: money(recent ? 0 : amount), owed: money(recent ? amount : 0) };
+        // The fake has no payout still on its way, so nothing is pending (erp-api `owed-dates.ts:35`).
+        return { start, days: bucketDays, paid: money(recent ? 0 : amount), pending: money(0), owed: money(recent ? amount : 0) };
       });
       return { ok: true, body: { ...body, earned: money(total), previous_earned: money(scale(previousEarned, days)), currency: CURRENCY, series } };
     },
