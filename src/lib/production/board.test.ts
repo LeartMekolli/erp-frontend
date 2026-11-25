@@ -4,7 +4,8 @@ import { createProductionStore } from "../../../test/fake-erp-api/production";
 
 import type { StepCount, StepGroup } from "../api/schema-types";
 
-import { boardColumns, dropMove, dropTargets, passesAtOnce } from "./board";
+import { boardColumns, dropMove, dropPlan, dropTargets, passesAtOnce } from "./board";
+import { toggleLine } from "./line-selection";
 import { staffRules } from "./staff";
 
 const WORKFLOW_ID = "b2b2b2b2-0000-4000-8000-000000000001";
@@ -60,6 +61,45 @@ describe("dropMove", () => {
     expect(dropMove(targets, "scrap", "final_qc")).toEqual({ kind: "fail", target: { kind: "scrap" } });
     expect(dropMove(targets, "print", "final_qc")).toBeNull();
     expect(dropMove(targets, "final_qc", "final_qc")).toBeNull();
+  });
+});
+
+describe("dropPlan", () => {
+  function setup() {
+    const { rules, path, printLines } = fake();
+    const line = (number: number) => printLines.find((one) => one.group.order?.number === number)!;
+    const targets = dropTargets(rules("print"), path);
+    // #1041 ticked at Print.
+    const ticked = toggleLine(null, "print", line(1041), ["a", "b"]);
+    return { line, targets, ticked };
+  }
+
+  it("moves every ticked card when a ticked card is dropped", () => {
+    const { line, targets, ticked } = setup();
+    expect(dropPlan({ stepKey: "print", line: line(1041) }, "finish", targets, ticked)).toEqual({ move: { kind: "pass" }, takes: "selection" });
+  });
+
+  it("moves an unticked card alone, whatever is ticked", () => {
+    const { line, targets, ticked } = setup();
+    expect(dropPlan({ stepKey: "print", line: line(1048) }, "finish", targets, ticked)).toEqual({ move: { kind: "pass" }, takes: "line" });
+    // Ticks at another step don't count as this card's.
+    const elsewhere = toggleLine(null, "finish", line(1041), ["a"]);
+    expect(dropPlan({ stepKey: "print", line: line(1041) }, "finish", targets, elsewhere)).toEqual({ move: { kind: "pass" }, takes: "line" });
+  });
+
+  it("moves a piece dragged out of an open card alone", () => {
+    const { line, targets, ticked } = setup();
+    expect(dropPlan({ stepKey: "print", line: line(1041), pieceId: "a" }, "finish", targets, ticked)).toEqual({ move: { kind: "pass" }, takes: "piece" });
+  });
+
+  it("does nothing on the card's own column, a step it can't go to, or nowhere", () => {
+    const { line, targets, ticked } = setup();
+    const item = { stepKey: "print", line: line(1041) };
+    expect(dropPlan(item, "print", targets, ticked)).toBeNull();
+    expect(dropPlan(item, "packing", targets, ticked)).toBeNull();
+    expect(dropPlan(item, "scrap", targets, ticked)).toBeNull();
+    expect(dropPlan(item, null, targets, ticked)).toBeNull();
+    expect(dropPlan(item, "finish", null, ticked)).toBeNull();
   });
 });
 

@@ -2,6 +2,7 @@
 
 import { CircleX, RotateCcw } from "lucide-react";
 import { cn } from "cn";
+import type { ReactNode } from "react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { HOLD_WORDS } from "@/lib/production/holds";
@@ -30,7 +31,10 @@ export function PieceRow({
   selected,
   onToggle,
   lostLook = false,
+  handle,
 }: {
+  /** The Board's drag handle, first in the row. */
+  handle?: ReactNode;
   piece: Piece;
   /** Whether this list offers picking at all. */
   selectable: boolean;
@@ -44,6 +48,7 @@ export function PieceRow({
   const lost = lostLook && piece.status === "scrapped";
   return (
     <li className="flex min-h-11 items-center gap-4 border-t border-line px-1 text-sm">
+      {handle}
       {selectable && !piece.held && (
         <Checkbox
           checked={selected}

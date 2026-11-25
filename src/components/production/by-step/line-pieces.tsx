@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { ListEnd } from "@/components/data/list-end";
 import { LoadFailure } from "@/components/data/load-failure";
 import { PieceRow } from "@/components/production/piece-row";
@@ -16,6 +18,7 @@ export function LinePieces({
   selectable,
   selection,
   onTogglePiece,
+  handle,
 }: {
   line: StepGroup;
   stepKey: string;
@@ -23,6 +26,8 @@ export function LinePieces({
   /** Already kept to this step by the table. */
   selection: LineSelection | null;
   onTogglePiece: (piece: Piece) => void;
+  /** The Board's drag handle for a piece, where it may be dragged out on its own. */
+  handle?: (piece: Piece) => ReactNode;
 }) {
   const list = useStepPieces(line.group.id, stepKey, "active", true);
   const picked = selection?.lines.get(line.group.id)?.ids;
@@ -50,6 +55,7 @@ export function LinePieces({
               selectable={selectable}
               selected={picked?.has(piece.id) ?? false}
               onToggle={() => onTogglePiece(piece)}
+              handle={handle?.(piece)}
             />
           );
         })}

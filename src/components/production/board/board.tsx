@@ -1,5 +1,15 @@
 "use client";
 
+import {
+  DndContext,
+  DragOverlay,
+  MeasuringStrategy,
+  type Active,
+  type Announcements,
+  type DragEndEvent,
+  type DragStartEvent,
+  type Over,
+} from "@dnd-kit/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { useId, useRef, useState, type ReactNode } from "react";
 
@@ -11,18 +21,31 @@ import { useMoveFlow } from "@/components/production/move-flow/use-move-flow";
 import { useMe } from "@/components/session/session-gate";
 import { Checkbox } from "@/components/ui/checkbox";
 import { NativeSelect } from "@/components/ui/native-select";
-import type { PieceSort, StepGroup } from "@/lib/api/schema-types";
+import type { PieceSort, StepGroup, WorkflowVersion } from "@/lib/api/schema-types";
 import { workspaceToday } from "@/lib/orders/labels";
-import { boardColumns, type DropMove } from "@/lib/production/board";
-import { keepVersion, lineState, toggleLine, type LineSelection } from "@/lib/production/line-selection";
-import { fetchLinePieces, sendMoveNow, useStepLines, useWorkflowCounts, useWorkflows, useWorkflowVersion } from "@/lib/production/queries";
+import { boardColumns, dropMove, dropPlan, dropTargets, type DragItem, type DropMove, type DropTargets } from "@/lib/production/board";
+import { cancelledWords, DRAG_INSTRUCTIONS, droppedWords, overWords, pickedUpWords } from "@/lib/production/board-words";
+import { keepVersion, lineState, pieceIds, toggleLine, type LineSelection } from "@/lib/production/line-selection";
+import {
+  fetchLinePieces,
+  productionKeys,
+  sendMoveNow,
+  useStepLines,
+  useWorkflowCounts,
+  useWorkflows,
+  useWorkflowVersion,
+  workflowVersionQuery,
+} from "@/lib/production/queries";
+import { staffRules } from "@/lib/production/staff";
 import { useHeldMove, type HeldMove } from "@/lib/production/use-held-move";
+import { useMediaQuery } from "@/lib/use-media-query";
 
 import { submitErrorText } from "../submit-error";
 
 import type { CardExtras } from "./board-column";
 import { BoardColumn } from "./board-column";
 import { CardMenu } from "./card-menu";
+import { DragPreview, ScrapZone, useBoardSensors, type DropZone } from "./drag";
 import { HeldCard } from "./held-card";
 import { OlderLines } from "./older-lines";
 
@@ -147,6 +170,93 @@ export function Board({ canMove, canUpload, workflowId, onWorkflow }: BoardProps
     }
   }
 
+  // Dragging, from 768 px. Below, cards move through Move to…, and a swipe scrolls between steps.
+  const wide = useMediaQuery("(min-width: 768px)");
+  const reduced = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const sensors = useBoardSensors();
+  const [dragging, setDragging] = useState<{ item: DragItem; targets: DropTargets | null } | null>(null);
+
+  /** Where the dragged card may land, from the rules of its own version (read by its Move to… already). */
+  function targetsFor(item: DragItem): DropTargets | null {
+    if (!workflowId) return null;
+    const steps = client.getQueryData<WorkflowVersion>(productionKeys.version(workflowId, item.line.group.workflow.version))?.steps;
+    const step = steps?.find((candidate) => candidate.key === item.stepKey);
+    if (!steps || !step) return null;
+    const path = steps.map((candidate) => ({ key: candidate.key, name: candidate.name }));
+    return dropTargets(staffRules(step, path), path);
+  }
+
+  /** How many pieces a drag takes: the piece, every ticked piece when the card is ticked, or the card's own. */
+  function piecesOf(item: DragItem): number {
+    if (item.pieceId !== undefined) return 1;
+    if (selection?.stepKey === item.stepKey && selection.lines.has(item.line.group.id)) return pieceIds(selection).length;
+    return item.line.workable;
+  }
+
+  const itemOf = (active: Active) => (active.data.current as DragItem | undefined) ?? null;
+  const stepName = (over: Over | null) => (over === null ? null : over.id === "scrap" ? "Scrap" : (stepNames.get(String(over.id)) ?? null));
+  const moveOver = (item: DragItem, over: Over | null) => {
+    const targets = targetsFor(item);
+    return over && targets ? dropMove(targets, String(over.id), item.stepKey) : null;
+  };
+
+  const announcements: Announcements = {
+    onDragStart: ({ active }) => {
+      const item = itemOf(active);
+      return item ? pickedUpWords(item.line, piecesOf(item)) : undefined;
+    },
+    onDragOver: ({ active, over }) => {
+      const item = itemOf(active);
+      return item ? overWords(stepName(over), moveOver(item, over)) : undefined;
+    },
+    onDragEnd: ({ active, over }) => {
+      const item = itemOf(active);
+      return item ? droppedWords(stepName(over), moveOver(item, over)) : undefined;
+    },
+    onDragCancel: () => cancelledWords(),
+  };
+
+  function onDragStart({ active }: DragStartEvent) {
+    const item = itemOf(active);
+    if (!item) return;
+    setNotice(null);
+    const targets = targetsFor(item);
+    setDragging({ item, targets });
+    if (targets || !workflowId) return;
+    // Rules not read yet: nothing lights up until they are.
+    void client.ensureQueryData(workflowVersionQuery(workflowId, item.line.group.workflow.version)).then(() =>
+      setDragging((current) => (current?.item === item ? { item, targets: targetsFor(item) } : current)),
+    );
+  }
+
+  /** A drop goes through the same move flow as Move to…: held with Undo, or the dialog. */
+  function onDragEnd({ active, over }: DragEndEvent) {
+    const item = itemOf(active);
+    const targets = dragging?.targets ?? (item ? targetsFor(item) : null);
+    setDragging(null);
+    if (!item) return;
+    const plan = dropPlan(item, over ? String(over.id) : null, targets, selection);
+    if (!plan) return;
+    const target = plan.move.kind === "fail" ? plan.move.target : undefined;
+    if (plan.takes === "selection") void flow.start(plan.move.kind, target);
+    else if (plan.takes === "line") void moveCard(item.line, item.stepKey, plan.move);
+    else {
+      const piece: LineSelection = {
+        stepKey: item.stepKey,
+        lines: new Map([[item.line.group.id, { line: item.line, version: item.line.group.workflow.version, ids: new Set([item.pieceId!]) }]]),
+      };
+      void flow.start(plan.move.kind, target, piece);
+    }
+  }
+
+  /** While a card is dragged, whether it may land on this column. */
+  function zoneFor(stepKey: string): DropZone {
+    const targets = dragging?.targets;
+    if (!targets) return null;
+    if (targets.pass?.key === stepKey) return "pass";
+    return targets.rework.some((step) => step.key === stepKey) ? "back" : null;
+  }
+
   /** The tick box and Move to… a card gets at `stepKey`; none for someone who can't move, or a line erp-api holds. */
   function cardExtras(line: StepGroup, stepKey: string): CardExtras {
     const here = selection?.stepKey === stepKey ? selection : null;
@@ -155,6 +265,8 @@ export function Board({ canMove, canUpload, workflowId, onWorkflow }: BoardProps
     const isBusy = busy.has(line.group.id);
     return {
       picked: checked !== false,
+      // Lines at a step only an older version has move through Move to… alone.
+      draggable: wide && line.workable > 0 && stepNames.has(stepKey),
       tick: (
         <Checkbox
           checked={checked}
@@ -191,6 +303,8 @@ export function Board({ canMove, canUpload, workflowId, onWorkflow }: BoardProps
   const current = version.data?.steps.map((step) => ({ key: step.key, name: step.name })) ?? null;
   const layout = steps && current ? boardColumns(steps, current) : null;
   const shown = phoneStep ?? layout?.columns[0]?.key ?? "";
+  // The current version's columns by key: where a card may be dragged, and how the drag words name them.
+  const stepNames = new Map(layout?.columns.map((step) => [step.key, step.name]) ?? []);
 
   /** The phone's picker: brings that step's column into view. */
   function showStep(key: string) {
@@ -243,21 +357,16 @@ export function Board({ canMove, canUpload, workflowId, onWorkflow }: BoardProps
               canMove={canMove}
               extras={cardExtras}
               held={held.held?.toStep.key === step.key ? <HeldCard move={held.held} onUndo={undoHeld} /> : undefined}
+              zone={zoneFor(step.key)}
             />
           ))}
-          {canMove && (
-            <section
-              aria-label="Scrap"
-              className="flex w-full shrink-0 snap-center flex-col items-center justify-center gap-1 self-stretch rounded-[18px] border-2 border-dashed border-lost-ink/40 p-4 text-center md:w-28"
-            >
-              <span className="font-semibold text-lost-ink">Scrap</span>
-              <span className="text-caption text-ink-2">Drop to scrap, with a defect</span>
-            </section>
-          )}
+          {canMove && <ScrapZone open={dragging?.targets?.scrap ?? false} />}
         </div>
       </div>
     );
   }
+
+  const dragged = dragging?.item ?? null;
 
   return (
     <section ref={boardRef} aria-label="Board" className="flex flex-col gap-3">
@@ -289,7 +398,20 @@ export function Board({ canMove, canUpload, workflowId, onWorkflow }: BoardProps
         {notice}
       </p>
       {/* On phones the bar is fixed to the screen's bottom: room for it under the columns. */}
-      <div className={selection ? "pb-36 md:pb-0" : undefined}>{body}</div>
+      <DndContext
+        sensors={sensors}
+        // Columns light up once the dragged card's rules are known, so they're measured whenever they change.
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+        accessibility={{ announcements, screenReaderInstructions: { draggable: DRAG_INSTRUCTIONS } }}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => setDragging(null)}
+      >
+        <div className={selection ? "pb-36 md:pb-0" : undefined}>{body}</div>
+        <DragOverlay dropAnimation={reduced ? null : undefined}>
+          {dragged ? <DragPreview name={lineName(dragged.line)} pieces={piecesOf(dragged)} /> : null}
+        </DragOverlay>
+      </DndContext>
       {canMove && selection && (
         <SelectionBar
           selection={selection}

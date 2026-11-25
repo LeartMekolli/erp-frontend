@@ -1,5 +1,6 @@
 import type { StepCount, StepGroup } from "@/lib/api/schema-types";
 
+import type { LineSelection } from "./line-selection";
 import type { MoveTarget } from "./move-body";
 import type { StepRules } from "./shape";
 
@@ -41,6 +42,31 @@ export function dropMove(targets: DropTargets, over: string, from: string): Drop
   if (targets.pass?.key === over) return { kind: "pass" };
   const back = targets.rework.find((step) => step.key === over);
   return back ? { kind: "fail", target: { kind: "rework", step: back } } : null;
+}
+
+/** What's being dragged: a card (an order line at a step), or one piece out of an open card. */
+export interface DragItem {
+  stepKey: string;
+  line: StepGroup;
+  pieceId?: string;
+}
+
+/**
+ * What a drop does and which pieces it takes: every ticked card when a ticked card is dropped, else the dragged
+ * card (or piece) alone, leaving the ticks as they were. Null where nothing happens.
+ */
+export function dropPlan(
+  item: DragItem,
+  over: string | null,
+  targets: DropTargets | null,
+  selection: LineSelection | null,
+): { move: DropMove; takes: "selection" | "line" | "piece" } | null {
+  if (over === null || targets === null) return null;
+  const move = dropMove(targets, over, item.stepKey);
+  if (!move) return null;
+  if (item.pieceId !== undefined) return { move, takes: "piece" };
+  const ticked = selection?.stepKey === item.stepKey && selection.lines.has(item.line.group.id);
+  return { move, takes: ticked ? "selection" : "line" };
 }
 
 /**

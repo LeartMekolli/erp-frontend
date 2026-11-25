@@ -9,6 +9,8 @@ import { orderHref } from "@/components/orders/order-row";
 import { HerePill, LineDue, LineStatus, lineName } from "@/components/production/by-step/line-row";
 import type { StepGroup } from "@/lib/api/schema-types";
 
+import { useCardDrag } from "./drag";
+
 /**
  * One order line waiting at a step, as a card: its order (or product, for staff who can't read orders), the
  * product, customer and due day, what it needs, and its pieces here. `tick` and `menu` are the card's tick box
@@ -16,6 +18,7 @@ import type { StepGroup } from "@/lib/api/schema-types";
  */
 export function BoardCard({
   line,
+  stepKey,
   today,
   selectable,
   picked = false,
@@ -23,9 +26,13 @@ export function BoardCard({
   onToggleOpen,
   tick,
   menu,
+  draggable = false,
   children,
 }: {
   line: StepGroup;
+  stepKey: string;
+  /** Whether it has a drag handle: from 768 px, for someone who may move it. */
+  draggable?: boolean;
   today: string;
   /** Whether the person may move pieces at all, for "Needs a skill you don't have". */
   selectable: boolean;
@@ -39,12 +46,19 @@ export function BoardCard({
 }) {
   const { group } = line;
   const name = lineName(line);
+  const { setNodeRef, handle, isDragging } = useCardDrag(`line:${stepKey}:${group.id}`, draggable ? { stepKey, line } : null, `Drag ${name}`);
   return (
     <li
+      ref={setNodeRef}
       data-line-card
-      className={cn("flex flex-col gap-1.5 rounded-xl border border-line bg-card px-2.5 py-2 text-sm", picked && "border-violet ring-2 ring-lilac")}
+      className={cn(
+        "flex flex-col gap-1.5 rounded-xl border border-line bg-card px-2.5 py-2 text-sm",
+        picked && "border-violet ring-2 ring-lilac",
+        isDragging && "opacity-40",
+      )}
     >
       <div className="flex min-w-0 items-center gap-2">
+        {handle}
         {tick}
         {group.order ? (
           <Link href={orderHref({ id: group.order.id })} className="font-semibold text-ink tabular-nums hover:underline">
