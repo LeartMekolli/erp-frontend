@@ -11,7 +11,7 @@ import {
   type Over,
 } from "@dnd-kit/core";
 import { useQueryClient } from "@tanstack/react-query";
-import { useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { LoadFailure } from "@/components/data/load-failure";
 import { lineName } from "@/components/production/by-step/line-row";
@@ -51,11 +51,17 @@ import { OlderLines } from "./older-lines";
 
 const count = (n: number) => `${n} ${n === 1 ? "piece" : "pieces"}`;
 
+/** A step's column on the Board. */
+const columnOf = (board: HTMLElement, stepKey: string) =>
+  [...board.querySelectorAll<HTMLElement>("[data-step-column]")].find((column) => column.dataset.stepColumn === stepKey) ?? null;
+
 export interface BoardProps {
   canMove: boolean;
   canUpload: boolean;
   workflowId: string | null;
   onWorkflow: (workflowId: string) => void;
+  /** What a pass sent as the Board closed came to, said by the page around it. */
+  onAwayNotice?: (message: string) => void;
 }
 
 function Skeleton() {
@@ -75,7 +81,7 @@ function Skeleton() {
  * The Board: one product type at a time, a column per step of its current version with erp-api's count, a card
  * per order line at that step, then Scrap. Below 768 px one column shows at a time: swipe, or pick the step.
  */
-export function Board({ canMove, canUpload, workflowId, onWorkflow }: BoardProps) {
+export function Board({ canMove, canUpload, workflowId, onWorkflow, onAwayNotice }: BoardProps) {
   const { data: me } = useMe();
   const id = useId();
   const client = useQueryClient();
@@ -89,13 +95,50 @@ export function Board({ canMove, canUpload, workflowId, onWorkflow }: BoardProps
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
 
+  // Whether the Board is still on screen: a pass sent as it closes reports to the page instead.
+  const onScreen = useRef(true);
+  useEffect(() => {
+    onScreen.current = true;
+    return () => {
+      onScreen.current = false;
+    };
+  }, []);
+  const tell = (message: string) => (onScreen.current ? setNotice(message) : onAwayNotice?.(message));
+
+  // The column a moved card left, while focus may still be on something the move takes away (its Move to…, the
+  // passing card's Undo). Once that leaves the page, focus goes to the column's heading instead of the page.
+  const refocus = useRef<string | null>(null);
+  useEffect(() => {
+    const board = boardRef.current;
+    if (!board) return;
+    const observer = new MutationObserver(() => {
+      const stepKey = refocus.current;
+      if (!stepKey || (document.activeElement && document.activeElement !== document.body)) return;
+      refocus.current = null;
+      columnOf(board, stepKey)?.querySelector<HTMLElement>("h2")?.focus();
+    });
+    observer.observe(board, { childList: true, subtree: true });
+    // Anything the person does next decides where focus goes.
+    const forget = () => {
+      refocus.current = null;
+    };
+    document.addEventListener("pointerdown", forget, true);
+    document.addEventListener("keydown", forget, true);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("pointerdown", forget, true);
+      document.removeEventListener("keydown", forget, true);
+    };
+  }, [me]);
+
   /** A held pass, sent: its notice, or erp-api's reason when it's refused, and the card stays where it was. */
   async function sendHeld(move: HeldMove, keepalive: boolean) {
+    refocus.current = move.fromStep;
     try {
       await sendMoveNow(client, move.body, move.key, { keepalive });
-      setNotice(`${count(move.pieces)} passed to ${move.toStep.name}.`);
+      tell(`${count(move.pieces)} passed to ${move.toStep.name}.`);
     } catch (error) {
-      setNotice(submitErrorText(error));
+      tell(submitErrorText(error));
     }
   }
   const held = useHeldMove(sendHeld);
@@ -103,15 +146,16 @@ export function Board({ canMove, canUpload, workflowId, onWorkflow }: BoardProps
   /** Undo: nothing is sent, and focus goes back to the card's Move to… where it still stands. */
   function undoHeld() {
     const move = held.held;
-    held.undo();
-    if (!move) return;
+    // Too late: the pass was sent just now, and its own notice follows.
+    if (!move || !held.undo()) return;
     const names = move.lines.map((line) => lineName(line)).join(", ");
     setNotice(`Undone. ${names} ${move.lines.length === 1 ? "stays" : "stay"} where ${move.lines.length === 1 ? "it was" : "they were"}.`);
     const first = move.lines[0];
-    if (first) {
-      boardRef.current
-        ?.querySelector<HTMLElement>(`[data-step-column="${move.fromStep}"] button[aria-label="${`Move ${lineName(first)}…`}"]`)
-        ?.focus();
+    const column = boardRef.current ? columnOf(boardRef.current, move.fromStep) : null;
+    if (first && column) {
+      // Compared, not put in a selector: a product name can hold quotes.
+      const label = `Move ${lineName(first)}…`;
+      [...column.querySelectorAll<HTMLElement>("button[aria-label]")].find((button) => button.getAttribute("aria-label") === label)?.focus();
     }
   }
 
@@ -125,7 +169,9 @@ export function Board({ canMove, canUpload, workflowId, onWorkflow }: BoardProps
     lines: pickedLines.items,
     onSelection: (update) => setSelection(update),
     onNotice: setNotice,
-    onMoved: () => {},
+    onMoved: (at) => {
+      refocus.current = at.stepKey;
+    },
     onCleared: () => {},
     mayUpload: canUpload,
     hold: (move) => {
@@ -305,6 +351,9 @@ export function Board({ canMove, canUpload, workflowId, onWorkflow }: BoardProps
   const shown = phoneStep ?? layout?.columns[0]?.key ?? "";
   // The current version's columns by key: where a card may be dragged, and how the drag words name them.
   const stepNames = new Map(layout?.columns.map((step) => [step.key, step.name]) ?? []);
+  // A waiting pass shows at the top of the step it goes to. When that step isn't a column here (another product
+  // type is picked, or an older version's next step), it shows above the columns, so Undo is always on screen.
+  const heldColumn = held.held && held.held.workflowId === workflowId && stepNames.has(held.held.toStep.key) ? held.held.toStep.key : null;
 
   /** The phone's picker: brings that step's column into view. */
   function showStep(key: string) {
@@ -356,7 +405,7 @@ export function Board({ canMove, canUpload, workflowId, onWorkflow }: BoardProps
               today={today}
               canMove={canMove}
               extras={cardExtras}
-              held={held.held?.toStep.key === step.key ? <HeldCard move={held.held} onUndo={undoHeld} /> : undefined}
+              held={held.held && heldColumn === step.key ? <HeldCard move={held.held} onUndo={undoHeld} /> : undefined}
               zone={zoneFor(step.key)}
             />
           ))}
@@ -397,6 +446,7 @@ export function Board({ canMove, canUpload, workflowId, onWorkflow }: BoardProps
       <p role="status" className="min-h-0 px-1 text-caption font-medium text-ink">
         {notice}
       </p>
+      {held.held && !heldColumn && <HeldCard move={held.held} onUndo={undoHeld} />}
       {/* On phones the bar is fixed to the screen's bottom: room for it under the columns. */}
       <DndContext
         sensors={sensors}

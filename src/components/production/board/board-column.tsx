@@ -127,7 +127,8 @@ export function BoardColumn({
         zone && isOver && "bg-lilac/60 outline-solid",
       )}
     >
-      <h2 className="flex items-center gap-1.5 px-0.5 text-sm font-semibold">
+      {/* Takes focus after a move takes away what had it (`board.tsx`). */}
+      <h2 tabIndex={-1} className="flex items-center gap-1.5 rounded-md px-0.5 text-sm font-semibold outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
         {step.name}{" "}
         <span className="ml-auto rounded-full bg-line px-2 text-xs font-semibold text-ink-2 tabular-nums">{step.active}</span>
       </h2>

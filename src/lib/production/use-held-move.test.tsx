@@ -5,6 +5,7 @@ import { HOLD_MS, useHeldMove, type HeldMove } from "./use-held-move";
 
 function heldMove(n: number): HeldMove {
   return {
+    workflowId: "workflow-1",
     body: { kind: "pass", work_order_ids: [`piece-${n}`], at_step: "print" },
     key: `key-${n}`,
     fromStep: "print",
@@ -53,7 +54,11 @@ describe("useHeldMove", () => {
   it("sends nothing after Undo", () => {
     const { result, unmount } = holdOne();
     act(() => vi.advanceTimersByTime(3000));
-    act(() => result.current.undo());
+    let undone = false;
+    act(() => {
+      undone = result.current.undo();
+    });
+    expect(undone).toBe(true);
     expect(result.current.held).toBeNull();
     act(() => vi.advanceTimersByTime(10_000));
     window.dispatchEvent(new Event("pagehide"));
@@ -61,13 +66,31 @@ describe("useHeldMove", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it("sends at once when the tab is hidden, and not again after the 5 seconds", () => {
+  it("sends at once, as a request that outlives the page, when the tab is hidden; not again after the 5 seconds", () => {
     const { result } = holdOne();
     act(() => vi.advanceTimersByTime(1000));
     act(() => setVisibility("hidden"));
-    expect(send).toHaveBeenCalledExactlyOnceWith(heldMove(1), false);
+    expect(send).toHaveBeenCalledExactlyOnceWith(heldMove(1), true);
     expect(result.current.held).toBeNull();
     act(() => vi.advanceTimersByTime(5000));
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("closing a tab hides it before pagehide: still one send that outlives the page", () => {
+    holdOne();
+    act(() => setVisibility("hidden"));
+    act(() => window.dispatchEvent(new Event("pagehide")));
+    expect(send).toHaveBeenCalledExactlyOnceWith(heldMove(1), true);
+  });
+
+  it("says Undo came too late once the move was sent", () => {
+    const { result } = holdOne();
+    act(() => vi.advanceTimersByTime(5000));
+    let undone = true;
+    act(() => {
+      undone = result.current.undo();
+    });
+    expect(undone).toBe(false);
     expect(send).toHaveBeenCalledTimes(1);
   });
 
@@ -92,6 +115,7 @@ describe("useHeldMove", () => {
     expect(send).toHaveBeenCalledExactlyOnceWith(heldMove(1), true);
     // Whatever else ends the wait afterwards, it was sent once.
     act(() => setVisibility("hidden"));
+    expect(send).toHaveBeenCalledTimes(1);
     unmount();
     act(() => vi.advanceTimersByTime(5000));
     expect(send).toHaveBeenCalledTimes(1);

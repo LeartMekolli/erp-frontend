@@ -31,6 +31,8 @@ export function Production({ canMove, canUpload }: { canMove: boolean; canUpload
   const { date } = useFormat();
   const [today] = useState(() => new Date().toISOString());
   const [view, setView] = useState<View>("board");
+  // What a pass sent as the Board closed came to; the Board can't say it any more.
+  const [awayNotice, setAwayNotice] = useState<string | null>(null);
   const productType = useProductType();
   const tab = { canMove, canUpload, workflowId: productType.workflowId, onWorkflow: productType.setWorkflowId };
 
@@ -53,7 +55,14 @@ export function Production({ canMove, canUpload }: { canMove: boolean; canUpload
 
   return (
     <OpenPieceProvider>
-      <Tabs value={view} onValueChange={(next) => setView(next as View)} className="gap-3">
+      <Tabs
+        value={view}
+        onValueChange={(next) => {
+          setAwayNotice(null);
+          setView(next as View);
+        }}
+        className="gap-3"
+      >
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-1">
           <div className="flex items-center gap-3">
             <h1 className="text-title font-semibold">Production</h1>
@@ -70,11 +79,15 @@ export function Production({ canMove, canUpload }: { canMove: boolean; canUpload
               </TabsTrigger>
             ))}
           </TabsList>
+          {/* Always there, so the first notice is read out; a row of its own under the title. */}
+          <p role="status" className="basis-full text-caption font-medium text-ink">
+            {awayNotice}
+          </p>
         </div>
         {body ?? (
           <>
             <TabsContent value="board">
-              <Board {...tab} />
+              <Board {...tab} onAwayNotice={setAwayNotice} />
             </TabsContent>
             <TabsContent value="by-step">
               <ByStep {...tab} />

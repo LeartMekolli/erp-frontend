@@ -70,6 +70,9 @@ async function stillHere(client: QueryClient, selection: LineSelection): Promise
 
 type Open = { kind: MoveKind; target?: MoveTarget; pieces: Piece[] };
 
+/** Where a move that went through started: the listed line's place, when it was sent, and the step it left. */
+export type MovedFrom = { index: number; sentAt: number; stepKey: string };
+
 export interface MoveFlowArgs {
   workflowId: string;
   /** The step of the page's selection; a move of `only` lines uses theirs. */
@@ -84,7 +87,7 @@ export interface MoveFlowArgs {
    * After a move went through. `index` is where the first moved line was listed (-1 when a search hid them
    * all), `sentAt` when the move was sent, so the page can wait for the list fetched since.
    */
-  onMoved: (at: { index: number; sentAt: number }) => void;
+  onMoved: (at: MovedFrom) => void;
   /** The selection emptied because every picked piece moved on. */
   onCleared: () => void;
   /** Whether this person may add photos (`file.write`). */
@@ -127,7 +130,7 @@ export function useMoveFlow({ workflowId, stepKey, selection, lines, onSelection
   // The lines a card's own move takes, instead of the page's selection, until that move is done.
   const [only, setOnly] = useState<LineSelection | null>(null);
   // Where the last move sent started from, for `onMoved`.
-  const sent = useRef<{ index: number; sentAt: number } | null>(null);
+  const sent = useRef<MovedFrom | null>(null);
 
   const subject = only ?? selection;
   const at = subject?.stepKey ?? stepKey;
@@ -162,11 +165,18 @@ export function useMoveFlow({ workflowId, stepKey, selection, lines, onSelection
     if (!next) onCleared();
   }
 
-  /** The page's selection without the lines a card's own move took. */
+  /** The page's selection without the pieces a card's own move took: a piece dragged alone leaves its line's other ticks. */
   function without(moved: LineSelection) {
     onSelection((previous) => {
-      if (!previous) return previous;
-      const kept = new Map([...previous.lines].filter(([groupId]) => !moved.lines.has(groupId)));
+      if (!previous || previous.stepKey !== moved.stepKey) return previous;
+      const kept = new Map(
+        [...previous.lines].flatMap(([groupId, line]) => {
+          const gone = moved.lines.get(groupId)?.ids;
+          if (!gone) return [[groupId, line] as const];
+          const ids = new Set([...line.ids].filter((id) => !gone.has(id)));
+          return ids.size > 0 ? [[groupId, { ...line, ids }] as const] : [];
+        }),
+      );
       return kept.size > 0 ? { ...previous, lines: kept } : null;
     });
   }
@@ -194,6 +204,7 @@ export function useMoveFlow({ workflowId, stepKey, selection, lines, onSelection
     if (!passesAtOnce(stepRules, movingLines, partnersOf(stepRules, movingLines))) return null;
     const ids = pieceIds(moving);
     return {
+      workflowId,
       body: moveBody("pass", stepRules, ids, emptyMoveValues(stepRules)),
       key: newIdempotencyKey(),
       fromStep: moving.stepKey,
@@ -235,7 +246,7 @@ export function useMoveFlow({ workflowId, stepKey, selection, lines, onSelection
 
   async function send(body: MoveBody) {
     const moving = subject!;
-    sent.current = { index: lines.findIndex((line) => moving.lines.has(line.group.id)), sentAt: Date.now() };
+    sent.current = { index: lines.findIndex((line) => moving.lines.has(line.group.id)), sentAt: Date.now(), stepKey: moving.stepKey };
     try {
       await move.mutateAsync(body);
     } catch (error) {
@@ -279,7 +290,7 @@ export function useMoveFlow({ workflowId, stepKey, selection, lines, onSelection
           else onSelection(() => null);
           setOnly(null);
           onNotice(message);
-          onMoved(sent.current ?? { index: -1, sentAt: Date.now() });
+          onMoved(sent.current ?? { index: -1, sentAt: Date.now(), stepKey: subject?.stepKey ?? stepKey });
         }}
       />
     ) : null;

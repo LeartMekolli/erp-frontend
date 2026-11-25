@@ -9,6 +9,8 @@ export const HOLD_MS = 5000;
 
 /** A pass waiting to be sent. Its `Idempotency-Key` is made when it's held, so sending it twice acts once. */
 export interface HeldMove {
+  /** The product type it was held on: its card shows only there. */
+  workflowId: string;
   body: MoveBody;
   key: string;
   fromStep: string;
@@ -20,13 +22,13 @@ export interface HeldMove {
 
 /**
  * One pass at a time, held for `HOLD_MS` with Undo. It's sent when the time is up, when another pass is held,
- * when the tab is hidden or when the page is left; when the tab or window is closed (`pagehide`) it's sent as a
+ * or when the page is left; when the tab is hidden or closed (`visibilitychange`, `pagehide`) it's sent as a
  * request that outlives the page (`keepalive`). Each held move is sent at most once.
  */
 export function useHeldMove(send: (move: HeldMove, keepalive: boolean) => Promise<void>): {
   held: HeldMove | null;
   hold: (move: HeldMove) => void;
-  undo: () => void;
+  undo: () => boolean;
 } {
   const [held, setHeld] = useState<HeldMove | null>(null);
   // The waiting move and its timer, read by the page listeners and the unmount, outside React's renders.
@@ -59,8 +61,9 @@ export function useHeldMove(send: (move: HeldMove, keepalive: boolean) => Promis
   });
 
   useEffect(() => {
+    // Closing a tab hides it before `pagehide`, so a hidden tab sends as a request that outlives the page too.
     const onVisibility = () => {
-      if (document.visibilityState === "hidden") flushRef.current(false);
+      if (document.visibilityState === "hidden") flushRef.current(true);
     };
     const onPageHide = () => flushRef.current(true);
     document.addEventListener("visibilitychange", onVisibility);
@@ -78,8 +81,11 @@ export function useHeldMove(send: (move: HeldMove, keepalive: boolean) => Promis
     setHeld(move);
   }
 
-  function undo() {
-    if (release()) setHeld(null);
+  /** Cancels the waiting move; false when there was none any more (it was just sent). */
+  function undo(): boolean {
+    if (!release()) return false;
+    setHeld(null);
+    return true;
   }
 
   return { held, hold, undo };

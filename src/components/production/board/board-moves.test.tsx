@@ -205,7 +205,8 @@ describe("A pass that waits 5 seconds with Undo", () => {
     const card = undo.closest("[data-held]");
     expect(card).not.toBeNull();
     expect(card).toHaveTextContent("#1041");
-    expect(card).toHaveTextContent("Passing…");
+    expect(card).toHaveTextContent("Passing to Finish…");
+    expect(card).toHaveTextContent("10 pieces");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     // Until it's sent, Print still holds the pieces.
     expect(head("Print")).toHaveTextContent("Print 26");
@@ -216,10 +217,12 @@ describe("A pass that waits 5 seconds with Undo", () => {
     expect(moves).toHaveLength(0);
   });
 
-  it("sends the pass after 5 seconds", async () => {
-    await passAtPrint();
+  it("sends the pass after 5 seconds, and focus on Undo moves to the column the card left", async () => {
+    const undo = await passAtPrint();
+    act(() => undo.focus());
     act(() => vi.advanceTimersByTime(5000));
     expect(await screen.findByText("10 pieces passed to Finish.")).toBeInTheDocument();
+    await waitFor(() => expect(head("Print")).toHaveFocus());
     expect(moves).toHaveLength(1);
     expect(moves[0]!.work_order_ids).toHaveLength(10);
     await waitFor(() => expect(head("Finish")).toHaveTextContent("Finish 34"));
@@ -256,6 +259,8 @@ describe("A pass that waits 5 seconds with Undo", () => {
     act(() => vi.advanceTimersByTime(1000));
     await user().click(screen.getByRole("tab", { name: "By step" }));
     await waitFor(() => expect(moves).toHaveLength(1));
+    // The Board has gone, so the page says what came of it.
+    expect(await screen.findByText("10 pieces passed to Finish.")).toBeInTheDocument();
     // By step reads the counts after the pass, so the move has landed before the test ends.
     await waitFor(() => expect(screen.getByRole("tab", { name: /^Print/ })).toHaveTextContent("Print 16"));
     act(() => vi.advanceTimersByTime(5000));

@@ -37,7 +37,7 @@ async function drag(page: Page, handle: Locator, to: Locator) {
 async function expectHeldThenSent(page: Page) {
   const undo = column(page, "Finish").getByRole("button", { name: "Undo" });
   await expect(undo).toBeVisible();
-  await expect(column(page, "Finish").getByText("Passing…")).toBeVisible();
+  await expect(column(page, "Finish").getByText("Passing to Finish…")).toBeVisible();
   await expect(head(page, "Print")).toHaveText(/Print\s*26/);
   await page.clock.fastForward(5_000);
   await expect(page.getByText("10 pieces passed to Finish.")).toBeVisible();
@@ -104,7 +104,7 @@ test.describe("dragging at 1280 px", () => {
     expect(errors).toEqual([]);
     const undo = column(page, "Finish").getByRole("button", { name: "Undo" });
     await expect(undo).toBeVisible();
-    await expect(column(page, "Finish").getByText("Passing…")).toBeVisible();
+    await expect(column(page, "Finish").getByText("Passing to Finish…")).toBeVisible();
     await undo.click();
     await expect(page.getByText("Undone. #1041 stays where it was.")).toBeVisible();
   });
