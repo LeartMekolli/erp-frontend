@@ -24,15 +24,19 @@ export interface MoveValues {
   inspected: boolean;
 }
 
-export function emptyMoveValues(step: StepRules): MoveValues {
+/** Where a fail sends the pieces when it was chosen before the dialog opened: back to a step, or scrapped. */
+export type MoveTarget = { kind: "rework"; step: { key: string; name: string } } | { kind: "scrap" };
+
+/** A fresh form; with a target, the outcome is already set to it, so the defect's own only decides whether a reason is needed. */
+export function emptyMoveValues(step: StepRules, target?: MoveTarget): MoveValues {
   return {
     answers: Object.fromEntries(step.checklist.map((item) => [item.key, ""])),
     comment: "",
     photoVersionIds: [],
     defectId: "",
-    changing: false,
-    outcome: "",
-    reworkTo: "",
+    changing: target !== undefined,
+    outcome: target?.kind ?? "",
+    reworkTo: target?.kind === "rework" ? target.step.key : "",
     overrideReason: "",
     toStep: "",
     inspected: true,

@@ -28,6 +28,32 @@ function Choice({ label, value, field }: { label: string; value: string; field: 
   );
 }
 
+/** One side of the Yes | No toggle: a real radio, drawn as a segment that turns white when picked. */
+function Segment({ label, value, field }: { label: string; value: string; field: ReturnType<UseFormRegister<MoveValues>> }) {
+  return (
+    <label className="relative">
+      <input type="radio" value={value} className="peer absolute inset-0 size-full cursor-pointer opacity-0" {...field} />
+      <span className="grid min-h-[38px] min-w-16 place-items-center rounded-lg px-3 text-sm font-medium text-ink-2 peer-checked:bg-card peer-checked:text-ink peer-checked:shadow-xs peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-violet peer-disabled:opacity-50 pointer-coarse:min-h-11">
+        {label}
+      </span>
+    </label>
+  );
+}
+
+/** A yes/no question with its Yes | No toggle on the same row; still a group of radios for keyboards and screen readers. */
+function YesNo({ item, error, field }: { item: Item; error?: string; field: ReturnType<UseFormRegister<MoveValues>> }) {
+  return (
+    <fieldset data-toggle className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+      <legend className="float-left text-sm font-medium text-ink">{item.required ? item.label : `${item.label} (optional)`}</legend>
+      <div className="inline-flex rounded-[10px] bg-ground p-[3px]">
+        <Segment label="Yes" value="true" field={field} />
+        <Segment label="No" value="false" field={field} />
+      </div>
+      {error && <p className="basis-full text-caption text-late">{error}</p>}
+    </fieldset>
+  );
+}
+
 function numberHint(item: Extract<Item, { kind: "number" }>): string | undefined {
   const range = item.min !== null && item.max !== null ? `${item.min} to ${item.max}` : item.min !== null ? `At least ${item.min}` : item.max !== null ? `At most ${item.max}` : null;
   return [range, item.unit].filter(Boolean).join(" ") || undefined;
@@ -52,12 +78,7 @@ export function ChecklistFields({
         const label = item.required ? item.label : `${item.label} (optional)`;
         switch (item.kind) {
           case "yes_no":
-            return (
-              <Choices key={item.key} item={item} error={error}>
-                <Choice label="Yes" value="true" field={field} />
-                <Choice label="No" value="false" field={field} />
-              </Choices>
-            );
+            return <YesNo key={item.key} item={item} error={error} field={field} />;
           case "choice":
             return (
               <Choices key={item.key} item={item} error={error}>

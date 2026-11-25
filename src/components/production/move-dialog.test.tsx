@@ -10,6 +10,7 @@ import { StaffSelectionProvider } from "@/components/order-detail/staff-pieces";
 import { useMe } from "@/components/session/session-gate";
 import type { Group, MoveBody } from "@/lib/api/schema-types";
 import { useCan } from "@/lib/auth/permissions";
+import type { MoveTarget } from "@/lib/production/move-body";
 import { useMovePieces } from "@/lib/production/queries";
 import { nextStepName } from "@/lib/production/selection";
 import type { NextStep, Piece, StepRules } from "@/lib/production/shape";
@@ -80,6 +81,7 @@ interface DialogOptions {
   countsFor?: string | null;
   uploadTarget?: UploadTarget;
   user?: FakeUser;
+  target?: MoveTarget;
 }
 
 /** The dialog as staff's Pieces tab opens it: moves go through staff's mutation, uploads follow `file.write`. */
@@ -96,6 +98,7 @@ function StaffDialog({ options, pieces, onMoved, onOpenChange }: { options: Dial
       mayUpload={options.uploadTarget?.area === "partner" || mayUpload}
       uploadTarget={options.uploadTarget ?? STAFF_PHOTOS}
       countsFor={options.countsFor ?? null}
+      target={options.target}
       onMove={async (body) => {
         await move.mutateAsync(body);
       }}
@@ -325,6 +328,71 @@ describe("MoveDialog: fail", () => {
   });
 });
 
+describe("MoveDialog: a fail with its target chosen", () => {
+  const FINISH: MoveTarget = { kind: "rework", step: { key: "finish", name: "Finish" } };
+  const PRINT: MoveTarget = { kind: "rework", step: { key: "print", name: "Print" } };
+
+  it("titles the move by where it sends the pieces, with nothing to change", async () => {
+    renderDialog({ kind: "fail", step: stepAt("finish"), target: FINISH });
+    await dialog("Send 2 pieces back to Finish");
+    expect(screen.queryByRole("button", { name: "Change what happens" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("What should happen")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Send them back to")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send back" })).toBeInTheDocument();
+  });
+
+  it("says where the defect usually goes and asks nothing more when it matches", async () => {
+    const step = stepAt("finish");
+    const { onMoved } = renderDialog({ kind: "fail", step, target: FINISH });
+    await dialog("Send 2 pieces back to Finish");
+    await userEvent.selectOptions(screen.getByLabelText("Defect"), "Scratch");
+    expect(screen.getByText("Scratch is usually redone at Finish.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Reason")).not.toBeInTheDocument();
+    await click("Send back");
+    await waitFor(() => expect(onMoved).toHaveBeenCalledWith("2 pieces sent back to Finish."));
+    expect(sent[0]!.body).toMatchObject({ kind: "fail", at_step: "finish", defect_id: step.defects[0]!.id });
+    expect(sent[0]!.body).not.toHaveProperty("rework_to");
+  });
+
+  it("asks why when the pieces go somewhere else", async () => {
+    renderDialog({ kind: "fail", step: stepAt("finish"), target: PRINT });
+    await dialog("Send 2 pieces back to Print");
+    await userEvent.selectOptions(screen.getByLabelText("Defect"), "Scratch");
+    expect(screen.getByText("Scratch is usually redone at Finish. Say why these go to Print.")).toBeInTheDocument();
+    await click("Send back");
+    expect(await screen.findByText("Say why this differs from the usual outcome.")).toBeInTheDocument();
+    expect(sent).toHaveLength(0);
+    await userEvent.type(screen.getByLabelText("Reason"), "Too deep");
+    await click("Send back");
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]!.body).toMatchObject({ rework_to: "print", override_reason: "Too deep" });
+  });
+
+  it("scraps the pieces", async () => {
+    renderDialog({ kind: "fail", step: stepAt("finish"), target: { kind: "scrap" } });
+    await dialog("Scrap 2 pieces");
+    await userEvent.selectOptions(screen.getByLabelText("Defect"), "Scratch");
+    expect(screen.getByText("Scratch is usually redone at Finish. Say why these are scrapped.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Reason")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Scrap" })).toBeInTheDocument();
+  });
+});
+
+describe("MoveDialog: a yes/no answer", () => {
+  it("is a Yes | No pair of radios named by its question, answered by keyboard too", async () => {
+    renderDialog({ kind: "pass", step: withoutPhotos(stepAt("finish")) });
+    await dialog("Pass 2 pieces at Finish");
+    const question = screen.getByRole("group", { name: "Surface smooth" });
+    const [yes, no] = within(question).getAllByRole("radio");
+    expect(yes).toHaveAccessibleName("Yes");
+    expect(no).toHaveAccessibleName("No");
+    await userEvent.click(no!);
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(yes).toBeChecked();
+    expect(question).toHaveAttribute("data-toggle");
+  });
+});
+
 describe("MoveDialog: correction", () => {
   it("needs a step and a comment", async () => {
     const { onMoved, pieces } = renderDialog({ kind: "correction", step: stepAt("packing"), pieces: piecesAt("packing") });
@@ -396,7 +464,7 @@ describe("moving from the order page", () => {
     const open = await dialog("Pass 2 pieces at Print");
     fakeState().production.move({ kind: "pass", work_order_ids: [piecesAt("print")[0]!.id], at_step: "print" }, null);
     await userEvent.click(within(open).getByRole("button", { name: "Pass to Finish" }));
-    expect(await screen.findByText("Some pieces cannot make this move")).toBeInTheDocument();
+    expect(await screen.findByText("Some pieces cannot make this move 1/12 is at finish, not print")).toBeInTheDocument();
     expect(await screen.findByText("1 piece moved on and left your selection.")).toBeInTheDocument();
     expect(await screen.findByRole("dialog", { name: "Pass 1 piece at Print" })).toBeInTheDocument();
   });
