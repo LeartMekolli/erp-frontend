@@ -42,6 +42,15 @@ export function leaveArrivalNote(path: string, note: ArrivalNote): void {
   tell();
 }
 
+/**
+ * Whether a click on a link opens it in this tab: a plain left click. Cmd-, Ctrl-, Shift- and Alt-clicks open
+ * another tab or window, or download, and a middle click a new tab. A note is per tab, so a link leaves one only
+ * for this kind of click; otherwise it would wait here, unused, and greet the next visit to that page.
+ */
+export function opensHere(event: { button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }): boolean {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+}
+
 /** Tests only: forgets every note. */
 export function resetArrivalNotes(): void {
   notes.clear();
