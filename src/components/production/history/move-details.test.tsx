@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -122,6 +122,25 @@ describe("An opened move in History", () => {
     expect(link).toHaveAttribute("href", path);
     await userEvent.click(link);
     expect(takeArrivalNote(path)).toEqual({ piece: piece.id });
+  });
+
+  it.each([
+    ["Cmd", { metaKey: true }],
+    ["Ctrl", { ctrlKey: true }],
+    ["Shift", { shiftKey: true }],
+  ])("leaves no note when a piece is %s-clicked open somewhere else", async (_key, keys) => {
+    const piece = scrapAtFinish();
+    const opened = await openNewest();
+    const link = await within(opened).findByRole("link", { name: `#1048 · ${piece.label}` });
+    fireEvent.click(link, keys);
+    expect(takeArrivalNote(`/orders/${orderId(1048)}`)).toBeNull();
+  });
+
+  it("heads each line one level under the day", async () => {
+    scrapAtFinish();
+    const opened = await openNewest();
+    expect(screen.getByRole("heading", { level: 2, name: "Today" })).toBeInTheDocument();
+    expect(await within(opened).findByRole("heading", { level: 3, name: "#1048 · 1 piece" })).toBeInTheDocument();
   });
 
   it("names pieces without linking them for someone who can't read orders", async () => {

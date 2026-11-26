@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+
+import { cn } from "cn";
 
 import { ListEnd } from "@/components/data/list-end";
 import { LoadFailure } from "@/components/data/load-failure";
@@ -32,6 +34,23 @@ function Placeholder() {
   );
 }
 
+/**
+ * What History keeps while another Production tab is open: its filters and which moves are opened. The tabs
+ * unmount, so the page holds it; a reload still opens the defaults.
+ */
+export interface HistoryState {
+  filters: MoveFilters;
+  setFilters: Dispatch<SetStateAction<MoveFilters>>;
+  opened: ReadonlySet<string>;
+  setOpened: Dispatch<SetStateAction<ReadonlySet<string>>>;
+}
+
+export function useHistoryState(): HistoryState {
+  const [filters, setFilters] = useState<MoveFilters>(DEFAULT_HISTORY);
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
+  return { filters, setFilters, opened, setOpened };
+}
+
 /** The moves the query picks, newest first under their day, opened one row at a time or several. */
 function Moves({
   query,
@@ -39,6 +58,8 @@ function Moves({
   onClear,
   now,
   rules,
+  opened,
+  setOpened,
 }: {
   query: MoveListQueryParams;
   filters: MoveFilters;
@@ -46,13 +67,16 @@ function Moves({
   now: number;
   /** The current version's steps, to explain a fail that didn't follow its defect's default. */
   rules: StepRules[];
+  opened: ReadonlySet<string>;
+  setOpened: HistoryState["setOpened"];
 }) {
   const { timeZone } = useFormat();
   const list = useMoveList(query);
-  const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
 
   if (list.isPending) return <Placeholder />;
   if (!list.data) return <LoadFailure error={list.error} fallback="History couldn't be loaded." onRetry={() => void list.refetch()} />;
+  // The last filters' moves stay while new ones load; with none to keep, the loading rows say it instead.
+  if (list.isPlaceholderData && list.items.length === 0) return <Placeholder />;
   if (list.items.length === 0) {
     const plain = filters.result === "all" && setFilterCount({ workflowId: query.workflow_id ?? "", ...filters }) === 0;
     return plain ? (
@@ -77,10 +101,14 @@ function Moves({
   return (
     <>
       {/* A region, not a feed: a feed may hold only articles, and the day headings sit between them. */}
-      <section aria-label="Moves" aria-busy={list.isFetching}>
+      <section
+        aria-label="Moves"
+        aria-busy={list.isFetching}
+        className={cn("transition-opacity motion-reduce:transition-none", list.isPlaceholderData && "opacity-60")}
+      >
         {groupByDay(list.items, now, timeZone).map((day) => (
           <div key={day.key}>
-            <h3 className="px-2 pt-4 pb-1 text-caption font-semibold text-ink-2">{day.heading}</h3>
+            <h2 className="px-2 pt-4 pb-1 text-caption font-semibold text-ink-2">{day.heading}</h2>
             {day.actions.map((move) => (
               <MoveRow key={move.id} move={move} now={now} timeZone={timeZone} open={opened.has(move.id)} onToggle={() => toggle(move.id)}>
                 <MoveDetails move={move} rules={rules} />
@@ -89,19 +117,28 @@ function Moves({
           </div>
         ))}
       </section>
-      <ListEnd list={list} />
+      {/* The placeholder's next page belongs to the last filters; Show more comes back with the new ones. */}
+      {!list.isPlaceholderData && <ListEnd list={list} />}
     </>
   );
 }
 
 /**
  * Production's History: every move across the workspace, newest first, with filters. The product type is the
- * page's, shared with the Board and By step; the rest is this tab's own state, so a reload opens the defaults.
+ * page's, shared with the Board and By step; the filters and opened moves are `state`, kept by the page.
  */
-export function History({ workflowId, onWorkflow }: { workflowId: string | null; onWorkflow: (workflowId: string) => void }) {
+export function History({
+  workflowId,
+  onWorkflow,
+  state,
+}: {
+  workflowId: string | null;
+  onWorkflow: (workflowId: string) => void;
+  state: HistoryState;
+}) {
   const { timeZone } = useFormat();
   const wide = useMediaQuery("(min-width: 768px)");
-  const [filters, setFilters] = useState<MoveFilters>(DEFAULT_HISTORY);
+  const { filters, setFilters, opened, setOpened } = state;
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), TICK_MS);
@@ -149,6 +186,8 @@ export function History({ workflowId, onWorkflow }: { workflowId: string | null;
             onClear={() => setFilters(DEFAULT_HISTORY)}
             now={now}
             rules={rules}
+            opened={opened}
+            setOpened={setOpened}
           />
         )}
       </div>

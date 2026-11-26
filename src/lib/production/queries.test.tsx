@@ -147,6 +147,30 @@ describe("History's queries", () => {
     expect(urls.find((u) => u.pathname === "/workflow/moves/actors")!.searchParams.get("workflow_id")).toBe(WORKFLOW_ID);
   });
 
+  it("reads who has moved again after a move, but not the defects, which a move never changes", async () => {
+    const { result } = renderHookAs(STAFF, () => ({ defects: useDefects(), people: useMoveActors(WORKFLOW_ID), move: useMovePieces() }));
+    await waitFor(() => expect(result.current.people.isSuccess && result.current.defects.isSuccess).toBe(true));
+    const count = (path: string) => urls.filter((u) => u.pathname === path).length;
+    const id = fakeState().production.pieces(new URLSearchParams({ group_id: GROUP, step_key: "final_qc", status: "active" }));
+    if (!id.ok) throw new Error("no piece at Final QC");
+    await result.current.move.mutateAsync({ kind: "pass", work_order_ids: [id.body.data[0]!.id], at_step: "final_qc" });
+    await waitFor(() => expect(count("/workflow/moves/actors")).toBe(2));
+    expect(count("/workflow/defects")).toBe(1);
+  });
+
+  it("keeps the last list on screen, marked as a placeholder, while new filters load", async () => {
+    let query: { workflow_id: string; kind?: "fail" } = { workflow_id: WORKFLOW_ID };
+    const { result, rerender } = renderHookAs(STAFF, () => useMoveList(query));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const before = result.current.items;
+    query = { workflow_id: WORKFLOW_ID, kind: "fail" };
+    rerender();
+    expect(result.current.isPlaceholderData).toBe(true);
+    expect(result.current.items).toEqual(before);
+    await waitFor(() => expect(result.current.isPlaceholderData).toBe(false));
+    expect(result.current.items.every((move) => move.kind === "fail")).toBe(true);
+  });
+
   it("asks for nobody until a product type is picked", () => {
     const { result } = renderHookAs(STAFF, () => useMoveActors(null));
     expect(result.current.fetchStatus).toBe("idle");

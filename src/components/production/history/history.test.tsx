@@ -187,6 +187,50 @@ describe("Production's History", () => {
     expect(lastList().has("cursor")).toBe(false);
   });
 
+  it("keeps the moves on screen, marked busy, while a new filter loads", async () => {
+    await openHistory();
+    const shown = moves().length;
+    let answer!: () => void;
+    const held = new Promise<void>((resolve) => (answer = resolve));
+    server.use(
+      http.get(`${FAKE_API_URL}/workflow/moves`, async () => {
+        await held;
+        return HttpResponse.json({ data: [], next_cursor: null });
+      }),
+    );
+    await userEvent.click(screen.getByRole("radio", { name: "Failed" }));
+    await waitFor(() => expect(feed()).toHaveAttribute("aria-busy", "true"));
+    expect(moves()).toHaveLength(shown);
+    expect(screen.queryByRole("status", { name: "Loading moves" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show more" })).not.toBeInTheDocument();
+    answer();
+    expect(await screen.findByText("No moves match these filters.")).toBeInTheDocument();
+  });
+
+  it("comes back from the Board to the same filters and opened moves", async () => {
+    await openHistory();
+    await userEvent.click(screen.getByRole("radio", { name: "Failed" }));
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Step" }), "final_qc");
+    await waitFor(() => expect(lastList().get("step_key")).toBe("final_qc"));
+    await waitFor(() => expect(feed()).toHaveAttribute("aria-busy", "false"));
+    const details = within(moves()[0]!).getByRole("button", { name: /^Details:/ });
+    const name = details.getAttribute("aria-label")!;
+    await userEvent.click(details);
+
+    await userEvent.click(screen.getByRole("tab", { name: "Board" }));
+    await userEvent.click(screen.getByRole("tab", { name: "History" }));
+    expect(await screen.findByRole("radio", { name: "Failed" })).toBeChecked();
+    expect(screen.getByRole("combobox", { name: "Step" })).toHaveValue("final_qc");
+    expect(await screen.findByRole("button", { name })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it.each([1280, 375])("takes no longer a search than erp-api does, at %ipx", async (width) => {
+    setScreenWidth(width);
+    await openHistory();
+    if (width < 768) await userEvent.click(screen.getByRole("button", { name: "Filters" }));
+    expect(await screen.findByRole("searchbox", { name: "Search order, product or customer" })).toHaveAttribute("maxLength", "100");
+  });
+
   it("says when the last 7 days have no moves", async () => {
     server.use(http.get(`${FAKE_API_URL}/workflow/moves`, () => HttpResponse.json({ data: [], next_cursor: null })));
     renderAs(STAFF, <ProductionPage />);

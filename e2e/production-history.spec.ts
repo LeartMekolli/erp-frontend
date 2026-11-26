@@ -36,6 +36,8 @@ for (const width of [375, 768, 1280] as const) {
       await openHistory(page);
       await page.getByText("Failed", { exact: true }).click();
       await expect(page.getByRole("radio", { name: "Failed" })).toBeChecked();
+      // The last list stays on screen, busy, until the fails come; read the rows only once they have.
+      await expect(feed(page)).toHaveAttribute("aria-busy", "false");
       const fail = moves(page).filter({ has: page.getByText("failed: Porosity, sent back to Finish") }).first();
       await expect(fail).toHaveAccessibleName(SEEDED_FAIL);
       for (const name of await moves(page).evaluateAll((articles) => articles.map((article) => article.getAttribute("aria-label") ?? ""))) {
@@ -92,9 +94,15 @@ test.describe("at 1280 px", () => {
     await chevron.focus();
     await page.keyboard.press("Enter");
     await expect(chevron).toHaveAttribute("aria-expanded", "true");
+    // The photo's link takes focus only once its signed address has come, so wait for it before tabbing.
+    const photo = fail.getByRole("link", { name: "Photo 1 at Final QC" });
+    await expect(photo).toHaveAttribute("href", /.+/);
     const piece = fail.getByRole("link", { name: "#1048 · 3/12" });
     await expect(piece).toBeVisible();
-    for (let tab = 0; tab < 6 && !(await piece.evaluate((link) => link === document.activeElement)); tab += 1) await page.keyboard.press("Tab");
+    // The order of stops after the chevron: the photo, then the move's one piece.
+    await page.keyboard.press("Tab");
+    await expect(photo).toBeFocused();
+    await page.keyboard.press("Tab");
     await expect(piece).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("dialog", { name: "Piece 3/12" })).toBeVisible();

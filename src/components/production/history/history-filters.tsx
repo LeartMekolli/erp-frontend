@@ -6,7 +6,7 @@ import { useId, useState } from "react";
 import { cn } from "cn";
 
 import { RangePicker } from "@/components/dashboard/range-picker";
-import { SearchField } from "@/components/orders/toolbar";
+import { SEARCH_MAX_LENGTH, SearchField } from "@/components/orders/toolbar";
 import { DIALOG_SHEET } from "@/components/production/dialog-classes";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -202,6 +202,7 @@ export function PhoneFilters(props: FilterProps) {
                 type="search"
                 aria-label={SEARCH_LABEL}
                 placeholder={SEARCH_PLACEHOLDER}
+                maxLength={SEARCH_MAX_LENGTH}
                 value={draft.q ?? ""}
                 onChange={(event) => setDraft({ ...draft, q: event.target.value.trim() ? event.target.value : null })}
                 className="h-11 rounded-lg border border-line px-3 text-base text-ink placeholder:text-ink-2 focus-visible:outline-2 focus-visible:outline-violet"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useInfiniteQuery, type InfiniteData, type QueryKey } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, type InfiniteData, type QueryKey } from "@tanstack/react-query";
 
 /** erp-api's list page (ADR 0004 §2): cursors only, `null` on the last page. */
 export interface Page<T> {
@@ -13,13 +13,15 @@ export interface Page<T> {
  * first page) and throws on a failed response. `items` is every loaded page
  * in order. `P` keeps what a page carries besides its items, such as counts.
  * Name `T`: it can't be inferred once `P` is. `refetchInterval` re-reads
- * every loaded page that often, or as often as a function of them says.
+ * every loaded page that often, or as often as a function of them says. With `keepPrevious`, a new key keeps
+ * showing the last key's pages until its own first page comes, with `isPlaceholderData` set meanwhile.
  */
 export function useCursorList<T, P extends Page<T> = Page<T>>(options: {
   queryKey: QueryKey;
   fetchPage: (cursor: string | undefined) => Promise<P>;
   enabled?: boolean;
   refetchInterval?: number | false | ((data: InfiniteData<P> | undefined) => number | false);
+  keepPrevious?: boolean;
 }) {
   const { refetchInterval } = options;
   const query = useInfiniteQuery({
@@ -29,6 +31,7 @@ export function useCursorList<T, P extends Page<T> = Page<T>>(options: {
     getNextPageParam: (last: P) => last.next_cursor ?? undefined,
     enabled: options.enabled,
     refetchInterval: typeof refetchInterval === "function" ? (query) => refetchInterval(query.state.data) : refetchInterval,
+    placeholderData: options.keepPrevious ? keepPreviousData : undefined,
   });
   return {
     ...query,

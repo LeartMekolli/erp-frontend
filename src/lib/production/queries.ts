@@ -63,7 +63,8 @@ export const productionKeys = {
   piece: (id: string) => ["production", "piece", id] as const,
   moveList: (query: MoveListQueryParams) => ["production", "move-list", query] as const,
   movePieces: (moveId: string, groupId: string) => ["production", "move-pieces", moveId, groupId] as const,
-  defects: () => ["production", "defects"] as const,
+  // Outside Production: a move never changes the catalogue, so it doesn't read it again.
+  defects: () => ["workflow-defects"] as const,
   // Under Production, so someone's first move puts them in the Person filter.
   actors: (workflowId: string | null) => ["production", "actors", workflowId] as const,
 };
@@ -74,6 +75,7 @@ const MOVE_ROWS_PAGE = 200;
 /**
  * History: every line's moves, newest first, `MOVE_LIST_PAGE` a page. The query is part of the key, so new
  * filters start again from the first page and never send a cursor made for other ones (erp-api refuses it).
+ * Until they come, the last filters' moves stay on screen as a placeholder, so a filter change doesn't blank it.
  */
 export function useMoveList(query: MoveListQueryParams) {
   return useCursorList<MoveListItem>({
@@ -85,6 +87,7 @@ export function useMoveList(query: MoveListQueryParams) {
       return data;
     },
     refetchInterval: REFRESH_MS,
+    keepPrevious: true,
   });
 }
 

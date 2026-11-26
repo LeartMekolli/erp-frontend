@@ -5,7 +5,7 @@ import { useState, type ReactNode } from "react";
 import { LoadFailure } from "@/components/data/load-failure";
 import { Board } from "@/components/production/board/board";
 import { ByStep } from "@/components/production/by-step/by-step";
-import { History } from "@/components/production/history/history";
+import { History, useHistoryState } from "@/components/production/history/history";
 import { OpenPieceProvider } from "@/components/production/open-piece";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFormat } from "@/lib/format/use-format";
@@ -36,6 +36,8 @@ export function Production({ canMove, canUpload }: { canMove: boolean; canUpload
   // What a pass sent as the Board closed came to; the Board can't say it any more.
   const [awayNotice, setAwayNotice] = useState<string | null>(null);
   const productType = useProductType();
+  // History's filters and opened moves outlive its tab, so a trip to the Board comes back to them.
+  const history = useHistoryState();
   const tab = { canMove, canUpload, workflowId: productType.workflowId, onWorkflow: productType.setWorkflowId };
 
   let body: ReactNode;
@@ -95,7 +97,7 @@ export function Production({ canMove, canUpload }: { canMove: boolean; canUpload
               <ByStep {...tab} />
             </TabsContent>
             <TabsContent value="history">
-              <History workflowId={productType.workflowId} onWorkflow={productType.setWorkflowId} />
+              <History workflowId={productType.workflowId} onWorkflow={productType.setWorkflowId} state={history} />
             </TabsContent>
           </>
         )}

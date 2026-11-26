@@ -7,7 +7,7 @@ import { LoadFailure } from "@/components/data/load-failure";
 import { orderHref } from "@/components/orders/order-row";
 import { MoveFacts, MovePhotos } from "@/components/production/move-look";
 import type { MoveListGroup, MoveListItem } from "@/lib/api/schema-types";
-import { leaveArrivalNote } from "@/lib/navigation/arrival-note";
+import { leaveArrivalNote, opensHere } from "@/lib/navigation/arrival-note";
 import { overrideText } from "@/lib/production/history";
 import { lineName } from "@/lib/production/move-list";
 import { useMoveRows } from "@/lib/production/queries";
@@ -42,7 +42,9 @@ function LinePieces({ moveId, line }: { moveId: string; line: MoveListGroup }) {
                 {order ? (
                   <Link
                     href={orderHref(order)}
-                    onClick={() => leaveArrivalNote(orderHref(order), { piece: row.work_order.id })}
+                    onClick={(event) => {
+                      if (opensHere(event)) leaveArrivalNote(orderHref(order), { piece: row.work_order.id });
+                    }}
                     className="inline-flex min-h-8 items-center px-2 hover:underline pointer-coarse:min-h-11"
                   >
                     {label}
@@ -61,7 +63,7 @@ function LinePieces({ moveId, line }: { moveId: string; line: MoveListGroup }) {
 
   return (
     <div className="flex flex-col gap-1.5">
-      <h4 className="text-caption font-semibold text-ink-2">{heading}</h4>
+      <h3 className="text-caption font-semibold text-ink-2">{heading}</h3>
       {body}
     </div>
   );
