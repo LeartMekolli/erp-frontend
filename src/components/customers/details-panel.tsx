@@ -28,7 +28,7 @@ function AddressText({ address }: { address: Address }) {
   );
 }
 
-/** Where the customer ships and bills, its VAT number, and whether its people pick the workshop. Edit comes with `canEdit`. */
+/** Where the customer ships and bills, its VAT number, and whether its people pick the workshop. `action` is its Edit, for staff who may change it. */
 export function DetailsPanel({ customer, action }: { customer: Customer; action?: ReactNode }) {
   const book = useCustomerAddressBook(customer.id);
   return (
@@ -40,7 +40,15 @@ export function DetailsPanel({ customer, action }: { customer: Customer; action?
       ) : (
         <dl className="flex flex-col gap-3.5">
           <Fact term="Ships to">{book.data.shipping_address ? <AddressText address={book.data.shipping_address} /> : <span className="text-ink-2">No shipping address yet</span>}</Fact>
-          <Fact term="Bills to">{book.data.billing_address ? <AddressText address={book.data.billing_address} /> : "Same as shipping"}</Fact>
+          <Fact term="Bills to">
+            {book.data.billing_address ? (
+              <AddressText address={book.data.billing_address} />
+            ) : book.data.shipping_address ? (
+              "Same as shipping"
+            ) : (
+              <span className="text-ink-2">No billing address yet</span>
+            )}
+          </Fact>
           <Fact term="VAT number" inline>
             {book.data.vat_number ?? <span className="text-ink-2">None</span>}
           </Fact>

@@ -80,9 +80,11 @@ describe("CustomerPage", () => {
     expect(within(details).getByText("Picks the workshop").nextSibling).toHaveTextContent("Yes");
   });
 
-  it("says when no shipping address is saved", async () => {
+  it("says when no shipping address is saved, and doesn't bill to it", async () => {
     open(MIRA_ID);
     expect(await screen.findByText("No shipping address yet")).toBeInTheDocument();
+    expect(within(panel("Details")).getByText("No billing address yet")).toBeInTheDocument();
+    expect(within(panel("Details")).queryByText("Same as shipping")).not.toBeInTheDocument();
   });
 
   it("shows an overdue invoice with its order, and Pinewood's terms", async () => {
@@ -195,6 +197,13 @@ describe("CustomerPage", () => {
     open("9a9a9a9a-0000-4000-8000-000000000000");
     expect(await screen.findByRole("heading", { level: 1, name: "This customer doesn't exist or was removed." })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Back to customers" })).toHaveAttribute("href", "/customers");
+  });
+
+  it("says an address that isn't a customer id doesn't exist, without Try again", async () => {
+    server.use(http.get(`${FAKE_API_URL}/customers/:id`, () => FAILED(400)));
+    open("abc");
+    expect(await screen.findByRole("heading", { level: 1, name: "This customer doesn't exist or was removed." })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
   });
 
   it("keeps Details when Money fails", async () => {

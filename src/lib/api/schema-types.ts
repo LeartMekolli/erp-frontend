@@ -2,7 +2,7 @@ import type { paths } from "./schema";
 
 export type { paths };
 
-type JsonOk<P extends keyof paths, M extends "get" | "post" | "put" | "patch"> =paths[P][M] extends {
+type JsonOk<P extends keyof paths, M extends "get" | "post" | "put" | "patch"> = paths[P][M] extends {
   responses: { 200: { content: { "application/json": infer Body } } };
 }
   ? Body
@@ -39,7 +39,7 @@ export type NotificationPaths = {
   [P in keyof paths as P extends "/notifications" | `/notifications/${string}` ? P : never]: paths[P];
 };
 
-type JsonBody<P extends keyof paths, M extends "post" | "put" | "patch"> =paths[P][M] extends {
+type JsonBody<P extends keyof paths, M extends "post" | "put" | "patch"> = paths[P][M] extends {
   requestBody: { content: { "application/json": infer Body } };
 }
   ? Body

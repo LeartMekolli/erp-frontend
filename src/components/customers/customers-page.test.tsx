@@ -121,11 +121,27 @@ describe("CustomersPage", () => {
     expect(lists.at(-1)!.searchParams.has("cursor")).toBe(false);
   });
 
-  it("says when there are no customers at all", async () => {
+  it("says when there are no active customers, then no customers at all", async () => {
     server.use(http.get(`${FAKE_API_URL}/customers`, () => HttpResponse.json({ data: [], next_cursor: null })));
     renderAs(STAFF, <CustomersPage />);
+    expect(await screen.findByText("No active customers.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Clear filters" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Show all customers" }));
     expect(await screen.findByText("No customers yet.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Clear filters" })).not.toBeInTheDocument();
+  });
+
+  it("shows disabled customers from an empty active list", async () => {
+    server.use(
+      http.get(`${FAKE_API_URL}/customers`, ({ request }) => {
+        if (new URL(request.url).searchParams.get("status") === "active") return HttpResponse.json({ data: [], next_cursor: null });
+        return undefined;
+      }),
+    );
+    renderAs(STAFF, <CustomersPage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Show all customers" }));
+    expect(await screen.findByRole("link", { name: "Luna Jewels" })).toBeInTheDocument();
   });
 
   it("says when the list can't be loaded, with Try again", async () => {
@@ -162,5 +178,16 @@ describe("CustomersPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(await screen.findByRole("link", { name: "Old Works" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Filters · 1" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Filters · 1" })).toHaveFocus());
+  });
+
+  it("gives focus back to Filters when the sheet is closed with Escape", async () => {
+    setScreenWidth(375);
+    renderAs(STAFF, <CustomersPage />);
+    await screen.findByRole("link", { name: "Luna Jewels" });
+    await userEvent.click(screen.getByRole("button", { name: "Filters" }));
+    await screen.findByLabelText("Status");
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Filters" })).toHaveFocus());
   });
 });

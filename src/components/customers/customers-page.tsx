@@ -62,7 +62,7 @@ function CustomersList() {
             <LoadFailure error={list.error} fallback="Customers couldn't be loaded." onRetry={() => void list.refetch()} />
           </div>
         ) : list.items.length === 0 ? (
-          <Empty filtered={filtersSet(view)} onClear={() => setView(DEFAULT_CUSTOMERS_VIEW)} />
+          <Empty view={view} setView={setView} />
         ) : (
           <>
             <CustomersTable customers={list.items} busy={list.isPlaceholderData} />
@@ -74,12 +74,28 @@ function CustomersList() {
   );
 }
 
-function Empty({ filtered, onClear }: { filtered: boolean; onClear: () => void }) {
-  if (!filtered) return <p className="px-1 py-8 text-center text-sm text-ink-2">No customers yet.</p>;
+/**
+ * The default view lists active customers only, so an empty one says so and offers the rest; "No
+ * customers yet." is said only when every status is shown and nothing else is set.
+ */
+function Empty({ view, setView }: { view: CustomersView; setView: (view: CustomersView) => void }) {
+  if (!filtersSet(view)) {
+    return (
+      <div className="flex flex-col items-center gap-3 px-1 py-8">
+        <p className="text-sm text-ink-2">No active customers.</p>
+        <Button variant="secondary" onClick={() => setView({ ...view, status: "all" })}>
+          Show all customers
+        </Button>
+      </div>
+    );
+  }
+  if (!filtersSet({ ...view, status: DEFAULT_CUSTOMERS_VIEW.status }) && view.status === "all") {
+    return <p className="px-1 py-8 text-center text-sm text-ink-2">No customers yet.</p>;
+  }
   return (
     <div className="flex flex-col items-center gap-3 px-1 py-8">
       <p className="text-sm text-ink-2">No customers match.</p>
-      <Button variant="secondary" onClick={onClear}>
+      <Button variant="secondary" onClick={() => setView(DEFAULT_CUSTOMERS_VIEW)}>
         Clear filters
       </Button>
     </div>

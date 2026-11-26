@@ -8,7 +8,7 @@ import { cn } from "cn";
 import { SearchField } from "@/components/orders/toolbar";
 import { DIALOG_SHEET } from "@/components/production/dialog-classes";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { NativeSelect } from "@/components/ui/native-select";
 import type { BandChoice, CustomerGroupChoice } from "@/lib/api/schema-types";
 import { DEFAULT_CUSTOMERS_VIEW, type CustomersView } from "@/lib/customers/view";
@@ -118,11 +118,14 @@ export function PhoneCustomersFilters(props: FilterProps) {
   return (
     <div className="flex items-center gap-2">
       <Search view={props.view} onChange={props.onChange} />
-      <Button variant="secondary" className="h-11 shrink-0 px-3 font-medium" onClick={() => setOpen(true)}>
-        <SlidersHorizontal aria-hidden />
-        {count > 0 ? `Filters · ${count}` : "Filters"}
-      </Button>
+      {/* A trigger, so Radix gives focus back to Filters when Done or Escape closes the sheet. */}
       <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button variant="secondary" className="h-11 shrink-0 px-3 font-medium">
+            <SlidersHorizontal aria-hidden />
+            {count > 0 ? `Filters · ${count}` : "Filters"}
+          </Button>
+        </DialogTrigger>
         <DialogContent className={DIALOG_SHEET} aria-describedby={undefined}>
           <DialogTitle className="text-base font-semibold">Filters</DialogTitle>
           <div className="flex flex-col gap-3">

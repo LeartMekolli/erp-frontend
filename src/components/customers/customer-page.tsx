@@ -71,7 +71,8 @@ function CustomerView({ id, access }: { id: string; access: CustomerAccess }) {
   }
 
   if (!query.data) {
-    if (isApiProblem(query.error) && query.error.status === 404) {
+    // erp-api answers 400 for an id that isn't a uuid (`customers.controller.ts:37`): no such customer either, and trying again can't help.
+    if (isApiProblem(query.error) && (query.error.status === 404 || query.error.status === 400)) {
       return (
         <section className="flex flex-col items-start gap-3 rounded-[20px] bg-card px-6 py-7">
           <h1 className="text-title font-semibold">This customer doesn&apos;t exist or was removed.</h1>
