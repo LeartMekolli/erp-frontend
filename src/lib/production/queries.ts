@@ -124,7 +124,7 @@ export function useMoveActors(workflowId: string | null) {
     queryFn: async (): Promise<MoveActor[]> => {
       const { data, error, response } = await api.GET("/workflow/moves/actors", { params: { query: { workflow_id: workflowId! } } });
       if (!data) throw problemFrom(error, response);
-      return data.items;
+      return data.data;
     },
     enabled: workflowId !== null,
   });

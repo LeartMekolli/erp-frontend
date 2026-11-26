@@ -430,20 +430,66 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Customer organisations, newest first, optionally of one customer group (or none) or one priority band.
-         * @description `band` filters by the band in force: an override through its end date, else the computed band. An unknown group or band is a 400.
+         * Customer organisations, newest first, optionally searched by name or narrowed by status, customer group (or none) or priority band.
+         * @description `q` matches any part of the name, in any case. `band` filters by the band in force: an override through its end date, else the computed band. An unknown group or band is a 400.
          *
          *     Access: permission `customer.read`.
          */
         get: operations["CustomersController_list"];
         put?: never;
         /**
-         * Create a customer organisation: a brand, or one person on their own.
-         * @description Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
+         * Create a customer organisation (a brand, or one person on their own), with its addresses, payment terms and first invitation if given.
+         * @description Everything is saved together or not at all; the invitation email goes out once it is saved. `payment_terms` needs `payment.write` (403 without). A refused invitation, or pay later the plan does not allow, is a 409 whose `errors` name the field, such as `invitation.email` or `payment_terms.terms`.
+         *
+         *     Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
          *
          *     Access: permission `customer.write`.
          */
         post: operations["CustomersController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/customers/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The customer groups to file a customer under, by name.
+         * @description For pickers and the list filter; the percent is on `GET /pricing/customer-groups`.
+         *
+         *     Access: permission `customer.read`.
+         */
+        get: operations["CustomersController_groups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/customers/bands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The priority bands, the default band first, then the workspace's bands in order.
+         * @description Pass a `key` as `band` to `GET /customers`. Without `customers.priority` set, the one default band.
+         *
+         *     Access: permission `customer.read`.
+         */
+        get: operations["CustomersController_bands"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -487,7 +533,7 @@ export interface paths {
         put?: never;
         /**
          * Invite someone by email to act for the customer, with the role they get on accepting.
-         * @description The token goes only to the invitee's inbox; the link points at the workspace's customer site when it has one. Someone who already acts for another customer of the workspace accepts without a new password. Refused with 409 for a staff email, someone already acting for the customer, or a second owner.
+         * @description The token goes only to the invitee's inbox; the link points at the workspace's customer site when it has one. Someone who already acts for another customer of the workspace accepts without a new password. Refused with 409 for a staff email, someone already acting for the customer, or a second owner; its `errors` name the field: `email`, or `role` for a second owner. The plan's member limit is a 409 on `email` too.
          *
          *     Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
          *
@@ -747,7 +793,7 @@ export interface paths {
         put?: never;
         /**
          * Invite a colleague by email to act for the customer, with the role they get on accepting.
-         * @description The token goes only to the invitee's inbox. Only the owner invites an owner (403), and only while the customer has none (409). Refused with 409 for a staff email or someone already acting for the customer.
+         * @description The token goes only to the invitee's inbox. Only the owner invites an owner (403), and only while the customer has none (409). Refused with 409 for a staff email or someone already acting for the customer; a 409's `errors` name the field, `email`, or `role` for a second owner.
          *
          *     Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
          *
@@ -4315,7 +4361,7 @@ export interface paths {
         };
         /**
          * Everyone who has made a move, staff and partner people, for History's Person filter.
-         * @description `workflow_id` keeps the people who moved pieces of any version of that workflow. Sorted by name. `partners` are the partners the person belongs to now, empty for staff. Deactivated people stay listed, since History still names them. Not paged. Pass an `id` as `actor_user_id` to `GET /workflow/moves`.
+         * @description `workflow_id` keeps the people who moved pieces of any version of that workflow. Sorted by name. `partners` are the partners the person belongs to now, empty for staff; `kind` tells a partner's person who left every partner from staff. Deactivated people stay listed, since History still names them. Not paged. Pass an `id` as `actor_user_id` to `GET /workflow/moves`.
          *
          *     Access: permission `workflow.read`.
          */
@@ -4337,7 +4383,7 @@ export interface paths {
         };
         /**
          * The QC history: every move of every piece, newest first, filtered by piece, group, step, defect, design file, actor or time.
-         * @description `step_key` matches the step the move was made at. `from` is inclusive and `to` exclusive. `move_id` keeps the rows one move wrote.
+         * @description `step_key` matches the step the move was made at. `from` is inclusive and `to` exclusive. `move_id` keeps the rows one move wrote, in piece number order instead of newest first; a cursor works only with the ordering it came from.
          *
          *     Access: permission `workflow.read`.
          */
@@ -5160,7 +5206,7 @@ export interface paths {
         get?: never;
         /**
          * Set how a customer pays: first, or later within some days and up to a credit limit.
-         * @description Replaces the terms as a whole: days to pay defaults to 30 and the credit limit to none. Orders already placed keep the terms they were placed under. Customers never see their terms.
+         * @description Replaces the terms as a whole: days to pay defaults to 30 and the credit limit to none. Orders already placed keep the terms they were placed under. Customers never see their terms. Pay later on a plan that doesn't allow it is a 409 whose `errors` name `terms`.
          *
          *     Access: permission `payment.write`.
          */
@@ -8017,6 +8063,8 @@ export interface operations {
                 cursor?: string;
                 customer_group?: string | "none";
                 band?: string;
+                q?: string;
+                status?: "active" | "disabled";
             };
             header?: never;
             path?: never;
@@ -8049,7 +8097,10 @@ export interface operations {
                                 /** @enum {string} */
                                 terms: "pay_first" | "pay_later";
                                 days_to_pay: number;
+                                /** @description In `currency`; null: no limit. */
                                 credit_limit: string | null;
+                                /** @description The workspace's currency, which the customer's money is in. */
+                                currency: string;
                             };
                             plan: {
                                 key: string;
@@ -8109,6 +8160,41 @@ export interface operations {
                     name: string;
                     /** Format: uuid */
                     customer_group_id?: string;
+                    may_pick_partner?: boolean;
+                    shipping_address?: {
+                        name: string;
+                        line1: string;
+                        line2?: string;
+                        city: string;
+                        postal_code: string;
+                        region?: string;
+                        country: string;
+                        phone?: string;
+                    } | null;
+                    billing_address?: {
+                        name: string;
+                        line1: string;
+                        line2?: string;
+                        city: string;
+                        postal_code: string;
+                        region?: string;
+                        country: string;
+                        phone?: string;
+                    } | null;
+                    vat_number?: string | null;
+                    payment_terms?: {
+                        /** @enum {string} */
+                        terms: "pay_first" | "pay_later";
+                        /** @default 30 */
+                        days_to_pay?: number;
+                        /** @default null */
+                        credit_limit?: string | null;
+                    };
+                    invitation?: {
+                        email: string;
+                        /** @enum {string} */
+                        role: "viewer" | "buyer" | "admin" | "owner";
+                    };
                 };
             };
         };
@@ -8137,7 +8223,10 @@ export interface operations {
                             /** @enum {string} */
                             terms: "pay_first" | "pay_later";
                             days_to_pay: number;
+                            /** @description In `currency`; null: no limit. */
                             credit_limit: string | null;
+                            /** @description The workspace's currency, which the customer's money is in. */
+                            currency: string;
                         };
                         plan: {
                             key: string;
@@ -8198,6 +8287,95 @@ export interface operations {
             };
         };
     };
+    CustomersController_groups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** Format: uuid */
+                            id: string;
+                            key: string;
+                            name: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    CustomersController_bands: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            key: string;
+                            name: string;
+                            default: boolean;
+                        }[];
+                    };
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     CustomersController_get: {
         parameters: {
             query?: never;
@@ -8233,7 +8411,10 @@ export interface operations {
                             /** @enum {string} */
                             terms: "pay_first" | "pay_later";
                             days_to_pay: number;
+                            /** @description In `currency`; null: no limit. */
                             credit_limit: string | null;
+                            /** @description The workspace's currency, which the customer's money is in. */
+                            currency: string;
                         };
                         plan: {
                             key: string;
@@ -8331,7 +8512,10 @@ export interface operations {
                             /** @enum {string} */
                             terms: "pay_first" | "pay_later";
                             days_to_pay: number;
+                            /** @description In `currency`; null: no limit. */
                             credit_limit: string | null;
+                            /** @description The workspace's currency, which the customer's money is in. */
+                            currency: string;
                         };
                         plan: {
                             key: string;
@@ -29428,10 +29612,12 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        items: {
+                        data: {
                             /** Format: uuid */
                             id: string;
                             name: string;
+                            /** @enum {string} */
+                            kind: "staff" | "partner";
                             partners: {
                                 /** Format: uuid */
                                 id: string;
@@ -32246,7 +32432,10 @@ export interface operations {
                         /** @enum {string} */
                         terms: "pay_first" | "pay_later";
                         days_to_pay: number;
+                        /** @description In `currency`; null: no limit. */
                         credit_limit: string | null;
+                        /** @description The workspace's currency, which the customer's money is in. */
+                        currency: string;
                     };
                 };
             };
@@ -32279,6 +32468,15 @@ export interface operations {
             };
             /** @description Not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Conflict with the current state */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -33191,10 +33389,13 @@ export interface operations {
                         /** @enum {string} */
                         terms: "pay_first" | "pay_later";
                         days_to_pay: number;
+                        /** @description In `currency`; null: no limit. */
                         credit_limit: string | null;
-                        /** @description What the customer owes or will owe: billed and not paid, plus its started pay-later orders not billed yet. */
+                        /** @description The workspace's currency, which the customer's money is in. */
+                        currency: string;
+                        /** @description What the customer owes or will owe, in `currency`: billed and not paid, plus its started pay-later orders not billed yet. */
                         exposure: string;
-                        /** @description Billed and not paid, from the ledger. */
+                        /** @description Billed and not paid, from the ledger, in `currency`. */
                         balance: string;
                         open_invoices: {
                             /** Format: uuid */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { FAKE_API_URL, FAKE_PASSWORD, FLOOR_WORKER, SALES_LEAD, STAFF, WORKSPACE } from "./seed";
+import { FAKE_API_URL, FAKE_PASSWORD, FLOOR_WORKER, LUNA_ID, MIRA_ID, ORDER_TAKER, SALES_LEAD, STAFF, WORKSPACE } from "./seed";
 import { fakeState } from "./state";
 
 function post(path: string, body: unknown, headers: Record<string, string> = {}) {
@@ -61,8 +61,34 @@ describe("fake erp-api handlers", () => {
     };
     const floor = await actors(FLOOR_WORKER.email);
     expect(floor.status).toBe(200);
-    expect(await floor.json()).toMatchObject({ items: [{ name: "Ana Ruiz", partners: [] }] });
+    expect(await floor.json()).toMatchObject({ data: [{ name: "Ana Ruiz", kind: "staff", partners: [] }] });
     expect((await actors(SALES_LEAD.email)).status).toBe(403);
+  });
+
+  it("asks each customer route for its own permission", async () => {
+    const call = async (email: string, method: string, path: string, body?: unknown) => {
+      const login = await post("/auth/login", { workspace: WORKSPACE, email, password: FAKE_PASSWORD });
+      const { access_token } = (await login.json()) as { access_token: string };
+      return fetch(`${FAKE_API_URL}${path}`, {
+        method,
+        headers: { authorization: `Bearer ${access_token}`, ...(body === undefined ? {} : { "content-type": "application/json" }) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+    };
+    // SALES_LEAD reads customers and payments but changes nothing; ORDER_TAKER can't read payments.
+    expect((await call(SALES_LEAD.email, "PATCH", `/customers/${LUNA_ID}`, { name: "Luna" })).status).toBe(403);
+    expect((await call(SALES_LEAD.email, "PUT", `/customers/${LUNA_ID}/addresses`, { vat_number: null })).status).toBe(403);
+    expect((await call(SALES_LEAD.email, "PUT", `/customers/${MIRA_ID}/payment-terms`, { terms: "pay_first" })).status).toBe(403);
+    expect((await call(ORDER_TAKER.email, "GET", `/payments/customers/${MIRA_ID}`)).status).toBe(403);
+    expect((await call(SALES_LEAD.email, "GET", "/customers/groups")).status).toBe(200);
+    expect((await call(SALES_LEAD.email, "GET", "/customers/bands")).status).toBe(200);
+    expect((await call(SALES_LEAD.email, "GET", "/customers?status=active&q=mira")).status).toBe(200);
+    expect((await call(FLOOR_WORKER.email, "GET", "/customers")).status).toBe(403);
+
+    const renamed = await call(STAFF.email, "PATCH", `/customers/${LUNA_ID}`, { name: "Luna Atelier" });
+    expect(renamed.status).toBe(200);
+    expect(await renamed.json()).toMatchObject({ name: "Luna Atelier" });
+    expect((await call(STAFF.email, "PUT", `/customers/${MIRA_ID}/payment-terms`, { terms: "pay_later", credit_limit: "5,000.00" })).status).toBe(400);
   });
 
   it("puts a short password on the password field", async () => {
