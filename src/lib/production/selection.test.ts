@@ -9,7 +9,7 @@ const steps = [
 ];
 
 function piece(id: string, fields: Partial<Piece> = {}): Piece {
-  return { id, label: "1/2", status: "active", stepKey: "print", toInspect: null, inRework: false, mayWork: true, held: null, lastMove: null, ...fields };
+  return { id, label: "1/2", status: "active", stepKey: "print", toInspect: null, inRework: false, mayWork: true, held: null, missingSkill: null, lastMove: null, ...fields };
 }
 
 describe("nextStepName", () => {

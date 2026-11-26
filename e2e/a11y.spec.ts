@@ -330,6 +330,17 @@ for (const user of [NORTHCAST_ADMIN, NORTHCAST_MEMBER]) {
   });
 }
 
+test("partner dashboard as owner, with the earnings hero and Submit for approval: accessible and fits the screen", async ({ page, request }) => {
+  await request.post(`${FAKE_URL}/__setting-up/${NORTHCAST_ID}`);
+  await request.post(`${FAKE_URL}/__payout-account/${NORTHCAST_ID}/ready`);
+  await signIn(page, PARTNER.email);
+  await expect(page).toHaveURL(`/partner-portal/${NORTHCAST_ID}/dashboard`);
+  await expect(page.getByRole("region", { name: "Earned · last 30 days" }).getByRole("figure")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Earned · last 30 days" }).getByText("Owed now")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Setup still to finish" }).getByRole("button", { name: "Submit for approval" })).toBeVisible();
+  await expectAccessibleAndFits(page);
+});
+
 test("partners: accessible and fits the screen", async ({ page }) => {
   await signIn(page, STAFF.email);
   await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();

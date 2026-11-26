@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import { STAFF } from "../test/fake-erp-api/seed";
 
 import { expect, signIn, test } from "./helpers";
+import { FAKE_URL } from "./urls";
 
 // Each size is set below; Safari at phone size would repeat the 375 run.
 test.skip(({ browserName }) => browserName === "webkit", "sizes are set per block");
@@ -97,6 +98,19 @@ for (const size of SIZES) {
       await expect(page.getByText("1 piece sent back to Finish.")).toBeVisible();
       await expect(row).toContainText("2 being redone");
       await expect(page).toHaveURL(/\/production$/);
+    });
+
+    test("names the skill a step needs that the person lacks", async ({ page, request }) => {
+      await request.post(`${FAKE_URL}/__require-skill/finish`);
+      await openProduction(page);
+      await pickStep(page, "finish", /^Finish/);
+      // Each row holds its words twice, the phone's and the table's, and CSS hides one: look at the shown one.
+      await expect(page.getByText("Needs the Finish skill").filter({ visible: true }).first()).toBeVisible();
+      await expect(page.getByText("Needs a skill you don't have")).toHaveCount(0);
+
+      await page.getByRole("tablist", { name: "Production views" }).getByRole("tab", { name: "Board" }).click();
+      if (size.width < 768) await page.getByLabel("Step", { exact: true }).selectOption("finish");
+      await expect(page.getByRole("region", { name: "Finish", exact: true }).getByText("Needs the Finish skill").filter({ visible: true }).first()).toBeVisible();
     });
   });
 }

@@ -37,6 +37,68 @@ describe("fake erp-api partner dashboard", () => {
     expect(body.range).toEqual({ from: "2026-10-26", to: "2026-11-24", previous_from: "2026-09-26", previous_to: "2026-10-25", bucket: "day" });
   });
 
+  it("splits an admin's earnings into paid, pending and owed that add up", async () => {
+    const body = (await (await get(NORTHCAST_ADMIN, `/summary?${RANGE}`)).json()) as {
+      earned: string;
+      paid_total: string;
+      pending_total: string;
+      owed_total: string;
+      series: { paid: string; pending: string; owed: string }[];
+    };
+    const cents = (amount: string) => Math.round(Number(amount) * 100);
+    expect(cents(body.paid_total) + cents(body.pending_total) + cents(body.owed_total)).toBe(cents(body.earned));
+    expect(cents(body.pending_total)).toBeGreaterThan(0);
+    const sum = (key: "paid" | "pending" | "owed") => body.series.reduce((total, point) => total + cents(point[key]), 0);
+    expect(sum("paid")).toBe(cents(body.paid_total));
+    expect(sum("pending")).toBe(cents(body.pending_total));
+    expect(sum("owed")).toBe(cents(body.owed_total));
+  });
+
+  it("leaves the totals out of a member's summary", async () => {
+    const body = (await (await get(NORTHCAST_MEMBER, `/summary?${RANGE}`)).json()) as Record<string, unknown>;
+    for (const key of ["paid_total", "pending_total", "owed_total"]) expect(body).not.toHaveProperty(key);
+  });
+
+  describe("submitting the setup for approval", () => {
+    async function submit(user: FakeUser, partnerId = NORTHCAST_ID) {
+      const token = await tokenFor(user);
+      return fetch(`${FAKE_API_URL}/partner-portal/partners/${partnerId}/submit`, { method: "POST", headers: { authorization: `Bearer ${token}` } });
+    }
+
+    async function submittedAt(user: FakeUser): Promise<string | null> {
+      const token = await tokenFor(user);
+      const me = (await (await fetch(`${FAKE_API_URL}/partner-portal/me`, { headers: { authorization: `Bearer ${token}` } })).json()) as {
+        partners: { id: string; submitted_at: string | null }[];
+      };
+      return me.partners.find((partner) => partner.id === NORTHCAST_ID)!.submitted_at;
+    }
+
+    it("records the owner's submission once, and /me shows it", async () => {
+      fakeState().setPartnerSettingUp(NORTHCAST_ID);
+      expect(await submittedAt(PARTNER)).toBeNull();
+      const first = await submit(PARTNER);
+      expect(first.status).toBe(200);
+      expect(await first.json()).toMatchObject({ id: NORTHCAST_ID, status: "setting_up" });
+      const at = await submittedAt(PARTNER);
+      expect(at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect((await submit(PARTNER)).status).toBe(200);
+      expect(await submittedAt(PARTNER)).toBe(at);
+    });
+
+    it("lets only the owner submit", async () => {
+      fakeState().setPartnerSettingUp(NORTHCAST_ID);
+      expect((await submit(NORTHCAST_ADMIN)).status).toBe(403);
+      expect((await submit(NORTHCAST_MEMBER)).status).toBe(403);
+      expect(await submittedAt(PARTNER)).toBeNull();
+    });
+
+    it("refuses a partner that isn't being set up", async () => {
+      const res = await submit(PARTNER);
+      expect(res.status).toBe(409);
+      expect(await res.json()).toMatchObject({ detail: "Only a partner being set up can be submitted for approval" });
+    });
+  });
+
   it("refuses a range that ends before it starts", async () => {
     const res = await get(NORTHCAST_MEMBER, "/summary?from=2026-11-24&to=2026-11-01");
     expect(res.status).toBe(400);

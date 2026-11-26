@@ -21,7 +21,8 @@ import { useWorkshop } from "../use-workshop";
 
 import { ActivityTile } from "./activity-tile";
 import { CountTiles } from "./count-tiles";
-import { EarnedTile, PayoutsTile } from "./money-tiles";
+import { EarningsTile } from "./earnings-tile";
+import { PayoutsTile } from "./money-tiles";
 import { OffersTile } from "./offers-tile";
 import { RatingsTile } from "./ratings-tile";
 import { ScoreTile } from "./score-tile";
@@ -81,14 +82,19 @@ export function PartnerDashboardPage() {
             busy && "opacity-60",
           )}
         >
-          {/* Reading order on a phone: the hero, the offers, then the counts. Below admin there is no money at all. */}
-          <WorkloadTile partnerId={partnerId} range={range} words={shownWords} today={today} />
+          {/* Reading order on a phone: the hero, the offers, then the counts. Below admin there is no money at all:
+              members get the workload as their hero, admins and owners their earnings, with the workload further down. */}
+          {seesMoney ? (
+            <EarningsTile summary={summary.data} words={shownWords} failure={summaryFailure} />
+          ) : (
+            <WorkloadTile partnerId={partnerId} range={range} words={shownWords} today={today} />
+          )}
           <OffersTile />
-          {seesMoney ? <EarnedTile summary={summary.data} words={shownWords} failure={summaryFailure} /> : null}
           <CountTiles summary={summary.data} words={shownWords} failure={summaryFailure} />
           <ScoreTile />
           <StepsTile summary={summary.data} failure={summaryFailure} />
           <RatingsTile />
+          {seesMoney ? <WorkloadTile partnerId={partnerId} range={range} words={shownWords} today={today} variant="tile" /> : null}
           {seesMoney ? <PayoutsTile /> : null}
           <SetupTile />
           <ActivityTile wide={!seesMoney} />

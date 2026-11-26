@@ -96,7 +96,7 @@ describe("selecting pieces", () => {
     fakeState().production.requireSkill("print");
     renderPieces();
     expect(await screen.findByRole("checkbox", { name: "Select 1/12" })).toBeDisabled();
-    expect(screen.getAllByText("Needs a skill you don't have")).toHaveLength(2);
+    expect(screen.getAllByText("Needs the Print skill")).toHaveLength(2);
   });
 
   it("replaces the selection when picking at another step", async () => {

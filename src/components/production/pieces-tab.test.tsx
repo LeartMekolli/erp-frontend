@@ -100,7 +100,7 @@ describe("LineTabs", () => {
     renderTabs();
     const piece = (await screen.findByText("1/12")).closest("li")!;
     expect(piece).toHaveTextContent("Waiting for its parts");
-    expect(piece).not.toHaveTextContent("Needs a skill you don't have");
+    expect(piece).not.toHaveTextContent(/Needs (a|the) .*skill/);
     expect(within(piece).queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "Select all at Print" })).toBeDisabled();
   });

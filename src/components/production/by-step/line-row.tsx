@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { StepGroup } from "@/lib/api/schema-types";
 import { formatDayMonth } from "@/lib/format/dates";
 import { dueWords } from "@/lib/production/by-step";
-import { HOLD_WORDS } from "@/lib/production/holds";
+import { HOLD_WORDS, skillWords } from "@/lib/production/holds";
 
 /** What a line is called in labels: its order number, or its product for staff who can't read orders. */
 export function lineName(line: StepGroup): string {
@@ -72,7 +72,7 @@ function Status({ line, selectable }: { line: StepGroup; selectable: boolean }) 
   if (selectable && line.workable === 0 && !line.held_reason)
     items.push(
       <span key="skill" className="text-caption text-ink-2">
-        Needs a skill you don&apos;t have
+        {skillWords(line.missing_skill)}
       </span>,
     );
   if (items.length === 0) return null;
@@ -200,7 +200,7 @@ export function LineRow({
               {HOLD_WORDS[line.held_reason]}
             </span>
           )}
-          {selectable && line.workable === 0 && !line.held_reason && <span className="text-caption text-ink-2">Needs a skill you don&apos;t have</span>}
+          {selectable && line.workable === 0 && !line.held_reason && <span className="text-caption text-ink-2">{skillWords(line.missing_skill)}</span>}
           {failed && <TickFailed name={name} onRetry={onTick} />}
         </span>
       </Cell>

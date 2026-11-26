@@ -303,6 +303,25 @@ describe("fake erp-api: Production's lists", () => {
     expect(row.group.product?.name).toBeDefined();
   });
 
+  it("names the skill a step requires that the caller lacks, on lines and pieces", () => {
+    const s = store();
+    expect(groups(s).data[0]!.missing_skill).toBeNull();
+    s.requireSkill("finish");
+    for (const row of groups(s).data) expect(row.missing_skill).toMatchObject({ name: "Finish" });
+    const piece = ok(s.pieces(new URLSearchParams({ group_id: GROUP, step_key: "finish", status: "active" }))).data[0]!;
+    expect(piece.missing_skill).toMatchObject({ name: "Finish" });
+  });
+
+  it("names no missing skill without workflow.move, or for a piece that isn't active", () => {
+    const s = store();
+    s.requireSkill("finish");
+    const reader = { permissions: ["workflow.read"] };
+    expect(ok(s.stepGroups(new URLSearchParams({ workflow_id: WORKFLOW_ID, step_key: "finish" }), reader)).data[0]!.missing_skill).toBeNull();
+    expect(ok(s.pieces(new URLSearchParams({ group_id: GROUP, step_key: "finish", status: "active" }), reader)).data[0]!.missing_skill).toBeNull();
+    const finished = ok(s.pieces(new URLSearchParams({ group_id: GROUP, status: "finished" }))).data;
+    for (const piece of finished) expect(piece.missing_skill).toBeNull();
+  });
+
   it("searches by order number, product or customer", () => {
     const s = store();
     expect(numbers(groups(s, { q: "1041" }))).toEqual([1041]);

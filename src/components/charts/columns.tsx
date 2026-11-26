@@ -18,6 +18,14 @@ const MAX_COLUMN = 24;
 const GAP = 2;
 const RADIUS = 4;
 
+type Tone = "light" | "dark";
+
+/** Everything but the columns' own colours, on a white tile or on the dark hero (as `capacity-chart.tsx`). */
+const TONES = {
+  light: { grid: CHART.grid, axis: CHART.axis, value: CHART.ink, hover: CHART.ink, legend: "text-ink-2" },
+  dark: { grid: CHART.dark.grid, axis: CHART.dark.axis, value: "#ffffff", hover: "#ffffff", legend: "text-[#b9b6c9]" },
+} as const;
+
 function totalOf(d: ColumnsDatum): number {
   let sum = 0;
   for (const v of d.values) sum += v;
@@ -65,6 +73,7 @@ function Drawing({
   active,
   onActive,
   onSize,
+  tone,
 }: {
   size: Size;
   data: ColumnsDatum[];
@@ -75,8 +84,10 @@ function Drawing({
   active: number | null;
   onActive: (index: number | null) => void;
   onSize: (size: Size) => void;
+  tone: Tone;
 }) {
   const { width, height } = size;
+  const colours = TONES[tone];
 
   // The tooltip lives outside the drawing and needs the size to place itself.
   useEffect(() => {
@@ -99,7 +110,7 @@ function Drawing({
   return (
     <svg width={width} height={height} style={{ display: "block" }}>
       <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
-        <ChartAxisY ticks={ticks} yScale={yScale} format={axis} innerWidth={innerWidth} />
+        <ChartAxisY ticks={ticks} yScale={yScale} format={axis} innerWidth={innerWidth} grid={colours.grid} text={colours.axis} />
 
         {data.map((d, i) => {
           const bandX = xScale(d.key) ?? 0;
@@ -150,7 +161,7 @@ function Drawing({
                   textAnchor="middle"
                   fontSize={12}
                   fontWeight={600}
-                  fill={CHART.ink}
+                  fill={colours.value}
                   style={{ fontVariantNumeric: "tabular-nums" }}
                 >
                   {format(total)}
@@ -162,7 +173,7 @@ function Drawing({
                   y={innerHeight + 17}
                   textAnchor="middle"
                   fontSize={11}
-                  fill={CHART.axis}
+                  fill={colours.axis}
                   style={{ fontVariantNumeric: "tabular-nums" }}
                 >
                   {d.label}
@@ -180,8 +191,8 @@ function Drawing({
               y={0}
               width={step}
               height={innerHeight}
-              fill={i === active ? CHART.ink : "transparent"}
-              fillOpacity={i === active ? 0.04 : undefined}
+              fill={i === active ? colours.hover : "transparent"}
+              fillOpacity={i === active ? (tone === "dark" ? 0.08 : 0.04) : undefined}
               onPointerEnter={() => onActive(i)}
               onPointerMove={() => onActive(i)}
             />
@@ -207,6 +218,8 @@ export function Columns({
   axis,
   empty,
   width,
+  tone = "light",
+  legend = true,
 }: {
   label: string;
   data: ColumnsDatum[];
@@ -217,6 +230,10 @@ export function Columns({
   axis: (v: number) => string;
   empty?: string | null;
   width?: number;
+  /** "dark" on the dark hero tile. */
+  tone?: Tone;
+  /** Off when the tile draws its own legend, say with a total per series. */
+  legend?: boolean;
 }) {
   const [active, setActive] = useState<number | null>(null);
   const [size, setSize] = useState<Size | null>(null);
@@ -239,7 +256,7 @@ export function Columns({
     tooltip = (
       <ChartTooltip
         open
-        tone="light"
+        tone={tone}
         left={MARGIN.left + (layout.xScale(activeDatum.key) ?? 0) + layout.xScale.bandwidth() / 2}
         top={MARGIN.top + layout.yScale(totalOf(activeDatum))}
         title={activeDatum.label}
@@ -254,6 +271,7 @@ export function Columns({
         label={label}
         height={height}
         width={width}
+        tone={tone}
         empty={hasData ? null : empty}
         focus={hasData ? keys.bind : undefined}
         overlay={tooltip}
@@ -278,11 +296,12 @@ export function Columns({
             active={active}
             onActive={setActive}
             onSize={setSize}
+            tone={tone}
           />
         )}
       </ChartFrame>
-      {stacked ? (
-        <ul className="text-ink-2 m-0 mt-2 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-[12px]">
+      {stacked && legend ? (
+        <ul className={`${TONES[tone].legend} m-0 mt-2 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-[12px]`}>
           {series.map((s) => (
             <li key={s.name} className="flex items-center gap-1.5">
               <span

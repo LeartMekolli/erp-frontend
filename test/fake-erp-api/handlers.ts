@@ -283,6 +283,14 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
+    // Submitting the setup for approval: owners only (`setup.controller.ts:223-233`).
+    http.post("/partner-portal/partners/{partnerId}/submit", ({ request, params, response }) => {
+      const refusedCall = partnerCaller(request, params.partnerId, true, "owner");
+      if (refusedCall) return response.untyped(refusedCall);
+      const answer = fakeState().submitSetup(params.partnerId);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
     http.post("/partner-portal/partners/{partnerId}/jobs/{groupId}/accept", ({ request, params, response }) => {
       const refusedCall = partnerCaller(request, params.partnerId, true);
       if (refusedCall) return response.untyped(refusedCall);

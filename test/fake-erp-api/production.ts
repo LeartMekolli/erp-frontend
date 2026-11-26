@@ -472,6 +472,16 @@ export function createProductionStore(now: () => number) {
   /** Whether the caller may pass or fail the piece where it is (`may_work`): active, at a step it has the skill for, not held. */
   const mayWork = (piece: StoredPiece) => piece.status === "active" && !skilled.has(piece.stepKey ?? "") && heldFor(piece) === null;
 
+  /**
+   * The skill an active piece's step requires that the caller lacks (erp-api `work-orders.service.ts:547`), named
+   * after its step; null without `workflow.move`, held or not.
+   */
+  const missingSkill = (piece: StoredPiece, viewer: Viewer): { id: string; name: string } | null => {
+    if (piece.status !== "active" || !can(viewer, "workflow.move") || !skilled.has(piece.stepKey ?? "")) return null;
+    const index = STEPS.findIndex((step) => step.key === piece.stepKey);
+    return { id: uuid("c3c3c3c3", index + 1), name: STEPS[index]!.name };
+  };
+
   /** What `q` finds (erp-api `searchGroups`): the product, an order number with `order.read`, the customer with `customer.read`. */
   const finds = (groupId: string, q: string, viewer: Viewer) => {
     const { order, line } = lineOf.get(groupId)!;
@@ -508,6 +518,7 @@ export function createProductionStore(now: () => number) {
       // erp-api: `mayMove && …` (`work-orders.service.ts:542`).
       may_work: can(viewer, "workflow.move") && mayWork(piece),
       held: heldFor(piece),
+      missing_skill: missingSkill(piece, viewer),
       in_rework: piece.status === "active" && piece.inRework,
       last_move: last
         ? { kind: last.kind, outcome: last.outcome, from_step: last.from_step, defect: last.defect, actor: last.actor, partner: last.partner, created_at: last.created_at }
@@ -770,6 +781,8 @@ export function createProductionStore(now: () => number) {
           to_inspect: 0,
           held: reasons.length,
           held_reason: reasons.includes("waiting_for_payment") ? "waiting_for_payment" : (reasons[0] ?? null),
+          // A line is on one version, so its pieces at the step share one skill (erp-api `work-orders.service.ts:665`).
+          missing_skill: mine.map((piece) => missingSkill(piece, viewer)).find((skill) => skill !== null) ?? null,
         };
       });
       return { ok: true, body: { data, next_cursor: offset + limit < ids.length ? `${filters.sort}@${offset + limit}` : null } };

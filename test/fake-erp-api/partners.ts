@@ -19,9 +19,13 @@ const NO_SCORE: StaffPartner["score"] = {
 /** Northcast then Layerline, as erp-api's seed creates them. */
 const IDS = [NORTHCAST_ID, LAYERLINE_ID];
 
-export function createPartnersStore(accountOf: (id: string) => PayoutAccountState, suspended: (id: string) => boolean) {
+export function createPartnersStore(
+  accountOf: (id: string) => PayoutAccountState,
+  statusOf: (id: string) => PartnerStatus,
+  submittedAtOf: (id: string) => string | null,
+) {
   const view = (id: string): StaffPartner => {
-    const status: PartnerStatus = suspended(id) ? "suspended" : "approved";
+    const status = statusOf(id);
     return {
       id,
       name: PARTNER_NAMES[id]!,
@@ -30,7 +34,7 @@ export function createPartnersStore(accountOf: (id: string) => PayoutAccountStat
       accepts_direct_orders: false,
       agreement: null,
       member_count: 1,
-      submitted_at: null,
+      submitted_at: submittedAtOf(id),
       score: structuredClone(NO_SCORE),
       payout_account: accountOf(id),
       created_at: "2026-01-05T09:00:00.000Z",
