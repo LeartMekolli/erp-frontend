@@ -967,13 +967,17 @@ export function createProductionStore(now: () => number) {
       return { ok: true, body: { data: all.slice(offset, offset + limit), next_cursor: offset + limit < all.length ? `moves@${offset + limit}` : null } };
     },
 
-    /** `GET /workflow/transitions` (`work-orders.service.ts:692`): one row per piece moved, newest first, naming the piece. */
+    /**
+     * `GET /workflow/transitions` (`work-orders.service.ts`): one row per piece moved, naming the piece. Newest first,
+     * except one move's rows (`move_id`), which come in piece number order.
+     */
     transitions(params: URLSearchParams): Answer<Page<TransitionListItem>> {
       const read = readRows(params, TRANSITION_KEYS, "transitions");
       if ("ok" in read) return read;
+      const byPiece = (a: Row, b: Row) => a.piece.number - b.piece.number || a.move.id.localeCompare(b.move.id);
       const all = allRows()
         .filter((row) => rowPicks(read.filters, row))
-        .sort((a, b) => newestFirst(a.move, b.move));
+        .sort(read.filters.moveId === null ? (a, b) => newestFirst(a.move, b.move) : byPiece);
       const { limit, offset } = read;
       return {
         ok: true,
@@ -998,26 +1002,31 @@ export function createProductionStore(now: () => number) {
     /**
      * `GET /workflow/moves/actors` (erp-api `move-history.ts` `listActors`): everyone who has made a move, by name
      * then id, each with the partners they moved for (the fake's stand-in for the partners they belong to now).
+     * `kind` is `partner` for anyone who moved for a partner, the fake's stand-in for the person's own kind.
      */
-    actors(params: URLSearchParams): Answer<{ items: MoveActor[] }> {
+    actors(params: URLSearchParams): Answer<{ data: MoveActor[] }> {
       const extra = [...params.keys()].find((key) => key !== "workflow_id");
       if (extra) return invalid(extra, `Unrecognized key: "${extra}"`);
       const workflowId = params.get("workflow_id");
-      if (workflowId !== null && workflowId !== WORKFLOW.id) return { ok: true, body: { items: [] } };
-      const people = new Map<string, { name: string; partners: Map<string, string> }>();
+      if (workflowId !== null && workflowId !== WORKFLOW.id) return { ok: true, body: { data: [] } };
+      const people = new Map<string, { name: string; partner: boolean; partners: Map<string, string> }>();
       for (const { move } of allRows()) {
-        const person = people.get(move.actor.id) ?? { name: move.actor.name, partners: new Map<string, string>() };
-        if (movers.has(move.move_id) && move.partner) person.partners.set(move.partner.id, move.partner.name);
+        const person = people.get(move.actor.id) ?? { name: move.actor.name, partner: false, partners: new Map<string, string>() };
+        if (movers.has(move.move_id) && move.partner) {
+          person.partner = true;
+          person.partners.set(move.partner.id, move.partner.name);
+        }
         people.set(move.actor.id, person);
       }
-      const items = [...people.entries()]
+      const data = [...people.entries()]
         .map(([id, person]) => ({
           id,
           name: person.name,
+          kind: person.partner ? ("partner" as const) : ("staff" as const),
           partners: [...person.partners.entries()].map(([partnerId, name]) => ({ id: partnerId, name })).sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)),
         }))
         .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
-      return { ok: true, body: { items } };
+      return { ok: true, body: { data } };
     },
 
     version(id: string, number: number): Answer<WorkflowVersion> {

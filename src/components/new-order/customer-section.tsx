@@ -43,12 +43,21 @@ const KEPT: ReadonlySet<string> = new Set<keyof NewOrderValues>(["customerId", "
  * besides the customer is entered, picking another asks first. A disabled customer is named and never set.
  * `onCustomerChange` runs when the last customer's entries are cleared, so the page drops their price.
  */
-export function CustomerSection({ onCustomerChange }: { onCustomerChange?: () => void }) {
+export function CustomerSection({
+  startWith = null,
+  onCustomerChange,
+}: {
+  /** A customer to start with, from a customer's page: read once, when the section first shows. */
+  startWith?: string | null;
+  onCustomerChange?: () => void;
+}) {
   const { control, reset, getValues } = useFormContext<NewOrderValues>();
   // Read while rendering, so the form keeps track of which fields were changed.
   const { dirtyFields } = useFormState({ control });
   const customerId = useWatch({ control, name: "customerId" });
-  const [pickedId, setPickedId] = useState<string | null>(() => getValues("customerId") || null);
+  const [pickedId, setPickedId] = useState<string | null>(() => getValues("customerId") || startWith);
+  // The customer the page started with is the form's default too, so leaving at once doesn't ask.
+  const started = useRef(startWith);
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
   // Change pressed: the search shows again under the chip's place until a customer is picked or Escape.
@@ -68,8 +77,11 @@ export function CustomerSection({ onCustomerChange }: { onCustomerChange?: () =>
 
   useEffect(() => {
     if (loaded?.status !== "active" || loaded.id !== pickedId || getValues("customerId") === loaded.id) return;
-    // The defaults stay empty, so the form counts as changed and the leave guard asks.
-    reset({ ...EMPTY_VALUES, customerId: loaded.id, declaredUnit: getValues("declaredUnit") }, { keepDefaultValues: true });
+    // Picked here, the defaults stay empty, so the form counts as changed and the leave guard asks.
+    // Started with from a customer's page, nothing was entered yet, so the customer becomes the default.
+    const fromPage = started.current === loaded.id;
+    started.current = null;
+    reset({ ...EMPTY_VALUES, customerId: loaded.id, declaredUnit: getValues("declaredUnit") }, { keepDefaultValues: !fromPage });
   }, [loaded, pickedId, getValues, reset]);
 
   useEffect(() => {

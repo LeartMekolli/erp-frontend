@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import type { QuoteRefusal, QuoteSummary } from "@/lib/api/schema-types";
 import { canPlaceOrders } from "@/lib/auth/permissions";
-import { leaveArrivalNote } from "@/lib/navigation/arrival-note";
+import { leaveArrivalNote, useArrivalNote } from "@/lib/navigation/arrival-note";
 import { EMPTY_VALUES, bodyKey, type NewOrderValues } from "@/lib/new-order/form";
 import { useCustomerProducts } from "@/lib/new-order/queries";
 import { useMediaQuery } from "@/lib/use-media-query";
@@ -46,6 +46,11 @@ export function NewOrderPage() {
 
 function NewOrder() {
   const form = useForm<NewOrderValues>({ defaultValues: EMPTY_VALUES });
+  // A customer's page opened this for them: the section starts with them, as if picked in the search.
+  const [startWith, setStartWith] = useState<string | null>(null);
+  useArrivalNote("/orders/new", (note) => {
+    if (note.customer) setStartWith(note.customer);
+  });
   const customerId = useWatch({ control: form.control, name: "customerId" });
   const productId = useWatch({ control: form.control, name: "productId" });
   const declaredUnit = useWatch({ control: form.control, name: "declaredUnit" });
@@ -158,7 +163,7 @@ function NewOrder() {
                     customer stays the grid's first child, so it keeps its state as the product comes and goes. */}
                 <div className={cn("grid items-start gap-3.5", customerId !== "" && "sm:grid-cols-[1.4fr_1fr]")}>
                   {/* Another customer's prices are their own: the last one's price, shown or stale, goes. */}
-                  <CustomerSection onCustomerChange={() => price.clear()} />
+                  <CustomerSection startWith={startWith} onCustomerChange={() => price.clear()} />
                   {customerId !== "" && <ProductSection refusals={price.fieldRefusals} />}
                 </div>
               </Panel>

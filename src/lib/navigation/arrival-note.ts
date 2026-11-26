@@ -15,6 +15,8 @@ export type ArrivalNote = {
   placed?: true;
   /** Production's History linked to one of the order's pieces (a work order id): the order page opens its story. */
   piece?: string;
+  /** A customer's page opened New order for them (a customer id): New order starts with them picked. */
+  customer?: string;
   /** The payment provider's answer after payout setup. */
   onboarding?: "done" | "expired";
   /** Sign-in: why this tab was signed out. */

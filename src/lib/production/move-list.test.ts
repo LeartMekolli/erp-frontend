@@ -71,12 +71,15 @@ describe("History's words", () => {
   });
 
   it("names a workshop's person with their workshops", () => {
-    expect(actorLabel({ id: "a", name: "Ana Novak", partners: [] })).toBe("Ana Novak");
-    expect(actorLabel({ id: "a", name: "Ana Novak", partners: [{ id: "n", name: "Northcast Foundry" }] })).toBe("Ana Novak · Northcast Foundry");
+    expect(actorLabel({ id: "a", name: "Ana Novak", kind: "staff", partners: [] })).toBe("Ana Novak");
+    expect(actorLabel({ id: "a", name: "Ana Novak", kind: "partner", partners: [{ id: "n", name: "Northcast Foundry" }] })).toBe(
+      "Ana Novak · Northcast Foundry",
+    );
     expect(
       actorLabel({
         id: "a",
         name: "Ana Novak",
+        kind: "partner",
         partners: [
           { id: "l", name: "Layerline Prints" },
           { id: "n", name: "Northcast Foundry" },

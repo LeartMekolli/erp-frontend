@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { resetArrivalNotes } from "@/lib/navigation/arrival-note";
+import { leaveArrivalNote, resetArrivalNotes } from "@/lib/navigation/arrival-note";
 
 import { takeArrivalNote } from "../../../test/arrival-note";
 import { FAKE_API_URL, LUNA_ID, MIRA_ID, ORDER_TAKER, ORDER_WRITER, STAFF } from "../../../test/fake-erp-api/seed";
@@ -246,6 +246,46 @@ describe("NewOrderPage", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(navigation.push).toHaveBeenCalledWith("/orders");
+  });
+
+  it("starts with the customer a customer's page left a note for, and leaves at once", async () => {
+    leaveArrivalNote("/orders/new", { customer: LUNA_ID });
+    renderAs(
+      ORDER_TAKER,
+      <>
+        <a href="/orders">Another page</a>
+        <NewOrderPage />
+      </>,
+    );
+    // Luna's chip, as if picked in the search, and her products ready to choose from.
+    expect(await screen.findByText("Trade · Free")).toBeInTheDocument();
+    expect(screen.getAllByText("Luna Jewels").length).toBeGreaterThan(0);
+    expect(await screen.findByRole("combobox", { name: "Product" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Customer" })).not.toBeInTheDocument();
+
+    // Nothing was entered here, so leaving doesn't ask.
+    reached = [];
+    await userEvent.click(screen.getByRole("link", { name: "Another page" }));
+    expect(reached).toEqual([false]);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("starts empty without a note", async () => {
+    renderAs(ORDER_TAKER, <NewOrderPage />);
+    expect(await screen.findByRole("combobox", { name: "Customer" })).toHaveValue("");
+    expect(screen.queryByText("Trade · Free")).not.toBeInTheDocument();
+  });
+
+  it("still asks before leaving once another customer is picked over the one it started with", async () => {
+    leaveArrivalNote("/orders/new", { customer: LUNA_ID });
+    renderAs(ORDER_TAKER, <NewOrderPage />);
+    await screen.findByText("Trade · Free");
+    await userEvent.click(screen.getByRole("button", { name: "Change the customer" }));
+    await pickCustomer("Mira", "Mira Studio");
+    await screen.findByText("No group · Starter");
+    reached = [];
+    await userEvent.click(screen.getByRole("link", { name: "Orders" }));
+    expect(await screen.findByRole("dialog", { name: "Leave this order?" })).toBeInTheDocument();
   });
 
   it("has a back link to Orders that asks before leaving", async () => {

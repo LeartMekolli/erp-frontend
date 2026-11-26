@@ -516,13 +516,13 @@ describe("fake erp-api: every line's moves (History)", () => {
 
   it("lists who has moved, staff and a partner's people, by name", () => {
     const s = store();
-    expect(ok(s.actors(new URLSearchParams())).items).toEqual([{ id: "55555555-0000-4000-8000-000000000001", name: "Ana Ruiz", partners: [] }]);
+    expect(ok(s.actors(new URLSearchParams())).data).toEqual([{ id: "55555555-0000-4000-8000-000000000001", name: "Ana Ruiz", kind: "staff", partners: [] }]);
     ok(s.partnerMove(passFinish(idsAt(s, "finish").slice(1, 2)), null, { actor: NORA, partner: NORTHCAST }, () => true));
-    expect(ok(s.actors(new URLSearchParams({ workflow_id: WORKFLOW_ID }))).items.map((actor) => [actor.name, actor.partners.map((p) => p.name)])).toEqual([
-      ["Ana Ruiz", []],
-      ["Nora", ["Northcast Foundry"]],
+    expect(ok(s.actors(new URLSearchParams({ workflow_id: WORKFLOW_ID }))).data.map((actor) => [actor.name, actor.kind, actor.partners.map((p) => p.name)])).toEqual([
+      ["Ana Ruiz", "staff", []],
+      ["Nora", "partner", ["Northcast Foundry"]],
     ]);
-    expect(ok(s.actors(new URLSearchParams({ workflow_id: "99999999-0000-4000-8000-000000000001" }))).items).toEqual([]);
+    expect(ok(s.actors(new URLSearchParams({ workflow_id: "99999999-0000-4000-8000-000000000001" }))).data).toEqual([]);
     expect(s.actors(new URLSearchParams({ q: "Ana" }))).toMatchObject({ ok: false, status: 400, errors: [{ path: "q" }] });
   });
 });

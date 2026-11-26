@@ -2,7 +2,7 @@ import type { paths } from "./schema";
 
 export type { paths };
 
-type JsonOk<P extends keyof paths, M extends "get" | "post"> = paths[P][M] extends {
+type JsonOk<P extends keyof paths, M extends "get" | "post" | "put" | "patch"> = paths[P][M] extends {
   responses: { 200: { content: { "application/json": infer Body } } };
 }
   ? Body
@@ -39,7 +39,7 @@ export type NotificationPaths = {
   [P in keyof paths as P extends "/notifications" | `/notifications/${string}` ? P : never]: paths[P];
 };
 
-type JsonBody<P extends keyof paths, M extends "post"> = paths[P][M] extends {
+type JsonBody<P extends keyof paths, M extends "post" | "put" | "patch"> = paths[P][M] extends {
   requestBody: { content: { "application/json": infer Body } };
 }
   ? Body
@@ -141,8 +141,8 @@ export type TransitionListItem = JsonOk<"/workflow/transitions", "get">["data"][
 /** `GET /workflow/defects`: every defect in the catalogue, by key. */
 export type Defect = JsonOk<"/workflow/defects", "get">["data"][number];
 
-/** `GET /workflow/moves/actors`: someone who has made a move, with the partners they belong to now. Under `items`. */
-export type MoveActor = JsonOk<"/workflow/moves/actors", "get">["items"][number];
+/** `GET /workflow/moves/actors`: someone who has made a move, staff or a partner's person, with the partners they belong to now. Under `data`. */
+export type MoveActor = JsonOk<"/workflow/moves/actors", "get">["data"][number];
 
 /** `GET /partners/eligible`: who can take a job, and who can't with why. */
 export type EligiblePartners = JsonOk<"/partners/eligible", "get">;
@@ -276,6 +276,28 @@ export type CustomerAddresses = JsonOk<"/customers/{id}/addresses", "get">;
 
 /** Where an order goes, as erp-api checks it. */
 export type Address = NonNullable<CustomerAddresses["shipping_address"]>;
+
+/** `GET /customers`'s query: search, status, group, band and paging. */
+export type CustomerListQuery = NonNullable<paths["/customers"]["get"]["parameters"]["query"]>;
+
+/** `PATCH /customers/{id}`: the name, status, group or workshop pick; only what's sent changes. */
+export type CustomerUpdate = JsonBody<"/customers/{id}", "patch">;
+
+/** `PUT /customers/{id}/addresses`: the addresses and VAT number; only what's sent changes, and null clears one. */
+export type AddressesUpdate = JsonBody<"/customers/{id}/addresses", "put">;
+
+/** `PUT /customers/{id}/payment-terms`: the terms as a whole; days default to 30 and the limit to none. */
+export type PaymentTermsBody = JsonBody<"/customers/{id}/payment-terms", "put">;
+
+/** `GET /payments/customers/{id}`: the terms, what the customer owes, and its open and overdue invoices. */
+export type CustomerMoney = JsonOk<"/payments/customers/{id}", "get">;
+export type CustomerInvoice = CustomerMoney["open_invoices"][number];
+
+/** `GET /customers/groups`: a customer group to file a customer under, by name. */
+export type CustomerGroupChoice = JsonOk<"/customers/groups", "get">["data"][number];
+
+/** `GET /customers/bands`: a priority band, the default first. */
+export type BandChoice = JsonOk<"/customers/bands", "get">["data"][number];
 
 /** A delivery speed a quote can name, from `GET /pricing/quotes/delivery-speeds`; no surcharge, that comes with the quote. */
 export type SpeedChoice = JsonOk<"/pricing/quotes/delivery-speeds", "get">["data"][number];

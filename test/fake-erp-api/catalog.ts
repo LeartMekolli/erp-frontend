@@ -1,16 +1,32 @@
 /**
- * The fake erp-api's catalog and the customer reads the New order page needs:
- * products with what each customer may see (`products.service.ts`,
- * `productListQuerySchema`), option groups, a customer and its saved
- * addresses (`customers.controller.ts:70,152`), and the delivery speeds a
- * customer's plan offers (`quotes.controller.ts`, `deliverySpeeds`).
+ * The fake erp-api's catalog and customers: products with what each customer
+ * may see (`products.service.ts`, `productListQuerySchema`), option groups,
+ * the customer list with its search and filters, a customer, its saved
+ * addresses and payment terms, its money (`customers.controller.ts`,
+ * `payment-terms.controller.ts`, `credit.controller.ts`), and the delivery
+ * speeds a customer's plan offers (`quotes.controller.ts`, `deliverySpeeds`).
  */
 
-import type { CatalogProduct, Customer, CustomerAddresses, OptionGroup, SpeedChoice } from "../../src/lib/api/schema-types";
+import type {
+  Address,
+  BandChoice,
+  CatalogProduct,
+  Customer,
+  CustomerAddresses,
+  CustomerGroupChoice,
+  CustomerInvoice,
+  CustomerMoney,
+  Order,
+  OptionGroup,
+  SpeedChoice,
+} from "../../src/lib/api/schema-types";
 
-import type { Answer, Page } from "./orders";
+import type { Answer, FieldError, Page } from "./orders";
 import { CUSTOMERS } from "./orders-seed";
-import { LUNA_ID, MIRA_ID, OLD_WORKS_ID } from "./seed";
+import { LUNA_ID, MIRA_ID, OLD_WORKS_ID, WORKSPACE_INFO } from "./seed";
+
+/** The workspace's currency, which every customer's money is in (`workspace-currency.ts`, erp-api PR #39). */
+const CURRENCY = WORKSPACE_INFO.default_currency;
 
 export const CAST_RING_ID = "a1a1a1a1-0000-4000-8000-000000000001";
 export const NAMEPLATE_ID = "a1a1a1a1-0000-4000-8000-000000000002";
@@ -36,7 +52,18 @@ export const PLA_ID = "a3a3a3a3-0000-4000-8000-000000000008";
 const CAST_CATEGORY_ID = "a4a4a4a4-0000-4000-8000-000000000001";
 const PRINTED_CATEGORY_ID = "a4a4a4a4-0000-4000-8000-000000000002";
 const ASSEMBLY_CATEGORY_ID = "a4a4a4a4-0000-4000-8000-000000000003";
-const TRADE_GROUP_ID = "a4a4a4a4-0000-4000-8000-000000000010";
+export const TRADE_GROUP_ID = "a4a4a4a4-0000-4000-8000-000000000010";
+
+/** `GET /customers/groups`: erp-api's seed files Luna under Trade. */
+const GROUPS: CustomerGroupChoice[] = [{ id: TRADE_GROUP_ID, key: "trade", name: "Trade" }];
+
+/** `GET /customers/bands`: the default band, then erp-api's seeded Gold and Silver (`seed-customers.ts:42-49`). */
+const BANDS: BandChoice[] = [
+  { key: "standard", name: "Standard", default: true },
+  { key: "gold", name: "Gold", default: false },
+  { key: "silver", name: "Silver", default: false },
+];
+const GOLD = { key: "gold", name: "Gold" };
 
 /** A material each material option value selects. */
 const material = (n: number) => `a5a5a5a5-0000-4000-8000-00000000000${n}`;
@@ -193,6 +220,24 @@ interface FakeCustomer {
 
 const NO_ADDRESSES: CustomerAddresses = { shipping_address: null, billing_address: null, vat_number: null };
 
+/** When each customer joined: the list is newest first, and Luna has been a customer since March 2026. */
+const JOINED: Record<string, string> = {
+  [CUSTOMERS.fieldnote.id]: "2026-01-08T09:00:00.000Z",
+  [CUSTOMERS.luna.id]: "2026-03-12T09:00:00.000Z",
+  [CUSTOMERS.orbit.id]: "2026-04-02T09:00:00.000Z",
+  [CUSTOMERS.mira.id]: "2026-05-20T09:00:00.000Z",
+  [CUSTOMERS.kestrel.id]: "2026-06-15T09:00:00.000Z",
+  [CUSTOMERS.halden.id]: "2026-07-01T09:00:00.000Z",
+  [CUSTOMERS.pinewood.id]: "2026-08-11T09:00:00.000Z",
+  [CUSTOMERS.northside.id]: "2026-09-03T09:00:00.000Z",
+  [CUSTOMERS.brightline.id]: "2026-10-06T09:00:00.000Z",
+  [CUSTOMERS.oldWorks.id]: "2026-02-14T09:00:00.000Z",
+};
+
+/** Pay later as erp-api's seed sets it for customers billed by invoice; the orders seed invoices Orbit, Pinewood and Brightline. */
+const PAY_LATER = { terms: "pay_later", days_to_pay: 30, credit_limit: null, currency: CURRENCY } as const;
+const INVOICED = new Set<string>([CUSTOMERS.orbit.id, CUSTOMERS.pinewood.id, CUSTOMERS.brightline.id]);
+
 /** A customer record; anything not given is an active pay-first customer on Free with no saved address. */
 function customer(id: string, name: string, extra: Partial<Customer> = {}, plan: keyof typeof PLANS = "free", addresses = NO_ADDRESSES): FakeCustomer {
   return {
@@ -203,10 +248,11 @@ function customer(id: string, name: string, extra: Partial<Customer> = {}, plan:
       customer_group: null,
       member_count: 1,
       may_pick_partner: false,
-      payment_terms: { terms: "pay_first", days_to_pay: 0, credit_limit: null },
+      // erp-api answers the default 30 days for pay first too (`payment-response.ts:61-69`).
+      payment_terms: INVOICED.has(id) ? { ...PAY_LATER } : { terms: "pay_first", days_to_pay: 30, credit_limit: null, currency: CURRENCY },
       plan: { key: PLANS[plan].key, name: PLANS[plan].name },
       band: { key: "standard", name: "Standard" },
-      created_at: "2026-01-05T09:00:00.000Z",
+      created_at: JOINED[id] ?? "2026-01-05T09:00:00.000Z",
       ...extra,
     },
     plan,
@@ -235,7 +281,7 @@ function seedCustomers(): Map<string, FakeCustomer> {
         vat_number: "FR00123456789",
       },
     ),
-    customer(MIRA_ID, CUSTOMERS.mira.name, { payment_terms: { terms: "pay_later", days_to_pay: 30, credit_limit: "5000.00" } }, "starter"),
+    customer(MIRA_ID, CUSTOMERS.mira.name, { payment_terms: { terms: "pay_later", days_to_pay: 30, credit_limit: "5000.00", currency: CURRENCY }, band: GOLD }, "starter"),
     customer(OLD_WORKS_ID, CUSTOMERS.oldWorks.name, { status: "disabled" }),
   ];
   const records = new Map(special.map((record) => [record.view.id, record]));
@@ -245,10 +291,195 @@ function seedCustomers(): Map<string, FakeCustomer> {
 
 const CUSTOMER_NOT_FOUND = { ok: false, status: 404, detail: "Customer not found" } as const;
 
-export function createCatalogStore() {
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** erp-api's credit limit (`payment-response.ts:44-47`). */
+const AMOUNT = /^\d{1,16}(\.\d{1,2})?$/;
+
+const invalid = (errors: FieldError[]) => ({ ok: false, status: 400, errors }) as const;
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** Keys a strict Zod object refuses (`z.strictObject`), one error naming each. */
+function unknownKeys(body: Record<string, unknown>, allowed: string[]): FieldError[] {
+  return Object.keys(body)
+    .filter((key) => !allowed.includes(key))
+    .map((key) => ({ path: key, message: `Unrecognized key: "${key}"` }));
+}
+
+/** A trimmed name of 1 to `max` characters, as erp-api's `z.string().trim().min(1).max(max)`; null when it isn't one. */
+function trimmed(value: unknown, max: number): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  return text.length >= 1 && text.length <= max ? text : null;
+}
+
+/** erp-api's `addressSchema` (`order-response.ts:14`): the errors under `path`, none for a good address. */
+function addressErrors(value: unknown, path: string): FieldError[] {
+  if (!isObject(value)) return [{ path, message: "Expected an address" }];
+  const errors: FieldError[] = [];
+  for (const key of ["name", "line1", "city"] as const) {
+    if (trimmed(value[key], 200) === null) errors.push({ path: `${path}.${key}`, message: "Required" });
+  }
+  if (trimmed(value.postal_code, 20) === null) errors.push({ path: `${path}.postal_code`, message: "Required, at most 20 characters" });
+  if (typeof value.country !== "string" || !/^[A-Z]{2}$/.test(value.country)) errors.push({ path: `${path}.country`, message: "Expected a two-letter country code" });
+  return errors;
+}
+
+/** An amount string in cents, so sums never go through a float. */
+const cents = (amount: string) => {
+  const [whole = "0", part = ""] = amount.split(".");
+  return Number(whole) * 100 + Number(part.padEnd(2, "0").slice(0, 2));
+};
+const fromCents = (value: number) => `${Math.floor(value / 100)}.${String(value % 100).padStart(2, "0")}`;
+
+/**
+ * `orders` gives the customer's money its invoices: each order's open invoice, overdue once the order's
+ * payment is, so Money and the customer's orders always agree.
+ */
+export function createCatalogStore(orders: () => Order[] = () => []) {
   const customers = seedCustomers();
 
   return {
+    /** `GET /customers`: newest first, searched by name and narrowed by status, group (or none) and band. */
+    list(params: URLSearchParams): Answer<Page<Customer>> {
+      const errors: FieldError[] = [];
+      const limit = Number(params.get("limit") ?? 50);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 200) errors.push({ path: "limit", message: "must be 1 to 200" });
+      const offset = Number(params.get("cursor") ?? 0);
+      if (!Number.isInteger(offset) || offset < 0) errors.push({ path: "cursor", message: "Invalid cursor" });
+      const rawQ = params.get("q");
+      const q = rawQ === null ? null : trimmed(rawQ, 100);
+      if (rawQ !== null && q === null) errors.push({ path: "q", message: "Must be 1 to 100 characters" });
+      const status = params.get("status");
+      if (status !== null && status !== "active" && status !== "disabled") errors.push({ path: "status", message: 'Expected "active" or "disabled"' });
+      const group = params.get("customer_group");
+      if (group !== null && group !== "none" && !UUID.test(group)) errors.push({ path: "customer_group", message: "Expected a group id or none" });
+      if (errors.length > 0) return invalid(errors);
+      // An unknown group or band is a 400 (`customers.service.ts`).
+      if (group !== null && group !== "none" && !GROUPS.some((choice) => choice.id === group)) return invalid([{ path: "customer_group", message: "Unknown customer group" }]);
+      const band = params.get("band");
+      if (band !== null && !BANDS.some((choice) => choice.key === band)) return invalid([{ path: "band", message: "Unknown band" }]);
+
+      const all = [...customers.values()]
+        .map((record) => record.view)
+        .filter(
+          (view) =>
+            (q === null || view.name.toLowerCase().includes(q.toLowerCase())) &&
+            (status === null || view.status === status) &&
+            (group === null || (group === "none" ? view.customer_group === null : view.customer_group?.id === group)) &&
+            (band === null || view.band.key === band),
+        )
+        .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id));
+      return {
+        ok: true,
+        body: { data: structuredClone(all.slice(offset, offset + limit)), next_cursor: offset + limit < all.length ? String(offset + limit) : null },
+      };
+    },
+
+    /** `GET /customers/groups`. */
+    groups(): Answer<{ data: CustomerGroupChoice[] }> {
+      return { ok: true, body: { data: structuredClone(GROUPS) } };
+    },
+
+    /** `GET /customers/bands`: the default band first. */
+    bands(): Answer<{ data: BandChoice[] }> {
+      return { ok: true, body: { data: structuredClone(BANDS) } };
+    },
+
+    /** `PATCH /customers/{id}`: only the fields sent change; unknown keys are dropped, as `z.object` does. */
+    update(id: string, body: unknown): Answer<Customer> {
+      const record = customers.get(id);
+      if (!record) return CUSTOMER_NOT_FOUND;
+      if (!isObject(body)) return invalid([{ path: "", message: "Expected an object" }]);
+      const errors: FieldError[] = [];
+      const name = body.name === undefined ? undefined : trimmed(body.name, 200);
+      if (name === null) errors.push({ path: "name", message: "Must be 1 to 200 characters" });
+      if (body.status !== undefined && body.status !== "active" && body.status !== "disabled") errors.push({ path: "status", message: 'Expected "active" or "disabled"' });
+      const groupId = body.customer_group_id;
+      if (groupId !== undefined && groupId !== null && (typeof groupId !== "string" || !UUID.test(groupId))) errors.push({ path: "customer_group_id", message: "Expected a group id or null" });
+      if (body.may_pick_partner !== undefined && typeof body.may_pick_partner !== "boolean") errors.push({ path: "may_pick_partner", message: "Expected a boolean" });
+      if (errors.length > 0) return invalid(errors);
+      const group = typeof groupId === "string" ? GROUPS.find((choice) => choice.id === groupId) : undefined;
+      if (typeof groupId === "string" && !group) return { ok: false, status: 404, detail: "Customer group not found" };
+
+      const view = record.view;
+      if (typeof name === "string") view.name = name;
+      if (body.status === "active" || body.status === "disabled") view.status = body.status;
+      if (groupId === null) view.customer_group = null;
+      if (group) view.customer_group = { ...group };
+      if (typeof body.may_pick_partner === "boolean") view.may_pick_partner = body.may_pick_partner;
+      return { ok: true, body: structuredClone(view) };
+    },
+
+    /** `PUT /customers/{id}/addresses`: only the fields sent change, and null clears one. */
+    setAddresses(id: string, body: unknown): Answer<CustomerAddresses> {
+      const record = customers.get(id);
+      if (!record) return CUSTOMER_NOT_FOUND;
+      if (!isObject(body)) return invalid([{ path: "", message: "Expected an object" }]);
+      const errors = unknownKeys(body, ["shipping_address", "billing_address", "vat_number"]);
+      for (const key of ["shipping_address", "billing_address"] as const) {
+        if (body[key] !== undefined && body[key] !== null) errors.push(...addressErrors(body[key], key));
+      }
+      const vat = body.vat_number === undefined || body.vat_number === null ? body.vat_number : trimmed(body.vat_number, 40);
+      if (vat === null && body.vat_number !== null) errors.push({ path: "vat_number", message: "Must be 1 to 40 characters" });
+      if (errors.length > 0) return invalid(errors);
+
+      const addresses = record.addresses;
+      if (body.shipping_address !== undefined) addresses.shipping_address = structuredClone(body.shipping_address as Address | null);
+      if (body.billing_address !== undefined) addresses.billing_address = structuredClone(body.billing_address as Address | null);
+      if (body.vat_number !== undefined) addresses.vat_number = vat ?? null;
+      return { ok: true, body: structuredClone(addresses) };
+    },
+
+    /** `PUT /customers/{id}/payment-terms`: the terms as a whole; days default to 30 and the limit to none. */
+    setTerms(id: string, body: unknown): Answer<Customer["payment_terms"]> {
+      const record = customers.get(id);
+      if (!record) return CUSTOMER_NOT_FOUND;
+      if (!isObject(body)) return invalid([{ path: "", message: "Expected an object" }]);
+      const errors = unknownKeys(body, ["terms", "days_to_pay", "credit_limit"]);
+      if (body.terms !== "pay_first" && body.terms !== "pay_later") errors.push({ path: "terms", message: 'Expected "pay_first" or "pay_later"' });
+      const days = body.days_to_pay ?? 30;
+      if (typeof days !== "number" || !Number.isInteger(days) || days < 1 || days > 120) errors.push({ path: "days_to_pay", message: "Must be 1 to 120" });
+      const limit = body.credit_limit ?? null;
+      if (limit !== null && (typeof limit !== "string" || !AMOUNT.test(limit))) {
+        errors.push({ path: "credit_limit", message: "must be an amount of zero or more with at most 2 places, such as 5000.00" });
+      }
+      if (errors.length > 0) return invalid(errors);
+
+      record.view.payment_terms = {
+        terms: body.terms as Customer["payment_terms"]["terms"],
+        days_to_pay: days as number,
+        credit_limit: limit === null ? null : fromCents(cents(limit as string)),
+        currency: CURRENCY,
+      };
+      return { ok: true, body: structuredClone(record.view.payment_terms) };
+    },
+
+    /** `GET /payments/customers/{id}`: the terms, what's billed and not paid, and the open and overdue invoices, oldest due first. */
+    money(id: string): Answer<CustomerMoney> {
+      const record = customers.get(id);
+      if (!record) return CUSTOMER_NOT_FOUND;
+      const open: CustomerInvoice[] = [];
+      const overdue: CustomerInvoice[] = [];
+      for (const order of orders()) {
+        const invoice = order.payment.invoice;
+        if (order.customer.id !== id || !invoice || invoice.status !== "open") continue;
+        const row = { order_id: order.id, order_number: order.number, total: order.total, currency: order.currency, due_on: invoice.due_on, url: invoice.url };
+        (order.payment.state === "overdue" ? overdue : open).push(row);
+      }
+      const byDue = (a: CustomerInvoice, b: CustomerInvoice) => a.due_on.localeCompare(b.due_on);
+      const billed = fromCents([...open, ...overdue].reduce((sum, invoice) => sum + cents(invoice.total), 0));
+      return {
+        ok: true,
+        body: {
+          ...structuredClone(record.view.payment_terms),
+          exposure: billed,
+          balance: billed,
+          open_invoices: open.sort(byDue),
+          overdue_invoices: overdue.sort(byDue),
+        },
+      };
+    },
+
     /** `GET /catalog/products`: with `customer_id`, only the active, published shared products and that customer's own. */
     products(customerId?: string | null, params: URLSearchParams = new URLSearchParams()): Answer<Page<CatalogProduct>> {
       const limit = Number(params.get("limit") ?? 50);
