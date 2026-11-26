@@ -136,14 +136,22 @@ describe("LinesTable", () => {
     renderTable();
     const row = await rowOf(1048);
     expect(lineBox(1048)).toBeDisabled();
-    expect(row).toHaveTextContent("Needs a skill you don't have");
+    expect(row).toHaveTextContent("Needs the Finish skill");
+    expect(row).not.toHaveTextContent("Needs a skill you don't have");
+  });
+
+  it("says nothing about skills to someone who can't move pieces", async () => {
+    fakeState().production.requireSkill("finish");
+    renderTable({ user: WORKFLOW_READER, selectable: false });
+    const row = await rowOf(1048);
+    expect(row).not.toHaveTextContent(/Needs (a|the) .*skill/);
   });
 
   it("says a line waits for payment, with no tick box", async () => {
     renderTable({ filter: PRINT });
     const row = await rowOf(1045);
     expect(row).toHaveTextContent("Waiting for payment");
-    expect(row).not.toHaveTextContent("Needs a skill you don't have");
+    expect(row).not.toHaveTextContent(/Needs (a|the) .*skill/);
     expect(within(row).queryByRole("checkbox")).not.toBeInTheDocument();
     expect(lineBox(1041)).toBeEnabled();
   });
@@ -167,7 +175,7 @@ describe("LinesTable", () => {
     await userEvent.click(screen.getByRole("button", { name: "Pieces of #1045" }));
     const piece = (await screen.findByRole("button", { name: "History of 1/1" })).closest("li")!;
     expect(piece).toHaveTextContent("Waiting for payment");
-    expect(piece).not.toHaveTextContent("Needs a skill you don't have");
+    expect(piece).not.toHaveTextContent(/Needs (a|the) .*skill/);
     expect(within(piece).queryByRole("checkbox")).not.toBeInTheDocument();
   });
 

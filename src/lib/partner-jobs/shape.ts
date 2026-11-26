@@ -69,6 +69,8 @@ export function partnerPiece(item: JobPiece): Piece {
     mayWork: item.stage === "yours",
     // erp-api lists no job of an order waiting for payment to partners, and offers them no assembly.
     held: null,
+    // erp-api's partner routes don't say which skill is missing.
+    missingSkill: null,
     lastMove: last
       ? { kind: last.kind, outcome: last.outcome, from_step: last.from_step, defect: last.defect, created_at: last.created_at, actor: partnerActor(last.actor) }
       : null,

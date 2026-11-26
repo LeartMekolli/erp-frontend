@@ -73,6 +73,14 @@ describe("Board", () => {
     expect(within(card).queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
+  it("names the skill a card's step needs that the person lacks", async () => {
+    fakeState().production.requireSkill("finish");
+    await renderBoard();
+    const card = (await within(column("Finish")).findByRole("link", { name: "#1048" })).closest("li")!;
+    await waitFor(() => expect(card).toHaveTextContent("Needs the Finish skill"));
+    expect(card).not.toHaveTextContent("Needs a skill you don't have");
+  });
+
   it("sorts every column", async () => {
     await renderBoard();
     await waitFor(() => expect(cardNumbers("Finish")).toEqual(["#1041", "#1048"]));

@@ -38,6 +38,7 @@ const piece = (id: string, mayWork = true): Piece => ({
   inRework: false,
   mayWork,
   held: null,
+  missingSkill: null,
   lastMove: null,
 });
 

@@ -84,6 +84,8 @@ export interface Piece {
   mayWork: boolean;
   /** Why nobody can move it yet; never true of a partner's piece, as erp-api shows partners no job that waits. */
   held: HoldReason | null;
+  /** The skill its step requires that the person lacks; staff only, null for a partner's piece. */
+  missingSkill: { id: string; name: string } | null;
   lastMove: LastMove | null;
 }
 

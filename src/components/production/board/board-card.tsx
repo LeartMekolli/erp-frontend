@@ -34,7 +34,7 @@ export function BoardCard({
   /** Whether it has a drag handle: from 768 px, for someone who may move it. */
   draggable?: boolean;
   today: string;
-  /** Whether the person may move pieces at all, for "Needs a skill you don't have". */
+  /** Whether the person may move pieces at all, for "Needs the Final QC skill". */
   selectable: boolean;
   picked?: boolean;
   open: boolean;

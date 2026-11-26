@@ -5,7 +5,7 @@ import { cn } from "cn";
 import type { ReactNode } from "react";
 
 import { Checkbox } from "@/components/ui/checkbox";
-import { HOLD_WORDS } from "@/lib/production/holds";
+import { HOLD_WORDS, skillWords } from "@/lib/production/holds";
 import type { LastMove, Piece } from "@/lib/production/shape";
 
 import { useOpenPiece } from "./open-piece";
@@ -90,7 +90,7 @@ export function PieceRow({
           {HOLD_WORDS[piece.held]}
         </span>
       ) : (
-        selectable && !piece.mayWork && <span className="ml-auto text-caption text-ink-2">Needs a skill you don&apos;t have</span>
+        selectable && !piece.mayWork && <span className="ml-auto text-caption text-ink-2">{skillWords(piece.missingSkill)}</span>
       )}
     </li>
   );
