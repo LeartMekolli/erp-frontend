@@ -18,6 +18,10 @@ import { fakeState, resetFakeState } from "./state";
  *   that order's next label with a 503.
  * - `POST /__suspend-partner/<partnerId>` suspends that workshop: its
  *   `/partner-portal/me` status says so and its accept and decline answer 403.
+ * - `POST /__setting-up/<partnerId>` puts that workshop back to being set up,
+ *   not yet submitted or approved.
+ * - `POST /__require-skill/<stepKey>` makes that step need a skill nobody
+ *   signed in holds, so its pieces can't be worked.
  * - `POST /__settle-payout/<partnerId>/<paid|failed>` has the payment provider
  *   settle that workshop's pending payout; a failed one gives its jobs back.
  * - `POST /__payout-account/<partnerId>/<state>` sets that workshop's payout
@@ -81,6 +85,20 @@ createServer(async (req, res) => {
   const suspend = /^\/__suspend-partner\/([^/]+)$/.exec(url.pathname);
   if (req.method === "POST" && suspend) {
     fakeState().suspendPartner(decodeURIComponent(suspend[1]!));
+    res.writeHead(204).end();
+    return;
+  }
+
+  const settingUp = /^\/__setting-up\/([^/]+)$/.exec(url.pathname);
+  if (req.method === "POST" && settingUp) {
+    fakeState().setPartnerSettingUp(decodeURIComponent(settingUp[1]!));
+    res.writeHead(204).end();
+    return;
+  }
+
+  const skill = /^\/__require-skill\/([^/]+)$/.exec(url.pathname);
+  if (req.method === "POST" && skill) {
+    fakeState().production.requireSkill(decodeURIComponent(skill[1]!));
     res.writeHead(204).end();
     return;
   }
