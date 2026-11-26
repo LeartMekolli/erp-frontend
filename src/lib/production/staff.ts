@@ -10,7 +10,7 @@ function staffActor(actor: { name: string }, partner: { name: string } | null): 
 }
 
 /** Staff open a photo from its file, not its move. */
-function staffPhotos(photos: { file_id: string; file_version_id: string }[]): Photo[] {
+export function staffPhotos(photos: { file_id: string; file_version_id: string }[]): Photo[] {
   return photos.map((photo) => ({ fileId: photo.file_id, fileVersionId: photo.file_version_id, moveId: null }));
 }
 

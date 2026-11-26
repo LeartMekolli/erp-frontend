@@ -64,6 +64,17 @@ describe("OrderDetailPage", () => {
     expect(screen.queryByText(/placed\.$/)).not.toBeInTheDocument();
   });
 
+  it("opens the piece History linked to, once", async () => {
+    const piece = "c0c0c0c0-0000-4000-8000-000001048007";
+    leaveArrivalNote(`/orders/${orderId(1048)}`, { piece });
+    const first = open(1048);
+    expect(await screen.findByRole("dialog", { name: "Piece 7/12" })).toBeInTheDocument();
+    first.unmount();
+    open(1048);
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("says nothing about placing without a note", async () => {
     open(1048);
     await screen.findByRole("heading", { level: 1, name: "#1048" });

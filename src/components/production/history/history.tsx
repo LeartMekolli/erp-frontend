@@ -11,9 +11,12 @@ import { useFormat } from "@/lib/format/use-format";
 import { groupByDay } from "@/lib/production/history";
 import { DEFAULT_HISTORY, moveListQuery, setFilterCount } from "@/lib/production/move-list";
 import { useDefects, useMoveActors, useMoveList, useWorkflowVersion, useWorkflows } from "@/lib/production/queries";
+import type { StepRules } from "@/lib/production/shape";
+import { staffRules } from "@/lib/production/staff";
 import { useMediaQuery } from "@/lib/use-media-query";
 
 import { PhoneFilters, WideFilters, type FilterOptions, type MoveFilters } from "./history-filters";
+import { MoveDetails } from "./move-details";
 import { MoveRow } from "./move-row";
 
 /** "10 min ago" moves on once a minute. */
@@ -30,7 +33,20 @@ function Placeholder() {
 }
 
 /** The moves the query picks, newest first under their day, opened one row at a time or several. */
-function Moves({ query, filters, onClear, now }: { query: MoveListQueryParams; filters: MoveFilters; onClear: () => void; now: number }) {
+function Moves({
+  query,
+  filters,
+  onClear,
+  now,
+  rules,
+}: {
+  query: MoveListQueryParams;
+  filters: MoveFilters;
+  onClear: () => void;
+  now: number;
+  /** The current version's steps, to explain a fail that didn't follow its defect's default. */
+  rules: StepRules[];
+}) {
   const { timeZone } = useFormat();
   const list = useMoveList(query);
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
@@ -65,7 +81,9 @@ function Moves({ query, filters, onClear, now }: { query: MoveListQueryParams; f
           <div key={day.key}>
             <h3 className="px-2 pt-4 pb-1 text-caption font-semibold text-ink-2">{day.heading}</h3>
             {day.actions.map((move) => (
-              <MoveRow key={move.id} move={move} now={now} timeZone={timeZone} open={opened.has(move.id)} onToggle={() => toggle(move.id)} />
+              <MoveRow key={move.id} move={move} now={now} timeZone={timeZone} open={opened.has(move.id)} onToggle={() => toggle(move.id)}>
+                <MoveDetails move={move} rules={rules} />
+              </MoveRow>
             ))}
           </div>
         ))}
@@ -95,9 +113,12 @@ export function History({ workflowId, onWorkflow }: { workflowId: string | null;
   const defects = useDefects();
   const people = useMoveActors(workflowId);
 
+  const steps = version.data?.steps ?? [];
+  const path = steps.map((step) => ({ key: step.key, name: step.name }));
+  const rules = steps.map((step) => staffRules(step, path));
   const options: FilterOptions = {
     productTypes: workflows.data ?? [],
-    steps: version.data?.steps ?? [],
+    steps,
     defects: defects.data ?? [],
     people: people.data ?? [],
   };
@@ -126,6 +147,7 @@ export function History({ workflowId, onWorkflow }: { workflowId: string | null;
             filters={filters}
             onClear={() => setFilters(DEFAULT_HISTORY)}
             now={now}
+            rules={rules}
           />
         )}
       </div>

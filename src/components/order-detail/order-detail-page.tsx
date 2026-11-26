@@ -13,7 +13,7 @@ import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
 import { isApiProblem } from "@/lib/api/problem";
 import { can } from "@/lib/auth/permissions";
-import { useArrivalNote } from "@/lib/navigation/arrival-note";
+import { useArrivalNote, type ArrivalNote } from "@/lib/navigation/arrival-note";
 import { useOrder } from "@/lib/orders/queries";
 import { OfflineError } from "@/lib/session/client-session";
 
@@ -31,12 +31,17 @@ import { StaffPiecePanel } from "./staff-tabs";
 export function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: me } = useMe();
+  // A note left for this order (just placed, or a piece History linked to), read here once so the piece is
+  // open from the provider's first render. Kept with its order, so another order never reads it.
+  const [arrived, setArrived] = useState<{ id: string; note: ArrivalNote } | null>(null);
+  useArrivalNote(`/orders/${id}`, (note) => setArrived({ id, note }));
+  const note = arrived?.id === id ? arrived.note : null;
   if (!me) return null;
   if (!can(me, "order.read")) notFound();
   // Keyed by the order, so opening another order on this page starts with no piece open.
   return (
-    <OpenPieceProvider key={id}>
-      <OrderDetail id={id} />
+    <OpenPieceProvider key={id} initialId={note?.piece ?? null}>
+      <OrderDetail id={id} justPlaced={note?.placed === true} />
     </OpenPieceProvider>
   );
 }
@@ -65,7 +70,7 @@ function Loading() {
   );
 }
 
-function OrderDetail({ id }: { id: string }) {
+function OrderDetail({ id, justPlaced }: { id: string; justPlaced: boolean }) {
   const query = useOrder(id);
   const piece = useOpenPiece();
   const [shipping, setShipping] = useState(false);
@@ -75,12 +80,7 @@ function OrderDetail({ id }: { id: string }) {
   const [notice, setNotice] = useState<string | null>(null);
 
   // Just placed from New order, which left a note for this order: it says so once the order has loaded,
-  // until the page is left. The note is used up, so a reload doesn't say it again. This component starts
-  // over for each order (the provider above is keyed by it), so another order never says it.
-  const [justPlaced, setJustPlaced] = useState(false);
-  useArrivalNote(`/orders/${id}`, (note) => {
-    if (note.placed) setJustPlaced(true);
-  });
+  // until the page is left. The note is used up, so a reload doesn't say it again.
   const placedNumber = justPlaced && query.data ? query.data.number : null;
 
   // On the page from the first render (the loading skeleton too) and filled once the order loads, so

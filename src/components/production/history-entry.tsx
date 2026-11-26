@@ -9,9 +9,8 @@ import { useFormat } from "@/lib/format/use-format";
 import { actionTitle, actorText, isMixed, isNotable, nextText, overrideText, pieceName, pieceResult } from "@/lib/production/history";
 import type { MoveEntry, StepRules } from "@/lib/production/shape";
 
-import { answerText, MovePhoto, moveIcon } from "./move-look";
+import { MoveFacts, MovePhotos, moveIcon } from "./move-look";
 import { useOpenPiece } from "./open-piece";
-import { usePhotoLinks } from "./photo-links";
 
 type LineAction = MoveEntry;
 
@@ -26,45 +25,13 @@ function Facts({ children }: { children: ReactNode[] }) {
   ));
 }
 
-/** The first photo, with how many more there are; their number alone for someone who may not see photos. */
-function Photos({ action }: { action: LineAction }) {
-  const { mayView } = usePhotoLinks();
-  const count = action.photos.length;
-  const first = action.photos[0];
-  if (!first) return null;
-  if (!mayView) return <p className="text-caption text-ink-2">{`${count} ${count === 1 ? "photo" : "photos"}`}</p>;
-  return (
-    <div className="relative self-start">
-      <MovePhoto photo={first} alt={`Photo 1 at ${action.from_step?.name ?? "this step"}`} />
-      {count > 1 && (
-        <span className="absolute right-1 bottom-1 rounded-md bg-ink/70 px-1.5 text-caption text-card tabular-nums">{`+${count - 1}`}</span>
-      )}
-    </div>
-  );
-}
-
 /** What came with a fail or a correction: photo, comment, answers, why it was overridden and who made it. */
 function Details({ action, steps }: { action: LineAction; steps: StepRules[] }) {
-  const override = overrideText(action, steps);
   return (
     <div role="group" aria-label="What came with it" className="mt-2 flex min-w-0 gap-3.5 rounded-[14px] border border-line px-3.5 py-3">
-      <Photos action={action} />
+      <MovePhotos photos={action.photos} at={action.from_step?.name ?? null} />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        {action.comment && <p className="break-words">{action.comment}</p>}
-        {action.answers.length > 0 && (
-          <dl className="grid gap-x-3.5 gap-y-0.5 text-sm sm:grid-cols-[max-content_1fr]">
-            {action.answers.map((answer) => (
-              <div key={answer.item} className="contents">
-                <dt className="text-ink-2">{answer.label}</dt>
-                <dd className="font-medium break-words max-sm:mb-1">
-                  {answerText(answer)}
-                  {answer.note && ` (${answer.note})`}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        )}
-        {override && <p className="text-sm break-words">{override}</p>}
+        <MoveFacts comment={action.comment} answers={action.answers} override={overrideText(action, steps)} />
         <p className="text-caption text-ink-2">{actorText(action)}</p>
       </div>
     </div>
