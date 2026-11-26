@@ -42,6 +42,12 @@ describe("dates", () => {
     expect(dayStartIso("2026-11-02", "America/New_York")).toBe("2026-11-02T05:00:00.000Z");
   });
 
+  it("starts a day whose midnight the clocks skip at its first instant, 01:00", () => {
+    // Chile goes from 00:00 at -04 straight to 01:00 at -03 on 6 September 2026.
+    expect(dayStartIso("2026-09-06", "America/Santiago")).toBe("2026-09-06T04:00:00.000Z");
+    expect(dayStartIso("2026-09-07", "America/Santiago")).toBe("2026-09-07T03:00:00.000Z");
+  });
+
   it.each(["2026-11-05T00:00:00Z", "5 Nov 2026", "2026-13-01"])("refuses %j as a day", (day) => {
     expect(() => formatDay(day)).toThrow("Not a calendar day");
   });
