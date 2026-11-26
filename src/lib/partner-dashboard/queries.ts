@@ -1,10 +1,11 @@
 "use client";
 
-import { useQuery, type QueryKey } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 
 import { partnerApi } from "@/lib/api/client";
 import { problemFrom } from "@/lib/api/problem";
-import type { CapacityRow, PartnerJobCounts, PartnerScoreResponse, PartnerSetup, PartnerSummary } from "@/lib/api/schema-types";
+import type { CapacityRow, PartnerJobCounts, PartnerScoreResponse, PartnerSetup, PartnerSummary, StaffPartner } from "@/lib/api/schema-types";
+import { useApiMutation } from "@/lib/query/use-api-mutation";
 
 /** Every key starts with the workshop, so someone working for two never sees one's numbers on the other's page. */
 export const partnerDashboardKeys = {
@@ -84,6 +85,23 @@ export function usePartnerJobCounts(partnerId: string) {
     refetchInterval: DASHBOARD_POLL_MS,
     refetchOnWindowFocus: true,
   });
+}
+
+/**
+ * The owner tells staff the setup is ready for approval (`setup.controller.ts:223-233`). Repeating it changes
+ * nothing. Either way, `/partner-portal/me` is read again, so `submitted_at` and the status come from erp-api:
+ * after a 409, staff have already decided.
+ */
+export function useSubmitSetup(partnerId: string) {
+  const client = useQueryClient();
+  return useApiMutation<void, StaffPartner>(
+    async () => {
+      const { data, error, response } = await partnerApi.POST("/partner-portal/partners/{partnerId}/submit", { params: { path: { partnerId } } });
+      if (!data) throw problemFrom(error, response);
+      return data;
+    },
+    { onSettled: () => client.invalidateQueries({ queryKey: ["partner-portal", "me"] }) },
+  );
 }
 
 /** The workshop's score as staff see it, and its 50 newest ratings. */
