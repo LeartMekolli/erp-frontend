@@ -78,11 +78,20 @@ describe("ProductionPage", () => {
     renderAs(STAFF, <ProductionPage />);
     expect(await screen.findByRole("heading", { level: 1, name: "Production" })).toBeInTheDocument();
     const row = await screen.findByRole("tablist", { name: "Production views" });
-    expect(within(row).getAllByRole("tab").map((view) => view.textContent)).toEqual(["Board", "By step"]);
+    expect(within(row).getAllByRole("tab").map((view) => view.textContent)).toEqual(["Board", "By step", "History"]);
     expect(within(row).getByRole("tab", { name: "Board" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tabpanel", { name: "Board" })).toBeInTheDocument();
     await userEvent.click(within(row).getByRole("tab", { name: "By step" }));
     await waitFor(() => expect(tab(/^Print/)).toHaveAttribute("aria-selected", "true"));
+  });
+
+  it("opens History at the same address", async () => {
+    renderAs(STAFF, <ProductionPage />);
+    await userEvent.click(await screen.findByRole("tab", { name: "History" }));
+    expect(await screen.findByRole("tabpanel", { name: "History" })).toBeInTheDocument();
+    expect(window.location.search).toBe("");
+    expect(window.location.hash).toBe("");
+    expect(navigation.push).not.toHaveBeenCalled();
   });
 
   it("opens on the Board again after a reload", async () => {

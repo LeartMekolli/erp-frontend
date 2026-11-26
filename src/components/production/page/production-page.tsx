@@ -5,17 +5,19 @@ import { useState, type ReactNode } from "react";
 import { LoadFailure } from "@/components/data/load-failure";
 import { Board } from "@/components/production/board/board";
 import { ByStep } from "@/components/production/by-step/by-step";
+import { History } from "@/components/production/history/history";
 import { OpenPieceProvider } from "@/components/production/open-piece";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFormat } from "@/lib/format/use-format";
 
 import { useProductType } from "./product-type";
 
-type View = "board" | "by-step";
+type View = "board" | "by-step" | "history";
 
 const VIEWS: { value: View; name: string }[] = [
   { value: "board", name: "Board" },
   { value: "by-step", name: "By step" },
+  { value: "history", name: "History" },
 ];
 
 function Panel({ children }: { children: ReactNode }) {
@@ -23,8 +25,8 @@ function Panel({ children }: { children: ReactNode }) {
 }
 
 /**
- * Production as staff see it: the Board (the default) and By step, as tabs, with History to come. The product
- * type is the page's, so both tabs show the same one. React state only: a reload opens the Board on the busiest
+ * Production as staff see it: the Board (the default), By step and History, as tabs. The product type is the
+ * page's, so every tab shows the same one. React state only: a reload opens the Board on the busiest
  * type. What the person may do comes in as props (`staff-production/production-page.tsx`).
  */
 export function Production({ canMove, canUpload }: { canMove: boolean; canUpload: boolean }) {
@@ -91,6 +93,9 @@ export function Production({ canMove, canUpload }: { canMove: boolean; canUpload
             </TabsContent>
             <TabsContent value="by-step">
               <ByStep {...tab} />
+            </TabsContent>
+            <TabsContent value="history">
+              <History workflowId={productType.workflowId} onWorkflow={productType.setWorkflowId} />
             </TabsContent>
           </>
         )}
