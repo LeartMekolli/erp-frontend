@@ -4306,6 +4306,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workflow/moves/actors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Everyone who has made a move, staff and partner people, for History's Person filter.
+         * @description `workflow_id` keeps the people who moved pieces of any version of that workflow. Sorted by name. `partners` are the partners the person belongs to now, empty for staff. Deactivated people stay listed, since History still names them. Not paged. Pass an `id` as `actor_user_id` to `GET /workflow/moves`.
+         *
+         *     Access: permission `workflow.read`.
+         */
+        get: operations["WorkOrdersController_moveActors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workflow/transitions": {
         parameters: {
             query?: never;
@@ -29379,6 +29401,66 @@ export interface operations {
             };
             /** @description Conflict with the current state */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    WorkOrdersController_moveActors: {
+        parameters: {
+            query?: {
+                workflow_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            /** Format: uuid */
+                            id: string;
+                            name: string;
+                            partners: {
+                                /** Format: uuid */
+                                id: string;
+                                name: string;
+                            }[];
+                        }[];
+                    };
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not allowed */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

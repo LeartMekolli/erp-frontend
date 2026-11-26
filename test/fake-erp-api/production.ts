@@ -8,12 +8,15 @@
 
 import type {
   ActionPiece,
+  Defect,
   Group,
   GroupSummary,
   HoldReason,
   LineAction,
+  MoveActor,
   MoveBody,
   MoveHistory,
+  MoveListItem,
   PartnerJobDetail,
   PartnerMoveHistory,
   PartnerWorkOrder,
@@ -22,6 +25,7 @@ import type {
   StepCounts,
   StepGroup,
   Transition,
+  TransitionListItem,
   WorkflowStep,
   WorkflowSummary,
   WorkflowVersion,
@@ -302,6 +306,87 @@ const LIST_KEYS = ["limit", "cursor", "group_id", "step_key", "status", "sort", 
 const COUNTS_KEYS = FILTER_KEYS;
 const GROUPS_KEYS = ["step_key", "sort", "limit", "cursor", ...FILTER_KEYS];
 const MOVES_KEYS = ["limit", "cursor", "only"];
+/** `GET /workflow/transitions`'s filters (erp-api `transitionQuerySchema`, `work-orders.service.ts:164`). */
+const TRANSITION_KEYS = ["limit", "cursor", "work_order_id", "group_id", "step_key", "defect_key", "file_version_id", "actor_user_id", "inspected", "from", "to", "move_id"];
+/** `GET /workflow/moves` adds `kind`, `workflow_id` and `q` (`moveListQuerySchema`, `work-orders.service.ts:186`). */
+const MOVE_LIST_KEYS = [...TRANSITION_KEYS, "kind", "workflow_id", "q"];
+const KINDS: readonly string[] = ["pass", "fail", "correction"];
+const DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
+
+/** A defect in the catalogue on no step: erp-api lists every defect, not only those steps record. */
+const CRACK = { defect_id: uuid("b3b3b3b3", 3), key: "crack", name: "Crack" };
+
+/** The rows `GET /workflow/transitions` filters to, shared with the moves list as in erp-api (`transitionFilters`). */
+interface RowFilters {
+  workOrderId: string | null;
+  groupId: string | null;
+  stepKey: string | null;
+  defectKey: string | null;
+  fileVersionId: string | null;
+  actorId: string | null;
+  inspected: boolean | null;
+  from: number | null;
+  to: number | null;
+  moveId: string | null;
+}
+
+/**
+ * The row filters and the page in `params`, or erp-api's 400. A cursor is an offset made for `list`
+ * (`moves@50`), so one from another list is refused, as erp-api refuses it.
+ */
+function readRows(params: URLSearchParams, keys: string[], list: string): { filters: RowFilters; limit: number; offset: number } | Answer<never> {
+  const extra = [...params.keys()].find((key) => !keys.includes(key));
+  if (extra) return invalid(extra, `Unrecognized key: "${extra}"`);
+  const limit = Number(params.get("limit") ?? 50);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200) return invalid("limit", "must be 1 to 200");
+  const cursor = params.get("cursor");
+  const [madeFor, at] = cursor?.split("@") ?? [list, "0"];
+  const offset = Number(at);
+  if (madeFor !== list || !Number.isInteger(offset) || offset < 0) return invalid("cursor", "Invalid cursor: made for another list");
+  const inspected = params.get("inspected");
+  if (inspected !== null && inspected !== "true" && inspected !== "false") return invalid("inspected", 'Invalid option: expected one of "true"|"false"');
+  for (const key of ["from", "to"]) {
+    const value = params.get(key);
+    if (value !== null && !DATETIME.test(value)) return invalid(key, "Invalid ISO datetime");
+  }
+  const time = (key: string) => (params.has(key) ? Date.parse(params.get(key)!) : null);
+  return {
+    filters: {
+      workOrderId: params.get("work_order_id"),
+      groupId: params.get("group_id"),
+      stepKey: params.get("step_key"),
+      defectKey: params.get("defect_key"),
+      fileVersionId: params.get("file_version_id"),
+      actorId: params.get("actor_user_id"),
+      inspected: inspected === null ? null : inspected === "true",
+      from: time("from"),
+      to: time("to"),
+      moveId: params.get("move_id"),
+    },
+    limit,
+    offset,
+  };
+}
+
+/** Whether a row passes the filters; the fake's lines have no design file, so `file_version_id` matches none. */
+function rowPicks(filters: RowFilters, { piece, move }: { piece: { id: string; groupId: string }; move: Transition }): boolean {
+  const at = Date.parse(move.created_at);
+  return (
+    (filters.workOrderId === null || piece.id === filters.workOrderId) &&
+    (filters.groupId === null || piece.groupId === filters.groupId) &&
+    (filters.stepKey === null || move.from_step?.key === filters.stepKey) &&
+    (filters.defectKey === null || move.defect?.key === filters.defectKey) &&
+    filters.fileVersionId === null &&
+    (filters.actorId === null || move.actor.id === filters.actorId) &&
+    (filters.inspected === null || move.inspected === filters.inspected) &&
+    (filters.from === null || at >= filters.from) &&
+    (filters.to === null || at < filters.to) &&
+    (filters.moveId === null || move.move_id === filters.moveId)
+  );
+}
+
+/** Newest first, as erp-api orders by its time-ordered ids. */
+const newestFirst = (a: Transition, b: Transition) => b.created_at.localeCompare(a.created_at) || b.move_id.localeCompare(a.move_id) || b.id.localeCompare(a.id);
 
 /** The filters in `params`, or the 400 erp-api answers: an unknown key, sort or `workable` value, or an empty search. */
 function readFilters(params: URLSearchParams, keys: string[]): Filters | Answer<never> {
@@ -416,6 +501,9 @@ export function createProductionStore(now: () => number) {
 
   const members = (groupId: string) => [...pieces.values()].filter((piece) => piece.groupId === groupId);
 
+  /** Every row of every piece's history, line by line in the seed's order. */
+  const allRows = (): Row[] => [...pieces.values()].flatMap((piece) => piece.history.map((move) => ({ piece, move })));
+
   const base = (piece: StoredPiece) => ({
     id: piece.id,
     group_id: piece.groupId,
@@ -456,6 +544,35 @@ export function createProductionStore(now: () => number) {
       late: order.promised_on < today() && active.length > 0,
       priority: null,
       partner: accepted ? { id: accepted.id, name: accepted.name, due_on: jobDue, late: jobDue < today() && atPartner } : null,
+    };
+  };
+
+  /**
+   * One move across every line, as erp-api builds it (`work-orders.service.ts:725-754`): what the rows share read
+   * from the first that didn't cancel its piece, and each line with its count and the partner it counts for there.
+   */
+  const moveItem = (rows: Row[], viewer: Viewer): MoveListItem => {
+    const { move } = rows.find((row) => statusAfter(row.move) !== "cancelled") ?? rows[0]!;
+    const lines = new Map<string, { count: number; partner: Transition["partner"] }>();
+    for (const row of rows) {
+      const line = lines.get(row.piece.groupId) ?? { count: 0, partner: null };
+      lines.set(row.piece.groupId, { count: line.count + 1, partner: line.partner ?? row.move.partner });
+    }
+    return {
+      id: move.move_id,
+      kind: move.kind,
+      outcome: move.outcome,
+      from_step: shared(rows.map((row) => row.move.from_step)),
+      to_step: shared(rows.map((row) => row.move.to_step)),
+      defect: move.defect,
+      override_reason: move.override_reason,
+      comment: move.comment,
+      answers: move.answers,
+      photos: move.photos,
+      actor: move.actor,
+      inspected: move.inspected,
+      created_at: move.created_at,
+      groups: [...lines.entries()].map(([groupId, line]) => ({ group: summary(groupId, viewer), count: line.count, partner: line.partner })),
     };
   };
 
@@ -817,6 +934,90 @@ export function createProductionStore(now: () => number) {
           counts: { all: all.length, fails: all.filter((one) => one.fail).length },
         },
       };
+    },
+
+    /**
+     * `GET /workflow/moves` (erp-api `move-history.ts` `listMoves`, `work-orders.service.ts:725`): the filters pick
+     * the moves, each listed whole, with every line it touched in the order it moved them, its count of pieces
+     * there and the partner it counts for there. Newest first, paged by move.
+     */
+    moveList(params: URLSearchParams, viewer: Viewer = EVERYTHING): Answer<Page<MoveListItem>> {
+      const lines = readFilters(params, MOVE_LIST_KEYS);
+      if (isAnswer(lines)) return lines;
+      const read = readRows(params, MOVE_LIST_KEYS, "moves");
+      if ("ok" in read) return read;
+      const kind = params.get("kind");
+      if (kind !== null && !KINDS.includes(kind)) return invalid("kind", `Invalid option: expected one of ${KINDS.join(", ")}`);
+      const rows = allRows();
+      const picked = new Set(
+        rows
+          .filter(
+            (row) =>
+              rowPicks(read.filters, row) &&
+              (kind === null || row.move.kind === kind) &&
+              (lines.workflowId === null || lines.workflowId === WORKFLOW.id) &&
+              (lines.q === null || finds(row.piece.groupId, lines.q, viewer)),
+          )
+          .map((row) => row.move.move_id),
+      );
+      const byMove = new Map<string, Row[]>();
+      for (const row of rows) if (picked.has(row.move.move_id)) byMove.set(row.move.move_id, [...(byMove.get(row.move.move_id) ?? []), row]);
+      const all = [...byMove.values()].map((moveRows) => moveItem(moveRows, viewer)).sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id));
+      const { limit, offset } = read;
+      return { ok: true, body: { data: all.slice(offset, offset + limit), next_cursor: offset + limit < all.length ? `moves@${offset + limit}` : null } };
+    },
+
+    /** `GET /workflow/transitions` (`work-orders.service.ts:692`): one row per piece moved, newest first, naming the piece. */
+    transitions(params: URLSearchParams): Answer<Page<TransitionListItem>> {
+      const read = readRows(params, TRANSITION_KEYS, "transitions");
+      if ("ok" in read) return read;
+      const all = allRows()
+        .filter((row) => rowPicks(read.filters, row))
+        .sort((a, b) => newestFirst(a.move, b.move));
+      const { limit, offset } = read;
+      return {
+        ok: true,
+        body: {
+          data: all.slice(offset, offset + limit).map(({ piece, move }) => ({
+            ...structuredClone(move),
+            work_order: { id: piece.id, label: `${piece.number}/${piece.quantity}` },
+          })),
+          next_cursor: offset + limit < all.length ? `transitions@${offset + limit}` : null,
+        },
+      };
+    },
+
+    /** `GET /workflow/defects` (`defects.controller.ts:39`): every defect in the catalogue, by key. */
+    defects(): Answer<{ data: Defect[] }> {
+      const data = [CRACK, POROSITY, SCRATCH]
+        .map((defect) => ({ id: defect.defect_id, key: defect.key, name: defect.name, active: true }))
+        .sort((a, b) => a.key.localeCompare(b.key));
+      return { ok: true, body: { data } };
+    },
+
+    /**
+     * `GET /workflow/moves/actors` (erp-api `move-history.ts` `listActors`): everyone who has made a move, by name
+     * then id, each with the partners they moved for (the fake's stand-in for the partners they belong to now).
+     */
+    actors(params: URLSearchParams): Answer<{ items: MoveActor[] }> {
+      const extra = [...params.keys()].find((key) => key !== "workflow_id");
+      if (extra) return invalid(extra, `Unrecognized key: "${extra}"`);
+      const workflowId = params.get("workflow_id");
+      if (workflowId !== null && workflowId !== WORKFLOW.id) return { ok: true, body: { items: [] } };
+      const people = new Map<string, { name: string; partners: Map<string, string> }>();
+      for (const { move } of allRows()) {
+        const person = people.get(move.actor.id) ?? { name: move.actor.name, partners: new Map<string, string>() };
+        if (movers.has(move.move_id) && move.partner) person.partners.set(move.partner.id, move.partner.name);
+        people.set(move.actor.id, person);
+      }
+      const items = [...people.entries()]
+        .map(([id, person]) => ({
+          id,
+          name: person.name,
+          partners: [...person.partners.entries()].map(([partnerId, name]) => ({ id: partnerId, name })).sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+      return { ok: true, body: { items } };
     },
 
     version(id: string, number: number): Answer<WorkflowVersion> {

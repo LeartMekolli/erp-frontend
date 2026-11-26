@@ -9,10 +9,10 @@ const OpenPieceContext = createContext<OpenPiece | null>(null);
 /**
  * Which piece's story is open on this page. It's kept on the page, never in the address, so a reload
  * opens the page with no piece open (CLAUDE.md § Addresses). Key it by the order or job, so moving to
- * another one never keeps a piece open.
+ * another one never keeps a piece open. `initialId` opens one piece as the page arrives, read once.
  */
-export function OpenPieceProvider({ children }: { children: ReactNode }) {
-  const [id, setId] = useState<string | null>(null);
+export function OpenPieceProvider({ initialId = null, children }: { initialId?: string | null; children: ReactNode }) {
+  const [id, setId] = useState<string | null>(initialId);
   return <OpenPieceContext value={{ id, open: setId, close: () => setId(null) }}>{children}</OpenPieceContext>;
 }
 

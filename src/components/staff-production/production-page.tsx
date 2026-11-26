@@ -2,6 +2,7 @@
 
 import { notFound } from "next/navigation";
 
+import { StaffPhotoLinks } from "@/components/order-detail/staff-tabs";
 import { Production } from "@/components/production/page/production-page";
 import { useMe } from "@/components/session/session-gate";
 import { can } from "@/lib/auth/permissions";
@@ -14,5 +15,9 @@ export function ProductionPage() {
   const { data: me } = useMe();
   if (!me) return null;
   if (!can(me, "workflow.read")) notFound();
-  return <Production canMove={can(me, "workflow.move")} canUpload={can(me, "file.write")} />;
+  return (
+    <StaffPhotoLinks>
+      <Production canMove={can(me, "workflow.move")} canUpload={can(me, "file.write")} />
+    </StaffPhotoLinks>
+  );
 }

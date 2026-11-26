@@ -13,6 +13,8 @@ export type ArrivalNote = {
   partnerTab?: "payouts";
   /** New order placed it: the order page says so. */
   placed?: true;
+  /** Production's History linked to one of the order's pieces (a work order id): the order page opens its story. */
+  piece?: string;
   /** The payment provider's answer after payout setup. */
   onboarding?: "done" | "expired";
   /** Sign-in: why this tab was signed out. */
@@ -38,6 +40,15 @@ function subscribe(listener: () => void): () => void {
 export function leaveArrivalNote(path: string, note: ArrivalNote): void {
   notes.set(path, note);
   tell();
+}
+
+/**
+ * Whether a click on a link opens it in this tab: a plain left click. Cmd-, Ctrl-, Shift- and Alt-clicks open
+ * another tab or window, or download, and a middle click a new tab. A note is per tab, so a link leaves one only
+ * for this kind of click; otherwise it would wait here, unused, and greet the next visit to that page.
+ */
+export function opensHere(event: { button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }): boolean {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
 }
 
 /** Tests only: forgets every note. */

@@ -431,3 +431,98 @@ describe("fake erp-api: a line's moves", () => {
     expect(s.moves("99999999-0000-4000-8000-000000000001", new URLSearchParams())).toMatchObject({ ok: false, status: 404 });
   });
 });
+
+describe("fake erp-api: every line's moves (History)", () => {
+  const OTHER = groupIdOf(1041, 0);
+  const FLOOR = { permissions: ["workflow.read", "workflow.move"] };
+  const NORTHCAST = { id: "2f1c5d7e-0a9b-4e3c-8d2f-6a5b4c3d2e10", name: "Northcast Foundry" };
+  const NORA = { id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c02", name: "Nora" };
+
+  const list = (s: Store, params: Record<string, string> = {}, viewer?: { permissions: string[] }) =>
+    ok(s.moveList(new URLSearchParams({ limit: "200", ...params }), viewer));
+  const finalQc = (s: Store, group: string) => pieces(s, { group_id: group, step_key: "final_qc", status: "active" }).data.map((piece) => piece.id);
+  /** Passes two of #1048's pieces and one of #1041's at Final QC in one move, and returns its id. */
+  const acrossTwoLines = (s: Store) => {
+    ok(s.move({ kind: "pass", work_order_ids: [...finalQc(s, GROUP).slice(0, 2), finalQc(s, OTHER)[0]!], at_step: "final_qc" }, null));
+    return list(s).data[0]!;
+  };
+
+  it("lists one item per move, newest first, with every line it touched and its count there", () => {
+    const s = store();
+    const move = acrossTwoLines(s);
+    expect(move).toMatchObject({ kind: "pass", from_step: { key: "final_qc" }, to_step: { key: "packing" }, actor: { name: "Ana Ruiz" } });
+    expect(move.groups.map((line) => [line.group.order?.number, line.count])).toEqual([
+      [1048, 2],
+      [1041, 1],
+    ]);
+    const all = list(s).data;
+    expect(new Set(all.map((item) => item.id)).size).toBe(all.length);
+    const times = all.map((item) => item.created_at);
+    expect(times).toEqual([...times].sort().reverse());
+  });
+
+  it("filters by kind, step and time, from inclusive and to exclusive", () => {
+    const s = store();
+    expect(list(s, { kind: "fail" }).data.every((item) => item.kind === "fail")).toBe(true);
+    expect(list(s, { kind: "fail" }).data.length).toBeGreaterThan(0);
+    expect(list(s, { step_key: "final_qc" }).data.every((item) => item.from_step?.key === "final_qc")).toBe(true);
+    const move = acrossTwoLines(s);
+    expect(list(s, { from: move.created_at }).data.map((item) => item.id)).toContain(move.id);
+    expect(list(s, { to: move.created_at }).data.map((item) => item.id)).not.toContain(move.id);
+  });
+
+  it("finds moves touching #1048 by search, and still lists every line of each", () => {
+    const s = store();
+    const move = acrossTwoLines(s);
+    const found = list(s, { q: "1048" }).data;
+    expect(found.every((item) => item.groups.some((line) => line.group.order?.number === 1048))).toBe(true);
+    expect(found.find((item) => item.id === move.id)!.groups).toHaveLength(2);
+    expect(list(s, { q: "1041" }).data.some((item) => item.groups.every((line) => line.group.order?.number !== 1048))).toBe(true);
+  });
+
+  it("pages by move, and refuses another list's cursor or an unknown key", () => {
+    const s = store();
+    const first = list(s, { limit: "2" });
+    expect(first.data).toHaveLength(2);
+    const second = list(s, { limit: "2", cursor: first.next_cursor! });
+    expect(second.data.map((item) => item.id)).not.toContain(first.data[0]!.id);
+    const board = ok(s.stepGroups(new URLSearchParams({ workflow_id: WORKFLOW_ID, step_key: "finish", limit: "1" })));
+    expect(s.moveList(new URLSearchParams({ cursor: board.next_cursor! }))).toMatchObject({ ok: false, status: 400, errors: [{ path: "cursor" }] });
+    expect(s.moveList(new URLSearchParams({ colour: "red" }))).toMatchObject({ ok: false, status: 400, errors: [{ path: "colour" }] });
+    expect(s.moveList(new URLSearchParams({ kind: "scrap" }))).toMatchObject({ ok: false, status: 400, errors: [{ path: "kind" }] });
+  });
+
+  it("leaves the order and customer out for someone who can't read them", () => {
+    const line = list(store(), {}, FLOOR).data[0]!.groups[0]!.group;
+    expect(line).not.toHaveProperty("order");
+    expect(line).not.toHaveProperty("customer");
+    expect(line.product?.name).toBeTruthy();
+  });
+
+  it("lists one move's pieces on one line, each with its piece", () => {
+    const s = store();
+    const move = acrossTwoLines(s);
+    const rows = ok(s.transitions(new URLSearchParams({ move_id: move.id, group_id: GROUP }))).data;
+    expect(rows).toHaveLength(2);
+    expect(rows.every((row) => row.move_id === move.id)).toBe(true);
+    expect(rows.map((row) => row.work_order.label).sort()).toEqual(["7/12", "8/12"]);
+    expect(rows[0]!.work_order.id).toBeTruthy();
+    expect(s.transitions(new URLSearchParams({ kind: "pass" }))).toMatchObject({ ok: false, status: 400 });
+  });
+
+  it("lists the defects in the catalogue, by key", () => {
+    expect(ok(store().defects()).data.map((defect) => defect.key)).toEqual(["crack", "porosity", "scratch"]);
+  });
+
+  it("lists who has moved, staff and a partner's people, by name", () => {
+    const s = store();
+    expect(ok(s.actors(new URLSearchParams())).items).toEqual([{ id: "55555555-0000-4000-8000-000000000001", name: "Ana Ruiz", partners: [] }]);
+    ok(s.partnerMove(passFinish(idsAt(s, "finish").slice(1, 2)), null, { actor: NORA, partner: NORTHCAST }, () => true));
+    expect(ok(s.actors(new URLSearchParams({ workflow_id: WORKFLOW_ID }))).items.map((actor) => [actor.name, actor.partners.map((p) => p.name)])).toEqual([
+      ["Ana Ruiz", []],
+      ["Nora", ["Northcast Foundry"]],
+    ]);
+    expect(ok(s.actors(new URLSearchParams({ workflow_id: "99999999-0000-4000-8000-000000000001" }))).items).toEqual([]);
+    expect(s.actors(new URLSearchParams({ q: "Ana" }))).toMatchObject({ ok: false, status: 400, errors: [{ path: "q" }] });
+  });
+});

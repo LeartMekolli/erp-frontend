@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type JsonBodyType } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -162,6 +162,14 @@ describe("SignInForm", () => {
     expect(link).toHaveAttribute("href", "/forgot-password");
     await user.click(link);
     expect(takeArrivalNote("/forgot-password")).toEqual({ workspace: "demo" });
+  });
+
+  it("leaves no note for the reset page when it's opened in another tab", async () => {
+    const user = userEvent.setup();
+    render(<SignInForm initialWorkspace="" next={null} reason={null} />);
+    await user.type(screen.getByLabelText("Workspace"), "demo");
+    fireEvent.click(screen.getByRole("link", { name: "Forgot password?" }), { metaKey: true });
+    expect(takeArrivalNote("/forgot-password")).toBeNull();
   });
 
   it("leaves no note for the reset page when the workspace is empty", async () => {

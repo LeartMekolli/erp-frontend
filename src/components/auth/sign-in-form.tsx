@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { clearSignedOut } from "@/lib/auth/auth-note";
 import { safeNext } from "@/lib/auth/safe-next";
-import { leaveArrivalNote, useArrivalNote, type ArrivalNote } from "@/lib/navigation/arrival-note";
+import { leaveArrivalNote, opensHere, useArrivalNote, type ArrivalNote } from "@/lib/navigation/arrival-note";
 import { clientSession } from "@/lib/session/client-session";
 
 import { OFFLINE, UNKNOWN, UNREACHABLE } from "./copy";
@@ -149,8 +149,8 @@ export function SignInForm({
           after={
             <Link
               href="/forgot-password"
-              onClick={() => {
-                if (workspace) leaveArrivalNote("/forgot-password", { workspace });
+              onClick={(event) => {
+                if (workspace && opensHere(event)) leaveArrivalNote("/forgot-password", { workspace });
               }}
               className="inline-flex min-h-11 items-center self-end text-caption font-medium underline underline-offset-[3px]"
             >

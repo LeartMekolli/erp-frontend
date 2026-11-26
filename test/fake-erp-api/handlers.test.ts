@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { FAKE_API_URL, FAKE_PASSWORD, STAFF, WORKSPACE } from "./seed";
+import { FAKE_API_URL, FAKE_PASSWORD, FLOOR_WORKER, SALES_LEAD, STAFF, WORKSPACE } from "./seed";
 import { fakeState } from "./state";
 
 function post(path: string, body: unknown, headers: Record<string, string> = {}) {
@@ -51,6 +51,18 @@ describe("fake erp-api handlers", () => {
 
     const right = await post(`/orders/${order.id}/comments`, { body: "Matte, please", line_id: line.id, readers: line.partner!.id }, { authorization: `Bearer ${access_token}` });
     expect(right.status).toBe(201);
+  });
+
+  it("lists who has moved to anyone with workflow.read, Floor included", async () => {
+    const actors = async (email: string) => {
+      const login = await post("/auth/login", { workspace: WORKSPACE, email, password: FAKE_PASSWORD });
+      const { access_token } = (await login.json()) as { access_token: string };
+      return fetch(`${FAKE_API_URL}/workflow/moves/actors`, { headers: { authorization: `Bearer ${access_token}` } });
+    };
+    const floor = await actors(FLOOR_WORKER.email);
+    expect(floor.status).toBe(200);
+    expect(await floor.json()).toMatchObject({ items: [{ name: "Ana Ruiz", partners: [] }] });
+    expect((await actors(SALES_LEAD.email)).status).toBe(403);
   });
 
   it("puts a short password on the password field", async () => {

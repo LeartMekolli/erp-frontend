@@ -70,7 +70,10 @@ export function pieceResult(piece: ActionPiece): string {
  * Why a fail didn't follow its defect's default, against that default in the step's rules. A step or
  * defect no longer in the rules gives the reason alone.
  */
-export function overrideText(action: LineAction, rules: StepRules[]): string | null {
+export function overrideText(
+  action: Pick<LineAction, "override_reason" | "outcome" | "from_step" | "to_step" | "defect">,
+  rules: StepRules[],
+): string | null {
   const reason = action.override_reason;
   if (!reason) return null;
   const step = rules.find((candidate) => candidate.key === action.from_step?.key);

@@ -130,6 +130,20 @@ export type MoveHistory = JsonOk<"/workflow/groups/{id}/moves", "get">;
 export type LineAction = MoveHistory["data"][number];
 export type ActionPiece = LineAction["pieces"][number];
 
+/** `GET /workflow/moves`: every line's moves, one item per move, each with every line it touched. */
+export type MoveListItem = JsonOk<"/workflow/moves", "get">["data"][number];
+export type MoveListGroup = MoveListItem["groups"][number];
+export type MoveListQueryParams = Omit<NonNullable<paths["/workflow/moves"]["get"]["parameters"]["query"]>, "limit" | "cursor">;
+
+/** `GET /workflow/transitions`: one row per piece a move moved, naming the piece. */
+export type TransitionListItem = JsonOk<"/workflow/transitions", "get">["data"][number];
+
+/** `GET /workflow/defects`: every defect in the catalogue, by key. */
+export type Defect = JsonOk<"/workflow/defects", "get">["data"][number];
+
+/** `GET /workflow/moves/actors`: someone who has made a move, with the partners they belong to now. Under `items`. */
+export type MoveActor = JsonOk<"/workflow/moves/actors", "get">["items"][number];
+
 /** `GET /partners/eligible`: who can take a job, and who can't with why. */
 export type EligiblePartners = JsonOk<"/partners/eligible", "get">;
 

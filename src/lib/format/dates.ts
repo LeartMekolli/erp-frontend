@@ -48,6 +48,36 @@ export function dayKey(iso: string, timeZone: string): string {
   return format("key", timeZone, new Date(iso));
 }
 
+const offsetFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/** How far the zone's clock is ahead of UTC at an instant, in ms: "GMT+13:00" is 13 hours, "GMT" none. */
+function zoneOffsetMs(at: number, timeZone: string): number {
+  let formatter = offsetFormatters.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" });
+    offsetFormatters.set(timeZone, formatter);
+  }
+  const name = formatter.formatToParts(at).find((part) => part.type === "timeZoneName")?.value ?? "GMT";
+  const match = /GMT([+-])(\d{2}):(\d{2})/.exec(name);
+  if (!match) return 0;
+  const minutes = Number(match[2]) * 60 + Number(match[3]);
+  return (match[1] === "-" ? -1 : 1) * minutes * 60_000;
+}
+
+/**
+ * The instant a calendar day (`YYYY-MM-DD`) starts in the zone, as a UTC ISO string: what erp-api's `from`
+ * and `to` take. The offset is read at the guess, then again at the result, so a day a clock change falls on
+ * still starts at its own local midnight. Where the clocks jump forward at midnight there is no 00:00: the day
+ * starts at the jump, which is the first guess, while the second lands back on the day before.
+ */
+export function dayStartIso(day: string, timeZone: string): string {
+  const [year, month, date] = day.split("-").map(Number) as [number, number, number];
+  const midnightUtc = Date.UTC(year, month - 1, date);
+  const first = midnightUtc - zoneOffsetMs(midnightUtc, timeZone);
+  const second = new Date(midnightUtc - zoneOffsetMs(first, timeZone)).toISOString();
+  return dayKey(second, timeZone) === day ? second : new Date(first).toISOString();
+}
+
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /**

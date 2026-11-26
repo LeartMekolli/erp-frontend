@@ -32,6 +32,9 @@ const SORT_LABEL: Record<OrderSort, string> = {
 /** Search waits this long after the last key. */
 const SEARCH_DEBOUNCE_MS = 300;
 
+/** The longest search erp-api takes: every list's `q` is `max(100)`, and a longer one is a 400 for the whole list. */
+export const SEARCH_MAX_LENGTH = 100;
+
 const PAYMENT_FILTERS = PAYMENT_STATES.filter((state) => PAYMENT_LABEL[state] !== null);
 
 function tabCount(counts: OrderCounts, tab: Tab): number {
@@ -198,6 +201,7 @@ export function SearchField({
         type="search"
         aria-label={label}
         placeholder={placeholder}
+        maxLength={SEARCH_MAX_LENGTH}
         value={text}
         onChange={(event) => type(event.target.value)}
         onKeyDown={(event) => {
