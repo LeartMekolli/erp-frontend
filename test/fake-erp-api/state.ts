@@ -109,7 +109,7 @@ export function createFakeState(now: () => number = Date.now) {
   const submitted = new Map<string, string>();
   const statusOf = (id: string): PartnerStatus => (suspended.has(id) ? "suspended" : settingUp.has(id) ? "setting_up" : "approved");
   const partners = createPartnersStore((id) => earnings.account(id).state, statusOf, (id) => submitted.get(id) ?? null);
-  const catalog = createCatalogStore();
+  const catalog = createCatalogStore(orders.all);
 
   /** A file version for quoting: its file's owner and name, and its status as it is (reading it here measures nothing). */
   function fileVersion(versionId: string): QuoteFile | null {

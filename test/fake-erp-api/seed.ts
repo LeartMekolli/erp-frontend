@@ -43,6 +43,7 @@ export const STAFF: FakeUser = {
     "order.ship",
     "quote.create",
     "customer.read",
+    "customer.write",
     "catalog.read",
     "partner.read",
     "partner.write",
@@ -129,6 +130,26 @@ export const SALES_LEAD: FakeUser = {
   name: "Jonas",
   kind: "staff",
   permissions: ["report.read", "order.read", "payment.read", "customer.read"],
+  organisations: [],
+};
+
+/** Not in erp-api's seed: reads customers and nothing else, so a customer's page has no Orders or Money. */
+export const CUSTOMER_READER: FakeUser = {
+  id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c28",
+  email: "customers@demo.example.test",
+  name: "Lea",
+  kind: "staff",
+  permissions: ["customer.read"],
+  organisations: [],
+};
+
+/** Not in erp-api's seed: changes customers and reads their money, but can't set payment terms. */
+export const CUSTOMER_EDITOR: FakeUser = {
+  id: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c29",
+  email: "accounts@demo.example.test",
+  name: "Ivo",
+  kind: "staff",
+  permissions: ["customer.read", "customer.write", "payment.read", "order.read"],
   organisations: [],
 };
 
@@ -221,7 +242,7 @@ export const PAYER: FakeUser = {
   organisations: [],
 };
 
-export const USERS: readonly FakeUser[] = [STAFF, CLERK, STAFF_MEMBER, PAYER, WORKFLOW_READER, ORDER_WRITER, ORDER_TAKER, PRODUCTION_LEAD, FLOOR_WORKER, SALES_LEAD, PARTNER, LAYERLINE_OWNER, NORTHCAST_ADMIN, NORTHCAST_MEMBER, PARTNER_TWO_SHOPS, CUSTOMER, NO_ACCESS];
+export const USERS: readonly FakeUser[] = [STAFF, CLERK, STAFF_MEMBER, PAYER, WORKFLOW_READER, ORDER_WRITER, ORDER_TAKER, PRODUCTION_LEAD, FLOOR_WORKER, SALES_LEAD, CUSTOMER_READER, CUSTOMER_EDITOR, PARTNER, LAYERLINE_OWNER, NORTHCAST_ADMIN, NORTHCAST_MEMBER, PARTNER_TWO_SHOPS, CUSTOMER, NO_ACCESS];
 
 export const PARTNER_NAMES: Record<string, string> = {
   [NORTHCAST_ID]: "Northcast Foundry",

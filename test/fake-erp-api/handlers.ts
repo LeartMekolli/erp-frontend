@@ -742,8 +742,31 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
-    // What the New order page reads (`customers.controller.ts:70,152`, `products.controller.ts`,
-    // `options.controller.ts:39`, `quotes.controller.ts`): each route has its own permission.
+    // Customers (`customers.controller.ts`, `payment-terms.controller.ts:28`, `credit.controller.ts:47`)
+    // and what the New order page reads (`products.controller.ts`, `options.controller.ts:39`,
+    // `quotes.controller.ts`): each route has its own permission.
+    http.get("/customers", ({ request, response }) => {
+      const caller = staffWith(request, "customer.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().catalog.list(new URL(request.url).searchParams);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    // Before `/customers/{id}`, which would take "groups" and "bands" for an id.
+    http.get("/customers/groups", ({ request, response }) => {
+      const caller = staffWith(request, "customer.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().catalog.groups();
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/customers/bands", ({ request, response }) => {
+      const caller = staffWith(request, "customer.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().catalog.bands();
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
     http.get("/customers/{id}", ({ request, params, response }) => {
       const caller = staffWith(request, "customer.read");
       if (caller instanceof Response) return response.untyped(caller);
@@ -751,10 +774,38 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
+    http.patch("/customers/{id}", async ({ request, params, response }) => {
+      const caller = staffWith(request, "customer.write");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().catalog.update(params.id, await request.json());
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
     http.get("/customers/{id}/addresses", ({ request, params, response }) => {
       const caller = staffWith(request, "customer.read");
       if (caller instanceof Response) return response.untyped(caller);
       const answer = fakeState().catalog.addresses(params.id);
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.put("/customers/{id}/addresses", async ({ request, params, response }) => {
+      const caller = staffWith(request, "customer.write");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().catalog.setAddresses(params.id, await request.json());
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.put("/customers/{id}/payment-terms", async ({ request, params, response }) => {
+      const caller = staffWith(request, "payment.write");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().catalog.setTerms(params.id, await request.json());
+      return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.get("/payments/customers/{id}", ({ request, params, response }) => {
+      const caller = staffWith(request, "payment.read");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().catalog.money(params.id);
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
