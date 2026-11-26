@@ -1,29 +1,30 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { FormProvider, type Path } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import type { Customer, CustomerAddresses } from "@/lib/api/schema-types";
 import {
   addressesBody,
-  addressesProblems,
   addressesValues,
   customerBody,
-  customerProblems,
   customerValues,
-  hasAddressesProblems,
   termsBody,
-  termsProblems,
   termsValues,
+  type AddressesValues,
+  type CustomerValues,
+  type TermsValues,
 } from "@/lib/customers/form";
 import { useCustomerAddressBook, useCustomerGroups, useSetAddresses, useSetTerms, useUpdateCustomer } from "@/lib/customers/queries";
-import type { AddressField } from "@/lib/new-order/form";
+import { ADDRESS_FIELDS, type AddressField } from "@/lib/new-order/form";
 
 import { EditDialog } from "./edit-dialog";
-import { AddressesFields, type AddressesErrors } from "./form/addresses-fields";
-import { CustomerFields, type CustomerErrors } from "./form/customer-fields";
-import { TermsFields, type TermsErrors } from "./form/terms-fields";
-import { saveErrors } from "./save-errors";
+import { AddressesFields } from "./form/addresses-fields";
+import { CustomerFields } from "./form/customer-fields";
+import { useAddressesForm, useCustomerForm, useTermsForm } from "./form/section-forms";
+import { TermsFields } from "./form/terms-fields";
+import { applySaveErrors } from "./save-errors";
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -74,31 +75,26 @@ export function EditCustomerButton({ customer }: { customer: Customer }) {
   return <EditButton label="Edit" name="Edit customer" prominent render={(close) => <EditCustomerDialog customer={customer} onClose={close} />} />;
 }
 
-const CUSTOMER_PATHS: Record<string, keyof CustomerErrors> = { name: "name", customer_group_id: "groupId", may_pick_partner: "mayPickPartner" };
+const CUSTOMER_PATHS: Record<string, keyof CustomerValues> = { name: "name", customer_group_id: "groupId", may_pick_partner: "mayPickPartner" };
 
 function EditCustomerDialog({ customer, onClose }: { customer: Customer; onClose: () => void }) {
   const groups = useCustomerGroups();
   const update = useUpdateCustomer(customer.id);
   const [before] = useState(() => customerValues(customer));
-  const [values, setValues] = useState(before);
-  const [tried, setTried] = useState(false);
-  const [errors, setErrors] = useState<CustomerErrors>({});
+  const form = useCustomerForm(before);
   const [message, setMessage] = useState<string | null>(null);
 
-  async function save() {
-    setTried(true);
-    if (Object.keys(customerProblems(values)).length > 0) return;
+  async function save(values: CustomerValues) {
     const body = customerBody(before, values);
     if (Object.keys(body).length === 0) return onClose();
-    setErrors({});
     setMessage(null);
     try {
       await update.mutateAsync(body);
       onClose();
     } catch (error) {
-      const refused = saveErrors(error, (path) => CUSTOMER_PATHS[path] ?? null);
-      setErrors(refused.fields as CustomerErrors);
-      setMessage(refused.message);
+      // Without the groups there's no group picker, so a refused group is said above the form.
+      const toField = (path: string) => (path === "customer_group_id" && !groups.data ? null : (CUSTOMER_PATHS[path] ?? null));
+      setMessage(applySaveErrors(error, toField, form.setError));
     }
   }
 
@@ -108,12 +104,14 @@ function EditCustomerDialog({ customer, onClose }: { customer: Customer; onClose
       onOpenChange={(open) => !open && onClose()}
       title="Edit customer"
       description={customer.name}
-      dirty={!same(before, values)}
+      dirty={form.formState.isDirty}
       saving={update.isPending}
       message={message}
-      onSave={() => void save()}
+      onSave={() => void form.handleSubmit(save)()}
     >
-      <CustomerFields value={values} onChange={setValues} errors={errors} groups={groups.data ?? null} showProblems={tried} />
+      <FormProvider {...form}>
+        <CustomerFields groups={groups.data ?? null} />
+      </FormProvider>
     </EditDialog>
   );
 }
@@ -131,47 +129,36 @@ export function EditDetailsButton({ customer }: { customer: Customer }) {
   );
 }
 
-/** erp-api's `shipping_address.city` as the form's shipping city, `vat_number` as its VAT. */
-function addressesPath(path: string): string | null {
+const isAddressField = (field: string | undefined): field is AddressField => (ADDRESS_FIELDS as readonly string[]).includes(field ?? "");
+
+/**
+ * erp-api's `shipping_address.city` as the form's shipping city, `vat_number` as its VAT. A billing
+ * field while "Bill to the shipping address" is ticked isn't on screen, so it's null and said above.
+ */
+function addressesPath(path: string, values: AddressesValues): Path<AddressesValues> | null {
   if (path === "vat_number") return "vat";
   const [address, field] = path.split(".");
-  if (address === "shipping_address" && field) return `shipping.${field}`;
-  if (address === "billing_address" && field) return `billing.${field}`;
+  if (!isAddressField(field)) return null;
+  if (address === "shipping_address") return `shipping.${field}`;
+  if (address === "billing_address" && !values.billToShipping) return `billing.${field}`;
   return null;
-}
-
-function toAddressesErrors(fields: Record<string, string>): AddressesErrors {
-  const errors: AddressesErrors = {};
-  for (const [key, message] of Object.entries(fields)) {
-    if (key === "vat") errors.vat = message;
-    const [side, field] = key.split(".") as ["shipping" | "billing", AddressField];
-    if ((side === "shipping" || side === "billing") && field) errors[side] = { ...errors[side], [field]: message };
-  }
-  return errors;
 }
 
 function EditDetailsDialog({ customer, saved, onClose }: { customer: Customer; saved: CustomerAddresses; onClose: () => void }) {
   const set = useSetAddresses(customer.id);
   const [before] = useState(() => addressesValues(saved));
-  const [values, setValues] = useState(before);
-  const [tried, setTried] = useState(false);
-  const [errors, setErrors] = useState<AddressesErrors>({});
+  const form = useAddressesForm(before);
   const [message, setMessage] = useState<string | null>(null);
 
-  async function save() {
-    setTried(true);
-    if (hasAddressesProblems(addressesProblems(values))) return;
+  async function save(values: AddressesValues) {
     const body = addressesBody(before, values);
     if (Object.keys(body).length === 0) return onClose();
-    setErrors({});
     setMessage(null);
     try {
       await set.mutateAsync(body);
       onClose();
     } catch (error) {
-      const refused = saveErrors(error, addressesPath);
-      setErrors(toAddressesErrors(refused.fields));
-      setMessage(refused.message);
+      setMessage(applySaveErrors(error, (path) => addressesPath(path, values), form.setError));
     }
   }
 
@@ -181,12 +168,14 @@ function EditDetailsDialog({ customer, saved, onClose }: { customer: Customer; s
       onOpenChange={(open) => !open && onClose()}
       title="Edit details"
       description={`${customer.name} · addresses and VAT number`}
-      dirty={!same(before, values)}
+      dirty={form.formState.isDirty}
       saving={set.isPending}
       message={message}
-      onSave={() => void save()}
+      onSave={() => void form.handleSubmit(save)()}
     >
-      <AddressesFields value={values} onChange={setValues} errors={errors} showProblems={tried} />
+      <FormProvider {...form}>
+        <AddressesFields />
+      </FormProvider>
     </EditDialog>
   );
 }
@@ -196,29 +185,27 @@ export function EditTermsButton({ customer }: { customer: Customer }) {
   return <EditButton label="Edit terms" name="Edit terms" render={(close) => <EditTermsDialog customer={customer} onClose={close} />} />;
 }
 
-const TERMS_PATHS: Record<string, keyof TermsErrors> = { terms: "terms", days_to_pay: "daysToPay", credit_limit: "creditLimit" };
+const TERMS_PATHS: Record<string, keyof TermsValues> = { terms: "terms", days_to_pay: "daysToPay", credit_limit: "creditLimit" };
 
 function EditTermsDialog({ customer, onClose }: { customer: Customer; onClose: () => void }) {
   const set = useSetTerms(customer.id);
   const [before] = useState(() => termsValues(customer.payment_terms));
-  const [values, setValues] = useState(before);
-  const [tried, setTried] = useState(false);
-  const [errors, setErrors] = useState<TermsErrors>({});
+  const form = useTermsForm(before);
   const [message, setMessage] = useState<string | null>(null);
 
-  async function save() {
-    setTried(true);
-    if (Object.keys(termsProblems(values)).length > 0) return;
+  async function save(values: TermsValues) {
     if (same(termsBody(before), termsBody(values))) return onClose();
-    setErrors({});
     setMessage(null);
     try {
       await set.mutateAsync(termsBody(values));
       onClose();
     } catch (error) {
-      const refused = saveErrors(error, (path) => TERMS_PATHS[path] ?? null);
-      setErrors(refused.fields as TermsErrors);
-      setMessage(refused.message);
+      // Pay first hides the days and the limit, so their errors are said above the form.
+      const toField = (path: string) => {
+        const field = TERMS_PATHS[path] ?? null;
+        return field !== "terms" && values.terms === "pay_first" ? null : field;
+      };
+      setMessage(applySaveErrors(error, toField, form.setError));
     }
   }
 
@@ -228,12 +215,14 @@ function EditTermsDialog({ customer, onClose }: { customer: Customer; onClose: (
       onOpenChange={(open) => !open && onClose()}
       title="Edit payment terms"
       description={`${customer.name}. New orders follow these terms; placed orders keep theirs.`}
-      dirty={!same(before, values)}
+      dirty={form.formState.isDirty}
       saving={set.isPending}
       message={message}
-      onSave={() => void save()}
+      onSave={() => void form.handleSubmit(save)()}
     >
-      <TermsFields value={values} onChange={setValues} currency={customer.payment_terms.currency} errors={errors} showProblems={tried} />
+      <FormProvider {...form}>
+        <TermsFields currency={customer.payment_terms.currency} />
+      </FormProvider>
     </EditDialog>
   );
 }

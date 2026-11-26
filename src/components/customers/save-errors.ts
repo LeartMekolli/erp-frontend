@@ -1,3 +1,5 @@
+import type { FieldValues, Path, UseFormSetError } from "react-hook-form";
+
 import { noAnswer, UNKNOWN } from "@/components/auth/copy";
 import { isApiProblem } from "@/lib/api/problem";
 import { OfflineError } from "@/lib/session/client-session";
@@ -24,4 +26,14 @@ export function saveErrors(error: unknown, toField: (path: string) => string | n
   }
   if (error.errors?.length) return { fields, message: rest.length ? rest.join(" ") : null };
   return { fields, message: error.detail ?? UNKNOWN };
+}
+
+/**
+ * `saveErrors` for a React Hook Form: each field's error goes on with `setError`, and what goes above the
+ * form is returned. `toField` answers null for a field that isn't on screen, so its error is never lost.
+ */
+export function applySaveErrors<T extends FieldValues>(error: unknown, toField: (path: string) => Path<T> | null, setError: UseFormSetError<T>): string | null {
+  const refused = saveErrors(error, toField);
+  for (const [field, message] of Object.entries(refused.fields)) setError(field as Path<T>, { type: "server", message });
+  return refused.message;
 }

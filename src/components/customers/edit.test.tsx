@@ -153,6 +153,43 @@ describe("editing a customer", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     expect(await within(dialog).findByText("That name is taken here.")).toBeInTheDocument();
     expect(within(dialog).getByLabelText("Name")).toHaveAttribute("aria-invalid", "true");
+
+    // Once the name changes, erp-api's reason no longer applies to it.
+    await userEvent.type(within(dialog).getByLabelText("Name"), "b");
+    await waitFor(() => expect(within(dialog).queryByText("That name is taken here.")).not.toBeInTheDocument());
+    expect(within(dialog).getByLabelText("Name")).toHaveAttribute("aria-invalid", "false");
+  });
+
+  it("says a refused group above the form when there's no group picker", async () => {
+    server.use(
+      http.get(`${FAKE_API_URL}/customers/groups`, () => HttpResponse.json({ type: "about:blank", title: "Forbidden", status: 403 }, { status: 403 })),
+      http.patch(`${FAKE_API_URL}/customers/:id`, () =>
+        HttpResponse.json({ type: "urn:problem:validation", title: "Bad Request", status: 400, errors: [{ path: "customer_group_id", message: "That group was removed." }] }, { status: 400 }),
+      ),
+    );
+    await open(LUNA_ID);
+    await userEvent.click(screen.getByRole("button", { name: "Edit customer" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit customer" });
+    expect(within(dialog).queryByLabelText("Customer group (optional)")).not.toBeInTheDocument();
+    await userEvent.type(within(dialog).getByLabelText("Name"), " 2");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    expect(await within(dialog).findByText("That group was removed.")).toBeInTheDocument();
+  });
+
+  it("says a refused billing field above the form while billing to the shipping address", async () => {
+    server.use(
+      http.put(`${FAKE_API_URL}/customers/:id/addresses`, () =>
+        HttpResponse.json({ type: "urn:problem:validation", title: "Bad Request", status: 400, errors: [{ path: "billing_address.city", message: "Check the billing city." }] }, { status: 400 }),
+      ),
+    );
+    await open(LUNA_ID);
+    await within(details()).findByText("12 rue des Orfèvres");
+    await userEvent.click(within(details()).getByRole("button", { name: "Edit details" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit details" });
+    expect(within(dialog).getByRole("checkbox", { name: "Bill to the shipping address" })).toBeChecked();
+    await userEvent.type(within(dialog).getByLabelText("VAT number (optional)"), "1");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    expect(await within(dialog).findByText("Check the billing city.")).toBeInTheDocument();
   });
 
   it("asks before throwing away changes, and closes at once without any", async () => {
@@ -182,7 +219,7 @@ describe("editing a customer", () => {
     await userEvent.click(screen.getByRole("button", { name: "More actions" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Disable" }));
     const confirm = await screen.findByRole("alertdialog", { name: "Disable Luna Jewels?" });
-    expect(confirm).toHaveTextContent("Its people won't be able to order or act for it until you enable it again. Its orders and data are kept.");
+    expect(confirm).toHaveTextContent("Luna Jewels's people won't be able to order or act for it until you enable it again. Its orders and data are kept.");
     await userEvent.click(within(confirm).getByRole("button", { name: "Disable" }));
 
     const header = (await screen.findByRole("heading", { level: 1, name: "Luna Jewels" })).closest("header")!;
@@ -194,6 +231,25 @@ describe("editing a customer", () => {
     await waitFor(() => expect(within(header).getByRole("button", { name: "More actions" })).toHaveFocus());
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect((await writes()).map((write) => write.body)).toEqual([{ status: "disabled" }, { status: "active" }]);
+  });
+
+  it("gives focus back to More when Disable is cancelled or closed with Escape", async () => {
+    await open(LUNA_ID);
+    const more = screen.getByRole("button", { name: "More actions" });
+    await userEvent.click(more);
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Disable" }));
+    const confirm = await screen.findByRole("alertdialog", { name: "Disable Luna Jewels?" });
+    await userEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(more).toHaveFocus());
+
+    await userEvent.click(more);
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Disable" }));
+    await screen.findByRole("alertdialog", { name: "Disable Luna Jewels?" });
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(more).toHaveFocus());
+    expect(await writes()).toEqual([]);
   });
 
   it("offers no Edit, More or Enable to someone who can't change customers", async () => {

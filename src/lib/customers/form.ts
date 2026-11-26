@@ -90,10 +90,6 @@ export function addressesProblems(values: AddressesValues): AddressesProblems {
   return problems;
 }
 
-export function hasAddressesProblems(problems: AddressesProblems): boolean {
-  return Object.keys(problems.shipping).length > 0 || Object.keys(problems.billing).length > 0 || problems.vat !== undefined;
-}
-
 /** An address as erp-api takes it, or null for none. Throws on an address `addressesProblems` would refuse. */
 function sent(address: Address): Address | null {
   if (isBlank(address)) return null;

@@ -9,7 +9,6 @@ import {
   customerBody,
   customerProblems,
   customerValues,
-  hasAddressesProblems,
   termsBody,
   termsProblems,
   termsValues,
@@ -88,7 +87,7 @@ describe("the Shipping address and Invoices sections", () => {
 
   it("accepts a blank shipping address, but not a half-typed one or a billing one left blank", () => {
     const none = addressesValues({ shipping_address: null, billing_address: null, vat_number: null });
-    expect(hasAddressesProblems(addressesProblems(none))).toBe(false);
+    expect(addressesProblems(none)).toEqual({ shipping: {}, billing: {} });
     const half = { ...none, shipping: { ...none.shipping, city: "Lyon" } };
     expect(addressesProblems(half).shipping).toMatchObject({ name: "missing", line1: "missing" });
     expect(addressesProblems({ ...none, billToShipping: false }).billing).toMatchObject({ name: "missing" });

@@ -69,17 +69,25 @@ export function StatusAction({ customer }: { customer: Customer }) {
       </DropdownMenu>
 
       <Dialog open={asking} onOpenChange={(open) => !update.isPending && setAsking(open)}>
-        <DialogContent role="alertdialog" showCloseButton={false} className="max-w-[calc(100%-1.5rem)] gap-5 p-5 sm:max-w-md max-sm:top-auto max-sm:bottom-3 max-sm:translate-y-0">
+        <DialogContent
+          role="alertdialog"
+          showCloseButton={false}
+          // Opened from a menu item, not a `DialogTrigger`, so Radix has nothing to give focus back to: More (or Enable, once disabled) takes it.
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            control.current?.focus();
+          }}
+          className="max-w-[calc(100%-1.5rem)] gap-5 p-5 sm:max-w-md max-sm:top-auto max-sm:bottom-3 max-sm:translate-y-0">
           <div className="flex flex-col gap-1.5">
             <DialogTitle className="text-[17px] font-semibold">{`Disable ${customer.name}?`}</DialogTitle>
             <DialogDescription className="text-sm text-ink-2">
-              Its people won&apos;t be able to order or act for it until you enable it again. Its orders and data are kept.
+              {`${customer.name}'s people won't be able to order or act for it until you enable it again. Its orders and data are kept.`}
             </DialogDescription>
           </div>
           {message && <FormMessage tone="error">{message}</FormMessage>}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button variant="secondary" onClick={() => setAsking(false)} disabled={update.isPending}>
-              Keep active
+              Cancel
             </Button>
             <Button onClick={() => void setStatus("disabled")} disabled={update.isPending} aria-busy={update.isPending || undefined}>
               {update.isPending ? "Disabling…" : "Disable"}
