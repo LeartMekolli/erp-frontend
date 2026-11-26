@@ -1,5 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 
+import { CUSTOMERS } from "../test/fake-erp-api/orders-seed";
 import { LONG_NAME_JOB_ID, LONG_PRODUCT_NAME, RING_BAND_JOB_ID, RING_OFFER_ID } from "../test/fake-erp-api/partner-jobs";
 import { NORTHCAST_ADMIN, NORTHCAST_ID, NORTHCAST_MEMBER, PARTNER, PARTNER_TWO_SHOPS, RESET_TOKEN, STAFF, STAFF_INVITE_TOKEN } from "../test/fake-erp-api/seed";
 
@@ -201,6 +202,41 @@ test("production board: accessible and fits the screen", async ({ page }) => {
   await expectAccessibleAndFits(page);
   await undo.click();
   await expect(undo).toHaveCount(0);
+});
+
+test("customers: accessible and fits the screen", async ({ page }) => {
+  await signIn(page, STAFF.email);
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+  await page.goto("/customers");
+  // The longest seeded name, cut in its row rather than widening the table.
+  await expect(page.getByRole("link", { name: "Northside Architecture Models and Protos" })).toBeVisible();
+  await expectAccessibleAndFits(page);
+
+  if (page.viewportSize()!.width < 768) {
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Filters" })).toBeVisible();
+    await expectAccessibleAndFits(page);
+  }
+});
+
+test("customer page: accessible and fits the screen", async ({ page }) => {
+  await signIn(page, STAFF.email);
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+  // Pinewood: pay later, an overdue invoice, and an order to list.
+  await page.goto(`/customers/${CUSTOMERS.pinewood.id}`);
+  await expect(page.getByRole("region", { name: "Money" }).getByText("1 invoice overdue")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Orders" }).getByRole("link").first()).toBeVisible();
+  await expectAccessibleAndFits(page);
+
+  await page.getByRole("region", { name: "Details" }).getByRole("button", { name: "Edit details" }).click();
+  await expect(page.getByRole("dialog", { name: "Edit details" })).toBeVisible();
+  await expectAccessibleAndFits(page);
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Disable" }).click();
+  await expect(page.getByRole("alertdialog", { name: "Disable Pinewood Instruments?" })).toBeVisible();
+  await expectAccessibleAndFits(page);
 });
 
 test("production history: accessible and fits the screen", async ({ page }) => {
