@@ -27,7 +27,7 @@ function isDate(value: string | null): value is string {
 }
 
 /** The date `days` after `date` (before it when negative). */
-function addDays(date: string, days: number): string {
+export function addDays(date: string, days: number): string {
   return new Date(utc(date) + days * DAY_MS).toISOString().slice(0, 10);
 }
 

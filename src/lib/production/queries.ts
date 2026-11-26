@@ -6,14 +6,19 @@ import { api } from "@/lib/api/client";
 import { idempotencyHeader } from "@/lib/api/idempotency";
 import { problemFrom } from "@/lib/api/problem";
 import type {
+  Defect,
   Group,
   LineAction,
+  MoveActor,
   MoveBody,
   MoveHistory,
+  MoveListItem,
+  MoveListQueryParams,
   MoveResponse,
   PieceSort,
   StepCounts,
   StepGroup,
+  TransitionListItem,
   WorkOrderDetail,
   WorkOrderListItem,
   WorkflowSummary,
@@ -56,7 +61,71 @@ export const productionKeys = {
   moves: (groupId: string, filter: MovesFilter) => ["production", "moves", groupId, filter] as const,
   version: (workflowId: string, version: number) => ["production", "version", workflowId, version] as const,
   piece: (id: string) => ["production", "piece", id] as const,
+  moveList: (query: MoveListQueryParams) => ["production", "move-list", query] as const,
+  movePieces: (moveId: string, groupId: string) => ["production", "move-pieces", moveId, groupId] as const,
+  defects: () => ["production", "defects"] as const,
+  // Under Production, so someone's first move puts them in the Person filter.
+  actors: (workflowId: string | null) => ["production", "actors", workflowId] as const,
 };
+
+const MOVE_LIST_PAGE = 50;
+const MOVE_ROWS_PAGE = 200;
+
+/**
+ * History: every line's moves, newest first, `MOVE_LIST_PAGE` a page. The query is part of the key, so new
+ * filters start again from the first page and never send a cursor made for other ones (erp-api refuses it).
+ */
+export function useMoveList(query: MoveListQueryParams) {
+  return useCursorList<MoveListItem>({
+    queryKey: productionKeys.moveList(query),
+    fetchPage: async (cursor) => {
+      const params = { ...query, limit: MOVE_LIST_PAGE, ...(cursor ? { cursor } : {}) };
+      const { data, error, response } = await api.GET("/workflow/moves", { params: { query: params } });
+      if (!data) throw problemFrom(error, response);
+      return data;
+    },
+    refetchInterval: REFRESH_MS,
+  });
+}
+
+/** The pieces one move moved on one line, read by erp-api's filters so nothing is grouped in the browser. */
+export function useMoveRows(moveId: string, groupId: string, enabled: boolean) {
+  return useCursorList<TransitionListItem>({
+    queryKey: productionKeys.movePieces(moveId, groupId),
+    fetchPage: async (cursor) => {
+      const query = { move_id: moveId, group_id: groupId, limit: MOVE_ROWS_PAGE, ...(cursor ? { cursor } : {}) };
+      const { data, error, response } = await api.GET("/workflow/transitions", { params: { query } });
+      if (!data) throw problemFrom(error, response);
+      return data;
+    },
+    enabled,
+  });
+}
+
+/** Every defect in the catalogue, by key, for History's Defect filter. */
+export function useDefects() {
+  return useQuery({
+    queryKey: productionKeys.defects(),
+    queryFn: async (): Promise<Defect[]> => {
+      const { data, error, response } = await api.GET("/workflow/defects");
+      if (!data) throw problemFrom(error, response);
+      return data.data;
+    },
+  });
+}
+
+/** Everyone who has moved pieces of the product type, staff and workshop people, by name. Nothing until one is picked. */
+export function useMoveActors(workflowId: string | null) {
+  return useQuery({
+    queryKey: productionKeys.actors(workflowId),
+    queryFn: async (): Promise<MoveActor[]> => {
+      const { data, error, response } = await api.GET("/workflow/moves/actors", { params: { query: { workflow_id: workflowId! } } });
+      if (!data) throw problemFrom(error, response);
+      return data.items;
+    },
+    enabled: workflowId !== null,
+  });
+}
 
 /** A line's path, with how many pieces are at each step. */
 export function useGroup(id: string, enabled: boolean) {
