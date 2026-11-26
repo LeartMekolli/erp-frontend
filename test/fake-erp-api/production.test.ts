@@ -199,11 +199,56 @@ describe("fake erp-api: Production's lists", () => {
 
   it("counts the active pieces at each step in path order", () => {
     expect(counts(store()).steps).toEqual([
-      { key: "print", name: "Print", active: 26, in_rework: 0, workable: 26 },
-      { key: "finish", name: "Finish", active: 24, in_rework: 1, workable: 24 },
-      { key: "final_qc", name: "Final QC", active: 13, in_rework: 0, workable: 13 },
-      { key: "packing", name: "Packing", active: 1, in_rework: 0, workable: 1 },
+      // #1045's one piece waits for payment: held, so never workable.
+      { key: "print", name: "Print", active: 26, in_rework: 0, workable: 25, held: 1 },
+      { key: "finish", name: "Finish", active: 24, in_rework: 1, workable: 24, held: 0 },
+      { key: "final_qc", name: "Final QC", active: 13, in_rework: 0, workable: 13, held: 0 },
+      { key: "packing", name: "Packing", active: 1, in_rework: 0, workable: 1, held: 0 },
     ]);
+  });
+
+  it("holds every piece of an order waiting for payment, so none is workable", () => {
+    const s = store();
+    const unpaid = groupIdOf(1045, 0);
+    const [piece] = ok(s.pieces(new URLSearchParams({ group_id: unpaid, step_key: "print", status: "active" }))).data;
+    expect(piece).toMatchObject({ held: "waiting_for_payment", may_work: false });
+    const row = groups(s, { step_key: "print" }).data.find((one) => one.group.id === unpaid);
+    expect(row).toMatchObject({ count: 1, workable: 0, held: 1, held_reason: "waiting_for_payment" });
+    expect(groups(s, { step_key: "print", workable: "true" }).data.some((one) => one.group.id === unpaid)).toBe(false);
+    expect(groups(s).data.every((one) => one.held === 0 && one.held_reason === null)).toBe(true);
+  });
+
+  it("holds an assembly's pieces while its parts aren't ready, payment first", () => {
+    const s = store();
+    s.waitForParts(groupIdOf(1049, 0));
+    s.waitForParts(groupIdOf(1045, 0));
+    const listed = ok(s.pieces(new URLSearchParams({ group_id: groupIdOf(1049, 0), status: "active" }))).data;
+    expect(listed.every((one) => one.held === "waiting_for_parts" && !one.may_work)).toBe(true);
+    const rows = groups(s, { step_key: "print" }).data;
+    expect(rows.find((one) => one.group.id === groupIdOf(1049, 0))).toMatchObject({ held: 4, held_reason: "waiting_for_parts", workable: 0 });
+    expect(rows.find((one) => one.group.id === groupIdOf(1045, 0))).toMatchObject({ held_reason: "waiting_for_payment" });
+    expect(counts(s).steps[0]).toMatchObject({ active: 26, workable: 21, held: 5 });
+  });
+
+  it("leaves a piece not active unheld", () => {
+    const s = store();
+    s.waitForParts(GROUP);
+    const done = ok(s.pieces(new URLSearchParams({ group_id: GROUP, status: "finished" }))).data;
+    expect(done.map((one) => one.held)).toEqual([null]);
+  });
+
+  it("refuses to move an assembly's pieces onward while its parts aren't ready, but not back to the first step", () => {
+    const s = store();
+    s.waitForParts(GROUP);
+    const [first] = idsAt(s, "finish");
+    expect(s.move(passFinish([first!]), null)).toEqual({
+      ok: false,
+      status: 409,
+      detail: "The parts are not ready yet",
+      errors: [{ path: "work_order_ids.0", message: "3/12 waits for its parts" }],
+    });
+    ok(s.move({ kind: "correction", work_order_ids: [first!], to_step: "print", comment: "Start again" }, null));
+    expect(idsAt(s, "print")).toContain(first);
   });
 
   it("counts only what the caller may work with workable=true", () => {

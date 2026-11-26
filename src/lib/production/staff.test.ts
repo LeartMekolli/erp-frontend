@@ -124,6 +124,13 @@ describe("staffPiece", () => {
     expect(piecesAt(s, "print").map(staffPiece).every((piece) => piece.mayWork)).toBe(true);
   });
 
+  it("keeps why a piece can't move yet", () => {
+    const s = store();
+    expect(piecesAt(s, "finish").map(staffPiece).every((piece) => piece.held === null)).toBe(true);
+    s.waitForParts(GROUP);
+    expect(piecesAt(s, "finish").map(staffPiece).every((piece) => piece.held === "waiting_for_parts" && !piece.mayWork)).toBe(true);
+  });
+
   it("carries where a piece is and what last happened to it", () => {
     const item = reworked(store());
     const piece = staffPiece(item);

@@ -61,8 +61,6 @@ interface PiecesTabProps {
   selectable: boolean;
   mayUpload: boolean;
   uploadTarget: UploadTarget;
-  /** Why nothing can be moved right now, such as an order waiting for payment. */
-  blockedReason: string | null;
   /** The partner a move at one of its steps counts for. */
   countsFor: string | null;
   onMove: (body: MoveBody) => Promise<void>;
@@ -215,9 +213,10 @@ function MoveFlow({
   const next = props.next(stepKey);
   const pieces = loaded.items.filter((piece) => selection.ids.has(piece.id));
 
-  let disabledReason = props.blockedReason;
-  if (disabledReason === null && props.rulesError) disabledReason = "This step's checks couldn't be loaded.";
-  else if (disabledReason === null && !rules) disabledReason = "Loading this step's checks…";
+  // A piece erp-api holds (an order waiting for payment, an assembly's parts) can't be picked, so it never gets here.
+  let disabledReason: string | null = null;
+  if (props.rulesError) disabledReason = "This step's checks couldn't be loaded.";
+  else if (!rules) disabledReason = "Loading this step's checks…";
 
   return (
     <>

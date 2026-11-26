@@ -51,7 +51,6 @@ function JobPieces({ job, partnerId }: { job: PartnerJobDetail; partnerId: strin
       selectable
       mayUpload
       uploadTarget={photos}
-      blockedReason={null}
       countsFor={null}
       onMove={async (body) => {
         await move.mutateAsync(body);

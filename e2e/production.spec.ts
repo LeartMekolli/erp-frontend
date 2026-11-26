@@ -24,7 +24,9 @@ async function openProduction(page: Page) {
   await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
   await page.goto("/production");
   await expect(page.getByRole("heading", { level: 1, name: "Production" })).toBeVisible();
-  await expect(page.getByRole("checkbox", { name: "Select #1045" })).toBeVisible();
+  // The page opens on the Board: By step is the second tab.
+  await page.getByRole("tablist", { name: "Production views" }).getByRole("tab", { name: "By step" }).click();
+  await expect(page.getByRole("checkbox", { name: "Select #1041" })).toBeVisible();
 }
 
 async function expectStep(page: Page, key: string, name: string, count: number) {
@@ -116,7 +118,11 @@ test.describe("with a keyboard only", () => {
   test("picks a step, ticks a line and reaches Pass", async ({ page }) => {
     await openProduction(page);
     await page.getByRole("heading", { level: 1, name: "Production" }).click();
-    await tabTo(page, async () => (await focused(page)).role === "tab");
+    // The Board and By step tabs come first; the step tabs follow.
+    await tabTo(page, async () => {
+      const at = await focused(page);
+      return at.role === "tab" && at.label.startsWith("Print");
+    });
     await expect(page.getByRole("tab", { name: /^Print/ })).toBeFocused();
     await page.keyboard.press("ArrowRight");
     await expect(page.getByRole("tab", { name: /^Finish/ })).toBeFocused();

@@ -64,6 +64,7 @@ export function staffPiece(item: WorkOrderListItem): Piece {
     toInspect: item.to_inspect,
     inRework: item.in_rework,
     mayWork: item.may_work,
+    held: item.held,
     lastMove: last
       ? { kind: last.kind, outcome: last.outcome, from_step: last.from_step, defect: last.defect, created_at: last.created_at, actor: staffActor(last.actor, last.partner) }
       : null,

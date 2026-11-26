@@ -95,6 +95,16 @@ describe("LineTabs", () => {
     expect(passed).not.toHaveTextContent("Being redone");
   });
 
+  it("says a piece waits for its parts, with no tick box", async () => {
+    fakeState().production.waitForParts(GROUP);
+    renderTabs();
+    const piece = (await screen.findByText("1/12")).closest("li")!;
+    expect(piece).toHaveTextContent("Waiting for its parts");
+    expect(piece).not.toHaveTextContent("Needs a skill you don't have");
+    expect(within(piece).queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Select all at Print" })).toBeDisabled();
+  });
+
   it("says nothing about the last move of a piece that hasn't moved", async () => {
     renderTabs();
     const first = (await screen.findByText("1/12")).closest("li")!;

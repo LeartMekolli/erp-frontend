@@ -32,7 +32,7 @@ export interface ProductType {
   active: number | null;
 }
 
-/** Product type, search, sort and "Only what I can work" above By step's lines. */
+/** Product type, search, sort and "Only what I can work" above By step's lines; the Board's has no search. */
 export function ByStepToolbar({
   productTypes,
   workflowId,
@@ -48,8 +48,9 @@ export function ByStepToolbar({
   productTypes: ProductType[];
   workflowId: string | null;
   onWorkflow: (workflowId: string) => void;
-  q: string | null;
-  onSearch: (q: string | null) => void;
+  q?: string | null;
+  /** Without it there's no search field. */
+  onSearch?: (q: string | null) => void;
   sort: PieceSort;
   onSort: (sort: PieceSort) => void;
   workable: boolean;
@@ -75,7 +76,7 @@ export function ByStepToolbar({
       </div>
 
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 lg:justify-end">
-        <SearchField q={q} onSearch={onSearch} label="Search order, product or customer" placeholder="Order, product or customer" />
+        {onSearch && <SearchField q={q ?? null} onSearch={onSearch} label="Search order, product or customer" placeholder="Order, product or customer" />}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="secondary" aria-label={`Sort: ${SORT_LABEL[sort]}`} className="h-11 px-3 font-medium md:h-9 pointer-coarse:h-11">

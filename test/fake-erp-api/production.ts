@@ -10,6 +10,7 @@ import type {
   ActionPiece,
   Group,
   GroupSummary,
+  HoldReason,
   LineAction,
   MoveBody,
   MoveHistory,
@@ -374,6 +375,8 @@ export function createProductionStore(now: () => number) {
   const pieces = new Map(seedPieces(now()).map((piece) => [piece.id, piece]));
   const keys = new Map<string, { input: string; body: MoveResponse }>();
   const skilled = new Set<string>();
+  /** The lines whose parts aren't ready. The fake has no assemblies of its own, so a test puts a line here. */
+  const waitingParts = new Set<string>();
   /** The partner whose person made each move, by move id; staff's moves aren't here. */
   const movers = new Map<string, string>();
   const createdAt = () => new Date(now()).toISOString();
@@ -456,8 +459,18 @@ export function createProductionStore(now: () => number) {
     };
   };
 
-  /** Whether the caller may pass or fail the piece where it is (`may_work`): active, at a step it has the skill for. */
-  const mayWork = (piece: StoredPiece) => piece.status === "active" && !skilled.has(piece.stepKey ?? "");
+  /**
+   * Why an active piece can't be passed or failed onward by anyone (erp-api `holds.ts`): its order waits for
+   * payment, or its line is an assembly whose parts aren't ready. Payment first. Null for a piece not active.
+   */
+  const heldFor = (piece: StoredPiece): HoldReason | null => {
+    if (piece.status !== "active") return null;
+    if (lineOf.get(piece.groupId)?.order.state === "awaiting_payment") return "waiting_for_payment";
+    return waitingParts.has(piece.groupId) ? "waiting_for_parts" : null;
+  };
+
+  /** Whether the caller may pass or fail the piece where it is (`may_work`): active, at a step it has the skill for, not held. */
+  const mayWork = (piece: StoredPiece) => piece.status === "active" && !skilled.has(piece.stepKey ?? "") && heldFor(piece) === null;
 
   /** What `q` finds (erp-api `searchGroups`): the product, an order number with `order.read`, the customer with `customer.read`. */
   const finds = (groupId: string, q: string, viewer: Viewer) => {
@@ -494,6 +507,7 @@ export function createProductionStore(now: () => number) {
       to_inspect: null,
       // erp-api: `mayMove && …` (`work-orders.service.ts:542`).
       may_work: can(viewer, "workflow.move") && mayWork(piece),
+      held: heldFor(piece),
       in_rework: piece.status === "active" && piece.inRework,
       last_move: last
         ? { kind: last.kind, outcome: last.outcome, from_step: last.from_step, defect: last.defect, actor: last.actor, partner: last.partner, created_at: last.created_at }
@@ -545,6 +559,15 @@ export function createProductionStore(now: () => number) {
         : [],
     );
     if (unpaid.length > 0) return { ok: false, status: 409, detail: WAITING_FOR_PAYMENT, errors: unpaid };
+    // An assembly's pieces may only go back to the path's first step until its parts are ready (erp-api
+    // `moves.service.ts` `holdForParts`). Rework here never lands on the first step, so only a correction can.
+    const toFirst = body.kind === "correction" && body.to_step === STEPS[0]!.key;
+    const forParts = toFirst
+      ? []
+      : moved.flatMap((piece, index) =>
+          waitingParts.has(piece.groupId) ? [{ path: `work_order_ids.${index}`, message: `${piece.number}/${piece.quantity} waits for its parts` }] : [],
+        );
+    if (forParts.length > 0) return { ok: false, status: 409, detail: "The parts are not ready yet", errors: forParts };
     const respond = (): Answer<MoveResponse> => ({ ok: true, body: { data: moved.map(base) } });
     const atStep = STEPS.find((s) => s.key === body.at_step);
     const moveId = crypto.randomUUID();
@@ -710,6 +733,7 @@ export function createProductionStore(now: () => number) {
               active: here.length,
               in_rework: here.filter((piece) => piece.inRework).length,
               workable: mayMove ? here.filter(mayWork).length : 0,
+              held: here.filter((piece) => heldFor(piece) !== null).length,
             };
           }),
         },
@@ -737,12 +761,15 @@ export function createProductionStore(now: () => number) {
       const mayMove = can(viewer, "workflow.move");
       const data = ids.slice(offset, offset + limit).map((id) => {
         const mine = here.filter((piece) => piece.groupId === id);
+        const reasons = mine.map(heldFor).filter((reason) => reason !== null);
         return {
           group: summary(id, viewer),
           count: mine.length,
           in_rework: mine.filter((piece) => piece.inRework).length,
           workable: mayMove ? mine.filter(mayWork).length : 0,
           to_inspect: 0,
+          held: reasons.length,
+          held_reason: reasons.includes("waiting_for_payment") ? "waiting_for_payment" : (reasons[0] ?? null),
         };
       });
       return { ok: true, body: { data, next_cursor: offset + limit < ids.length ? `${filters.sort}@${offset + limit}` : null } };
@@ -802,6 +829,11 @@ export function createProductionStore(now: () => number) {
     /** This step now needs a skill the caller doesn't hold, so its pieces can't be worked. */
     requireSkill(stepKey: string): void {
       skilled.add(stepKey);
+    },
+
+    /** This line is now an assembly whose parts aren't ready, so its active pieces are held. */
+    waitForParts(groupId: string): void {
+      waitingParts.add(groupId);
     },
 
     /** `POST /workflow/moves`, with erp-api's one-time `Idempotency-Key`. */

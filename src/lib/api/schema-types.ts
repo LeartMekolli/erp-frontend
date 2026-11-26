@@ -94,6 +94,9 @@ export type Group = JsonOk<"/workflow/groups/{id}", "get">;
 /** One piece in a work list, from `GET /workflow/work-orders`. */
 export type WorkOrderListItem = JsonOk<"/workflow/work-orders", "get">["data"][number];
 
+/** Why an active piece can't be passed or failed onward now, by anyone: its order waits for payment, or its parts. */
+export type HoldReason = NonNullable<WorkOrderListItem["held"]>;
+
 /** `GET /workflow/workflows`: one product type's workflow and its current version (null before one is published). */
 export type WorkflowSummary = JsonOk<"/workflow/workflows", "get">["data"][number];
 

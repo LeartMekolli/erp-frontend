@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { StepGroup } from "@/lib/api/schema-types";
 import { formatDayMonth } from "@/lib/format/dates";
 import { dueWords } from "@/lib/production/by-step";
+import { HOLD_WORDS } from "@/lib/production/holds";
 
 /** What a line is called in labels: its order number, or its product for staff who can't read orders. */
 export function lineName(line: StepGroup): string {
@@ -33,6 +34,13 @@ function Dot({ className }: { className: string }) {
 function Status({ line, selectable }: { line: StepGroup; selectable: boolean }) {
   const { group } = line;
   const items: ReactNode[] = [];
+  if (line.held_reason)
+    items.push(
+      <span key="held" className="inline-flex items-center gap-2 font-medium text-ink">
+        <Dot className="bg-collect" />
+        {HOLD_WORDS[line.held_reason]}
+      </span>,
+    );
   if (group.late)
     items.push(
       <span key="late" className="inline-flex items-center gap-2 font-semibold text-late">
@@ -61,7 +69,7 @@ function Status({ line, selectable }: { line: StepGroup; selectable: boolean }) 
         {`With ${group.partner.name}`}
       </span>,
     );
-  if (selectable && line.workable === 0)
+  if (selectable && line.workable === 0 && !line.held_reason)
     items.push(
       <span key="skill" className="text-caption text-ink-2">
         Needs a skill you don&apos;t have
@@ -144,16 +152,19 @@ export function LineRow({
     <tr data-line-row className={cn("text-sm", checked !== false && "bg-lilac/50")}>
       {selectable && (
         <Cell className="w-10 pr-0">
+          {/* A held line keeps its cell, empty, so the columns stay in line: nobody can move it yet. */}
           <span className="grid size-11 place-items-center md:size-6 pointer-coarse:size-11">
-            <Checkbox
-              checked={checked}
-              disabled={busy || line.workable === 0}
-              aria-busy={busy}
-              onCheckedChange={onTick}
-              aria-label={`Select ${name}`}
-              // The box's hit area reaches 44 px on touch screens, filling the space kept for it.
-              className="pointer-coarse:after:-inset-3.5"
-            />
+            {!line.held_reason && (
+              <Checkbox
+                checked={checked}
+                disabled={busy || line.workable === 0}
+                aria-busy={busy}
+                onCheckedChange={onTick}
+                aria-label={`Select ${name}`}
+                // The box's hit area reaches 44 px on touch screens, filling the space kept for it.
+                className="pointer-coarse:after:-inset-3.5"
+              />
+            )}
           </span>
         </Cell>
       )}
@@ -183,7 +194,13 @@ export function LineRow({
                 .join(" · ")}
             </span>
           )}
-          {selectable && line.workable === 0 && <span className="text-caption text-ink-2">Needs a skill you don&apos;t have</span>}
+          {line.held_reason && (
+            <span className="inline-flex items-center gap-2 text-caption font-medium text-ink">
+              <Dot className="bg-collect" />
+              {HOLD_WORDS[line.held_reason]}
+            </span>
+          )}
+          {selectable && line.workable === 0 && !line.held_reason && <span className="text-caption text-ink-2">Needs a skill you don&apos;t have</span>}
           {failed && <TickFailed name={name} onRetry={onTick} />}
         </span>
       </Cell>
@@ -236,3 +253,6 @@ export function LineRow({
     </tr>
   );
 }
+
+// The Board's cards say what a line needs in the same words.
+export { Due as LineDue, Here as HerePill, Status as LineStatus };
