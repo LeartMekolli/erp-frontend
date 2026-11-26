@@ -176,7 +176,7 @@ export function createFakeState(now: () => number = Date.now) {
       return suspended.has(id);
     },
 
-    /** Puts a workshop back to being set up, not yet submitted or approved. */
+    /** Puts a workshop back to being set up and not approved; a submission it already made stays. */
     setPartnerSettingUp(id: string): void {
       settingUp.add(id);
     },

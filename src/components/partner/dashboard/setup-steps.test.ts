@@ -55,4 +55,10 @@ describe("setupSteps", () => {
     const steps = setupSteps(store.setup(NORTHCAST_ID), APPROVED, "ready");
     expect(step(steps, "submitted")?.done).toBe(true);
   });
+
+  it("leaves a suspended workshop nothing to submit and nothing to wait for", () => {
+    const steps = setupSteps(store.setup(NORTHCAST_ID), { status: "suspended", submittedAt: null }, "ready");
+    expect(step(steps, "submitted")?.done).toBe(true);
+    expect(step(steps, "approved")).toMatchObject({ done: false, waiting: false });
+  });
 });

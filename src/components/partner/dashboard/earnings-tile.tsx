@@ -143,7 +143,9 @@ function OwedLine() {
                 ? "…"
                 : lastPaid
                   ? `${formatMoney(lastPaid.amount, lastPaid.currency)} · ${date(lastPaid.settled_at ?? lastPaid.created_at)}`
-                  : "None yet"}
+                  : payouts.isError
+                    ? "Couldn't load"
+                    : "None yet"}
             </dd>
           </div>
         </dl>

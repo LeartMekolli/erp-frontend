@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 
 import { partnerApi } from "@/lib/api/client";
+import { idempotencyHeader } from "@/lib/api/idempotency";
 import { problemFrom } from "@/lib/api/problem";
 import type { CapacityRow, PartnerJobCounts, PartnerScoreResponse, PartnerSetup, PartnerSummary, StaffPartner } from "@/lib/api/schema-types";
 import { useApiMutation } from "@/lib/query/use-api-mutation";
@@ -95,8 +96,10 @@ export function usePartnerJobCounts(partnerId: string) {
 export function useSubmitSetup(partnerId: string) {
   const client = useQueryClient();
   return useApiMutation<void, StaffPartner>(
-    async () => {
-      const { data, error, response } = await partnerApi.POST("/partner-portal/partners/{partnerId}/submit", { params: { path: { partnerId } } });
+    async (_vars, key) => {
+      const { data, error, response } = await partnerApi.POST("/partner-portal/partners/{partnerId}/submit", {
+        params: { path: { partnerId }, header: idempotencyHeader(key) },
+      });
       if (!data) throw problemFrom(error, response);
       return data;
     },

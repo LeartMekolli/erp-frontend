@@ -1,10 +1,12 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
+import { http, HttpResponse } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import type { PartnerSummary } from "@/lib/api/schema-types";
 
-import { NORTHCAST_ADMIN, NORTHCAST_ID } from "../../../../test/fake-erp-api/seed";
+import { FAKE_API_URL, NORTHCAST_ADMIN, NORTHCAST_ID } from "../../../../test/fake-erp-api/seed";
 import { fakeState } from "../../../../test/fake-erp-api/state";
+import { server } from "../../../../test/msw";
 import { renderAs, WithMe } from "../../../../test/render";
 
 import { EarningsTile } from "./earnings-tile";
@@ -94,6 +96,19 @@ describe("EarningsTile", () => {
     const hero = await tile("this year");
     expect(within(hero).getByRole("cell", { name: "Nov 2026" })).toBeInTheDocument();
     expect(within(hero).getByRole("cell", { name: "Jan 2026" })).toBeInTheDocument();
+  });
+
+  it("doesn't say no payout was made when the payouts couldn't load", async () => {
+    server.use(
+      http.get(`${FAKE_API_URL}/partner-portal/partners/:partnerId/payouts`, () =>
+        HttpResponse.json({ type: "about:blank", title: "Error", status: 500 }, { status: 500, headers: { "content-type": "application/problem+json" } }),
+      ),
+    );
+    renderTile(summary());
+    const hero = await tile();
+    const lastPayout = (await within(hero).findByText("Last payout")).nextSibling;
+    await waitFor(() => expect(lastPayout).toHaveTextContent("Couldn't load"));
+    expect(within(hero).queryByText("None yet")).not.toBeInTheDocument();
   });
 
   it("says when the summary couldn't load, with Try again", async () => {
