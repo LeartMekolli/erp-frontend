@@ -1,4 +1,4 @@
-import type { InvitationPreview, MeResponse, PartnerMeResponse, paths } from "../../src/lib/api/schema-types";
+import type { InvitationPreview, MeResponse, PartnerMeResponse, PartnerStatus, paths, StaffPartner } from "../../src/lib/api/schema-types";
 import {
   FAKE_PASSWORD,
   INVITATIONS,
@@ -20,7 +20,7 @@ import { createCommentsStore } from "./comments";
 import { createJobsStore } from "./jobs";
 import { createEarningsStore } from "./earnings";
 import { createNotificationsStore } from "./notifications";
-import { createOrdersStore } from "./orders";
+import { createOrdersStore, type Answer } from "./orders";
 import { createPartnerDashboardStore } from "./partner-dashboard";
 import { createPartnerJobsStore } from "./partner-jobs";
 import { createPartnersStore } from "./partners";
@@ -103,7 +103,12 @@ export function createFakeState(now: () => number = Date.now) {
   const reports = createReportsStore(now, orders.all);
   const partnerDashboard = createPartnerDashboardStore(now);
   const suspended = new Set<string>();
-  const partners = createPartnersStore((id) => earnings.account(id).state, (id) => suspended.has(id));
+  /** Workshops still being set up; the seeded ones were approved, so a test puts one here. */
+  const settingUp = new Set<string>();
+  /** When each workshop's owner submitted its setup (erp-api `partners.service.ts:150-166`). */
+  const submitted = new Map<string, string>();
+  const statusOf = (id: string): PartnerStatus => (suspended.has(id) ? "suspended" : settingUp.has(id) ? "setting_up" : "approved");
+  const partners = createPartnersStore((id) => earnings.account(id).state, statusOf, (id) => submitted.get(id) ?? null);
   const catalog = createCatalogStore();
 
   /** A file version for quoting: its file's owner and name, and its status as it is (reading it here measures nothing). */
@@ -169,6 +174,23 @@ export function createFakeState(now: () => number = Date.now) {
 
     isPartnerSuspended(id: string): boolean {
       return suspended.has(id);
+    },
+
+    /** Puts a workshop back to being set up, not yet submitted or approved. */
+    setPartnerSettingUp(id: string): void {
+      settingUp.add(id);
+    },
+
+    /** Staff approve a workshop being set up. */
+    approvePartner(id: string): void {
+      settingUp.delete(id);
+    },
+
+    /** `POST /partner-portal/partners/{partnerId}/submit`: the first submission is kept; a workshop not being set up is a 409. */
+    submitSetup(id: string): Answer<StaffPartner> {
+      if (statusOf(id) !== "setting_up") return { ok: false, status: 409, detail: "Only a partner being set up can be submitted for approval" };
+      if (!submitted.has(id)) submitted.set(id, new Date(now()).toISOString());
+      return partners.get(id);
     },
 
     login(workspace: string | undefined, email: string, password: string): SessionTokens | Status<401 | 429> {
@@ -292,9 +314,9 @@ export function createFakeState(now: () => number = Date.now) {
           id,
           display_name: PARTNER_NAMES[id] ?? "Workshop",
           role: user.partnerRole ?? ("owner" as const),
-          status: suspended.has(id) ? ("suspended" as const) : ("approved" as const),
+          status: statusOf(id),
           // Seeded partners were approved by staff without submitting (erp-api `partner-response.ts:539`).
-          submitted_at: null,
+          submitted_at: submitted.get(id) ?? null,
         })),
       };
     },

@@ -158,17 +158,32 @@ export function createPartnerDashboardStore(now: () => number) {
 
       const [earned, previousEarned] = EARNED[partnerId] ?? [0, 0];
       const total = scale(earned, days);
-      // Spread over the buckets by their days; the last takes what rounding left. Older money is paid, the latest week still owed.
+      // Spread over the buckets by their days; the last takes what rounding left. The latest week is still owed, the
+      // week before is in a payout on its way (erp-api `owed-dates.ts:35`), and older money is paid.
       const buckets = bucketsOf(from, to, bucket);
       let left = total;
+      const totals = { paid: 0, pending: 0, owed: 0 };
       const series = buckets.map(({ start, days: bucketDays }, n) => {
         const amount = n === buckets.length - 1 ? left : Math.floor((total * bucketDays) / days);
         left -= amount;
-        const recent = spanDays(start, to) <= 7;
-        // The fake has no payout still on its way, so nothing is pending (erp-api `owed-dates.ts:35`).
-        return { start, days: bucketDays, paid: money(recent ? 0 : amount), pending: money(0), owed: money(recent ? amount : 0) };
+        const age = spanDays(start, to);
+        const part = age <= 7 ? "owed" : age <= 14 ? "pending" : "paid";
+        totals[part] += amount;
+        return { start, days: bucketDays, paid: money(part === "paid" ? amount : 0), pending: money(part === "pending" ? amount : 0), owed: money(part === "owed" ? amount : 0) };
       });
-      return { ok: true, body: { ...body, earned: money(total), previous_earned: money(scale(previousEarned, days)), currency: CURRENCY, series } };
+      return {
+        ok: true,
+        body: {
+          ...body,
+          earned: money(total),
+          previous_earned: money(scale(previousEarned, days)),
+          paid_total: money(totals.paid),
+          pending_total: money(totals.pending),
+          owed_total: money(totals.owed),
+          currency: CURRENCY,
+          series,
+        },
+      };
     },
 
     /** `GET .../score`: Northcast scored, Layerline still new with 2 finished jobs. */
