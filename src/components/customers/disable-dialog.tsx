@@ -59,7 +59,7 @@ export function StatusAction({ customer }: { customer: Customer }) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button ref={control} variant="secondary" size="icon" aria-label="More actions" className="md:size-9 pointer-coarse:size-11">
+          <Button ref={control} variant="secondary" size="icon" aria-label="More actions">
             <MoreHorizontal aria-hidden />
           </Button>
         </DropdownMenuTrigger>

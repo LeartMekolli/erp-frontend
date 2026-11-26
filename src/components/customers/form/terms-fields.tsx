@@ -12,6 +12,12 @@ const CHOICES: { value: TermsValues["terms"]; label: string }[] = [
   { value: "pay_later", label: "Pay later" },
 ];
 
+/** What each choice does to an order (erp-api's `payment-state.ts`): pay first holds it at Awaiting payment. */
+const MEANS: Record<TermsValues["terms"], string> = {
+  pay_first: "Each order waits for payment before work starts.",
+  pay_later: "Work starts without waiting for payment, which is due within the days to pay.",
+};
+
 /**
  * The Payment terms section, in a `useTermsForm` (`section-forms.ts`): pay first, or pay later with days
  * to pay and a credit limit (empty for none). The limit stays the text typed; it's sent as erp-api's
@@ -24,7 +30,7 @@ export function TermsFields({ currency }: { /** The customer's money's currency 
   const { errors, defaultValues } = useFormState({ control });
   const terms = useWatch({ control, name: "terms" });
   const clears = defaultValues?.terms === "pay_later" && terms === "pay_first";
-  const describedBy = [errors.terms ? `${id}-terms-error` : undefined, clears ? `${id}-terms-clears` : undefined].filter(Boolean).join(" ") || undefined;
+  const describedBy = [`${id}-terms-means`, errors.terms ? `${id}-terms-error` : undefined, clears ? `${id}-terms-clears` : undefined].filter(Boolean).join(" ");
 
   return (
     <div className="flex flex-col gap-4">
@@ -40,6 +46,9 @@ export function TermsFields({ currency }: { /** The customer's money's currency 
             </label>
           ))}
         </div>
+        <p id={`${id}-terms-means`} className="text-sm text-ink-2">
+          {MEANS[terms]}
+        </p>
         {errors.terms?.message && (
           <p id={`${id}-terms-error`} className="text-caption text-late">
             {errors.terms.message}

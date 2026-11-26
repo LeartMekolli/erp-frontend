@@ -66,10 +66,13 @@ export function EditDialog({
           <DialogDescription className="text-sm text-ink-2">{description}</DialogDescription>
         </div>
         <form onSubmit={submit} noValidate className="flex min-h-0 flex-1 flex-col">
-          <fieldset disabled={saving} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4.5">
-            {message && <FormMessage tone="error">{message}</FormMessage>}
-            {children}
-          </fieldset>
+          {/* The scroller is a div: a fieldset doesn't reliably shrink and scroll as a flex item, so a long form ran under the footer. */}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <fieldset disabled={saving} className="flex min-w-0 flex-col gap-4 px-5 py-4.5">
+              {message && <FormMessage tone="error">{message}</FormMessage>}
+              {children}
+            </fieldset>
+          </div>
           {asking ? (
             <div role="alertdialog" aria-labelledby={discardTitle} className="flex flex-wrap items-center justify-end gap-2 border-t border-line bg-panel-soft px-4 py-3">
               <p id={discardTitle} className="mr-auto text-sm font-medium text-ink">

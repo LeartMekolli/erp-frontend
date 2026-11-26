@@ -58,7 +58,9 @@ describe("the customer form's sections", () => {
   it("hides days and limit for pay first, and keeps them for going back", async () => {
     render(<Terms start={{ terms: "pay_later", daysToPay: "45", creditLimit: "5000.00" }} />);
     expect(screen.getByLabelText("Days to pay")).toHaveValue("45");
+    expect(screen.getByText("Work starts without waiting for payment, which is due within the days to pay.")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("radio", { name: "Pay first" }));
+    expect(screen.getByText("Each order waits for payment before work starts.")).toBeInTheDocument();
     expect(screen.queryByLabelText("Days to pay")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Credit limit (optional)")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("radio", { name: "Pay later" }));
@@ -72,7 +74,7 @@ describe("the customer form's sections", () => {
     expect(screen.queryByText(clears)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("radio", { name: "Pay first" }));
     expect(screen.getByText(clears)).toBeInTheDocument();
-    expect(screen.getByRole("radiogroup", { name: "Terms" })).toHaveAccessibleDescription(clears);
+    expect(screen.getByRole("radiogroup", { name: "Terms" })).toHaveAccessibleDescription(`Each order waits for payment before work starts. ${clears}`);
     unmount();
 
     render(<Terms start={{ terms: "pay_first", daysToPay: "30", creditLimit: "" }} />);
