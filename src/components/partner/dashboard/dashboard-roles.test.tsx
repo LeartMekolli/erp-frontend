@@ -50,7 +50,7 @@ describe("the dashboard by role", () => {
     await screen.findByRole("img", { name: "Score 4.4 out of 5" });
     await screen.findByRole("region", { name: /^Waiting for Casting/ });
     const setup = await screen.findByRole("region", { name: "Setup still to finish" });
-    await within(setup).findByText("3 of 3");
+    await within(setup).findByText("4 of 4");
 
     expect(document.body).not.toHaveTextContent(MONEY);
     const money = paths.filter((path) => /\/(owed|payouts|payout-account)$/.test(path));
@@ -70,19 +70,20 @@ describe("the dashboard by role", () => {
     ]);
   });
 
-  it("gives an admin the money tiles too, in their places", async () => {
+  it("gives an admin the earnings as the hero, and the workload as a tile further down", async () => {
     renderPage(NORTHCAST_ADMIN);
     const earned = await screen.findByRole("region", { name: "Earned · last 30 days" });
+    expect(earned).toHaveClass("lg:col-span-8");
     expect(await within(earned).findByText("Owed now")).toBeInTheDocument();
     expect(await screen.findByRole("region", { name: "Latest payouts" })).toBeInTheDocument();
     const setup = await screen.findByRole("region", { name: "Setup still to finish" });
-    expect(await within(setup).findByText("3 of 4")).toBeInTheDocument();
+    expect(await within(setup).findByText("4 of 5")).toBeInTheDocument();
     expect(within(setup).getByText("Payout account").closest("li")).toHaveTextContent("To do");
-    await screen.findByRole("region", { name: /^Waiting for Casting/ });
+    const workload = await screen.findByRole("region", { name: /^Waiting for Casting/ });
+    expect(workload).toHaveClass("lg:col-span-6");
     expect(titles()).toEqual([
-      "Waiting for Casting · last 30 days",
-      "Offers waiting for you",
       "Earned · last 30 days",
+      "Offers waiting for you",
       "In progress",
       "Late",
       "Due in 2 working days",
@@ -90,10 +91,18 @@ describe("the dashboard by role", () => {
       "Your score",
       "Pieces at your steps now",
       "Ratings",
+      "Waiting for Casting · last 30 days",
       "Latest payouts",
       "Setup still to finish",
       "Recent activity",
     ]);
+  });
+
+  it("gives an owner the same earnings hero", async () => {
+    renderPage(PARTNER);
+    await screen.findByRole("region", { name: /^Waiting for Casting/ });
+    expect(titles()[0]).toBe("Earned · last 30 days");
+    expect(titles()).not.toContain("Earned");
   });
 
   it("lists the person's newest notifications, each opening what it's about", async () => {

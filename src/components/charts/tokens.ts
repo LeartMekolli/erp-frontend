@@ -25,6 +25,8 @@ export const CHART = {
     line: "#b7aaff",
     previous: "#5a5670",
     label: "#b9b6c9",
+    /** Axis labels on a dark chart. */
+    axis: "#9e9bb0",
     better: "#6fe0b0",
     worse: "#ff9aa1",
   },

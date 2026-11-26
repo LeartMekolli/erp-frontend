@@ -126,4 +126,32 @@ describe("Columns", () => {
     // W10 sits too close to W12, so it makes way.
     expect(labels).not.toContain("W10");
   });
+
+  it("draws in the dark tone on a dark tile, with the same table", () => {
+    const { container } = render(
+      <Columns
+        label="Earned per week"
+        data={[
+          { key: "a", label: "2 Nov", values: [3, 1, 2] },
+          { key: "b", label: "9 Nov", values: [0, 4, 1] },
+        ]}
+        series={[
+          { name: "Paid out", color: CHART.ramp[2] },
+          { name: "On its way", color: CHART.ramp[3] },
+          { name: "Owed", color: CHART.ramp[0] },
+        ]}
+        height={200}
+        width={480}
+        format={format}
+        axis={axis}
+        tone="dark"
+      />,
+    );
+    const fills = Array.from(container.querySelectorAll("svg text")).map((t) => t.getAttribute("fill"));
+    expect(fills).not.toContain(CHART.axis);
+    expect(fills).toContain(CHART.dark.axis);
+    expect(container.querySelector(`svg line[stroke="${CHART.grid}"]`)).toBeNull();
+    expect(screen.getByRole("columnheader", { name: "On its way" })).toBeTruthy();
+    expect(screen.getByRole("cell", { name: "6" })).toBeTruthy();
+  });
 });
