@@ -42,7 +42,8 @@ afterEach(() => {
 });
 
 const lastList = () => lists.at(-1)!.searchParams;
-const feed = () => screen.getByRole("feed", { name: "Moves" });
+// A region, not a feed: a feed may hold only articles, and the day headings sit between them.
+const feed = () => screen.getByRole("region", { name: "Moves" });
 const moves = () => within(feed()).queryAllByRole("article");
 
 /** Opens Production on History, once its moves have loaded. */
@@ -100,9 +101,10 @@ function manyMoves(total: number) {
 }
 
 describe("Production's History", () => {
-  it("lists every move as an article in a feed, newest first under day headings", async () => {
+  it("lists every move as an article, newest first under day headings", async () => {
     northcastFails();
     await openHistory();
+    expect(screen.queryByRole("feed")).not.toBeInTheDocument();
     const headings = within(feed()).getAllByRole("heading").map((heading) => heading.textContent);
     expect(headings[0]).toBe("Today");
     expect(new Set(headings).size).toBe(headings.length);

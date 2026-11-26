@@ -203,6 +203,29 @@ test("production board: accessible and fits the screen", async ({ page }) => {
   await expect(undo).toHaveCount(0);
 });
 
+test("production history: accessible and fits the screen", async ({ page }) => {
+  await signIn(page, STAFF.email);
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+  await page.goto("/production");
+  await page.getByRole("tablist", { name: "Production views" }).getByRole("tab", { name: "History" }).click();
+  const feed = page.getByRole("region", { name: "Moves" });
+  await expect(feed.getByRole("article").first()).toBeVisible();
+  await expectAccessibleAndFits(page);
+
+  // The seed's Final QC fail opened, with its answer, photo and piece.
+  const fail = feed.getByRole("article").filter({ has: page.getByText("failed: Porosity, sent back to Finish") }).first();
+  await fail.getByRole("button", { name: /^Details:/ }).click();
+  await expect(fail.getByRole("link", { name: "#1048 · 3/12" })).toBeVisible();
+  await expectAccessibleAndFits(page);
+
+  // Below 768 px the filters are in a sheet.
+  if (page.viewportSize()!.width < 768) {
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Filters" })).toBeVisible();
+    await expectAccessibleAndFits(page);
+  }
+});
+
 test("piece history: accessible and fits the screen", async ({ page }) => {
   await openOrder(page);
   await page.getByRole("button", { name: "History of 1/12" }).click();

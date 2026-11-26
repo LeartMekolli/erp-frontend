@@ -76,7 +76,8 @@ function Moves({
 
   return (
     <>
-      <div role="feed" aria-label="Moves" aria-busy={list.isFetching}>
+      {/* A region, not a feed: a feed may hold only articles, and the day headings sit between them. */}
+      <section aria-label="Moves" aria-busy={list.isFetching}>
         {groupByDay(list.items, now, timeZone).map((day) => (
           <div key={day.key}>
             <h3 className="px-2 pt-4 pb-1 text-caption font-semibold text-ink-2">{day.heading}</h3>
@@ -87,7 +88,7 @@ function Moves({
             ))}
           </div>
         ))}
-      </div>
+      </section>
       <ListEnd list={list} />
     </>
   );

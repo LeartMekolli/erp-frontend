@@ -79,7 +79,7 @@ function passAcrossTwoLines() {
 async function openNewest(user: FakeUser = STAFF) {
   renderAs(user, <ProductionPage />);
   await userEvent.click(await screen.findByRole("tab", { name: "History" }));
-  const feed = await screen.findByRole("feed", { name: "Moves" });
+  const feed = await screen.findByRole("region", { name: "Moves" });
   const newest = (await within(feed).findAllByRole("article"))[0]!;
   await userEvent.click(within(newest).getByRole("button", { name: /^Details:/ }));
   return newest;
@@ -100,7 +100,7 @@ describe("An opened move in History", () => {
     renderAs(STAFF, <ProductionPage />);
     await userEvent.click(await screen.findByRole("tab", { name: "History" }));
     await userEvent.type(screen.getByRole("searchbox", { name: "Search order, product or customer" }), "1048");
-    const feed = await screen.findByRole("feed", { name: "Moves" });
+    const feed = await screen.findByRole("region", { name: "Moves" });
     await waitFor(() => expect(within(feed).getAllByRole("article")[0]).toHaveAccessibleName(/passed, at Final QC$/));
     const opened = within(feed).getAllByRole("article")[0]!;
     await userEvent.click(within(opened).getByRole("button", { name: /^Details:/ }));
