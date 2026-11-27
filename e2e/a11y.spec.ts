@@ -239,6 +239,32 @@ test("customer page: accessible and fits the screen", async ({ page }) => {
   await expectAccessibleAndFits(page);
 });
 
+test("new customer: accessible and fits the screen", async ({ page }) => {
+  await signIn(page, STAFF.email);
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+  await page.goto("/customers/new");
+  await expect(page.getByRole("heading", { level: 1, name: "New customer" })).toBeVisible();
+  // The group picker shows once the groups have loaded.
+  await expect(page.getByLabel("Customer group (optional)")).toBeVisible();
+  await expectAccessibleAndFits(page);
+
+  // The name warning, with its link to the customer already called that.
+  await page.getByRole("region", { name: "Customer", exact: true }).getByLabel("Name", { exact: true }).fill("Luna Jewels");
+  await expect(page.getByRole("link", { name: /^Open Luna Jewels/ })).toBeVisible();
+  await expectAccessibleAndFits(page);
+});
+
+test("new customer from new order: accessible and fits the screen", async ({ page }) => {
+  await signIn(page, STAFF.email);
+  await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();
+  await openNewOrder(page);
+  await page.getByPlaceholder("Search customers by name").fill("Atelier Nord");
+  await page.getByRole("button", { name: /^New customer/ }).click();
+  const panel = page.getByRole("dialog", { name: "New customer" });
+  await expect(panel.getByLabel("Customer group (optional)")).toBeVisible();
+  await expectAccessibleAndFits(page);
+});
+
 test("production history: accessible and fits the screen", async ({ page }) => {
   await signIn(page, STAFF.email);
   await expect(page.getByRole("heading", { level: 1, name: "Orders" })).toBeVisible();

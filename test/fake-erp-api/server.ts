@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { getResponse } from "msw";
 
 import { APP_URL } from "../../e2e/urls";
-import type { PayoutAccountState } from "../../src/lib/api/schema-types";
+import type { InvitationEmailStatus, PayoutAccountState } from "../../src/lib/api/schema-types";
 
 import { createHandlers } from "./handlers";
 import { fakeState, resetFakeState } from "./state";
@@ -26,6 +26,8 @@ import { fakeState, resetFakeState } from "./state";
  *   settle that workshop's pending payout; a failed one gives its jobs back.
  * - `POST /__payout-account/<partnerId>/<state>` sets that workshop's payout
  *   account (`not_connected`, `onboarding`, `ready` or `restricted`).
+ * - `POST /__invitation-email/<status>` sets what becomes of the next
+ *   invitation emails (`queued`, `no_customer_site` or `failed`).
  * - `POST /__expire-quotes` runs out the hold of every saved quote: placing
  *   one next answers 409 `price_changed` with a new quote at the total × 1.1.
  * - `GET /fake-provider/onboarding?partner=<partnerId>` stands in for the
@@ -113,6 +115,13 @@ createServer(async (req, res) => {
   const account = /^\/__payout-account\/([^/]+)\/(not_connected|onboarding|ready|restricted)$/.exec(url.pathname);
   if (req.method === "POST" && account) {
     fakeState().earnings.setAccount(decodeURIComponent(account[1]!), account[2] as PayoutAccountState);
+    res.writeHead(204).end();
+    return;
+  }
+
+  const invitationEmail = /^\/__invitation-email\/(queued|no_customer_site|failed)$/.exec(url.pathname);
+  if (req.method === "POST" && invitationEmail) {
+    fakeState().catalog.setInvitationEmail(invitationEmail[1] as InvitationEmailStatus);
     res.writeHead(204).end();
     return;
   }

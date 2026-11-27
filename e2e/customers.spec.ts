@@ -1,8 +1,10 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 import { LUNA_ID, MIRA_ID, STAFF } from "../test/fake-erp-api/seed";
 
 import { expect, signIn, test } from "./helpers";
+import { openNewOrder, pickCustomer, pickProduct } from "./new-order-steps";
+import { FAKE_URL } from "./urls";
 
 // Each size is set below; Safari at phone size would repeat the 375 run.
 test.skip(({ browserName }) => browserName === "webkit", "sizes are set per block");
@@ -25,6 +27,33 @@ async function openCustomer(page: Page, id: string, name: string) {
   await page.goto(`/customers/${id}`);
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
 }
+
+async function openNewCustomer(page: Page) {
+  await signedIn(page);
+  await page.goto("/customers/new");
+  await expect(page.getByRole("heading", { level: 1, name: "New customer" })).toBeVisible();
+}
+
+/**
+ * Fills New customer, on its page or in New order's panel: the name (unless it came from the search),
+ * where orders ship, and the first person's email when one is given.
+ */
+async function fillNewCustomer(form: Page | Locator, { name, email }: { name?: string; email?: string }) {
+  if (name !== undefined) await form.getByRole("region", { name: "Customer", exact: true }).getByLabel("Name", { exact: true }).fill(name);
+  const shipping = form.getByRole("region", { name: "Shipping address" });
+  await shipping.getByLabel("Name", { exact: true }).fill("Sofia Berg");
+  await shipping.getByLabel("Address line 1").fill("Storgata 4");
+  await shipping.getByLabel("City").fill("Oslo");
+  await shipping.getByLabel("Postal code").fill("0155");
+  await shipping.getByLabel("Country").fill("NO");
+  if (email !== undefined) await form.getByRole("region", { name: "First person (optional)" }).getByLabel("Email").fill(email);
+}
+
+/** The line New customer leaves on the customer's page, or under New order's chip. */
+const createdNotice = (page: Page, name: string) => page.getByRole("status").filter({ hasText: `${name} was created.` });
+
+/** A customer's page, at a plain address. */
+const CUSTOMER_PAGE = /\/customers\/[0-9a-f-]{36}$/;
 
 for (const width of [375, 768, 1280] as const) {
   test.describe(`at ${width} px`, () => {
@@ -84,8 +113,122 @@ for (const width of [375, 768, 1280] as const) {
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await expect(page).toHaveURL(new RegExp(`/customers/${LUNA_ID}$`));
     });
+
+    test("makes a customer from the list and lands on their page", async ({ page }) => {
+      await signedIn(page);
+      await page.goto("/customers");
+      await expect(page.getByRole("heading", { level: 1, name: "Customers" })).toBeVisible();
+      await page.getByRole("main").getByRole("link", { name: "New customer" }).click();
+      await expect(page.getByRole("heading", { level: 1, name: "New customer" })).toBeVisible();
+      await expect(page).toHaveURL(/\/customers\/new$/);
+
+      await fillNewCustomer(page, { name: "Atelier Nord" });
+      await page.getByRole("button", { name: "Create customer" }).click();
+      await expect(page.getByRole("heading", { level: 1, name: "Atelier Nord" })).toBeVisible();
+      await expect(page).toHaveURL(CUSTOMER_PAGE);
+      await expect(createdNotice(page, "Atelier Nord")).toBeVisible();
+    });
+
+    test("makes a customer from New order and keeps the order", async ({ page }) => {
+      await signedIn(page);
+      await page.goto("/orders/new");
+      await expect(page.getByRole("heading", { level: 1, name: "New order" })).toBeVisible();
+      await page.getByPlaceholder("Search customers by name").fill("Atelier Nord");
+      await expect(page.getByText("No customer matches “Atelier Nord”.")).toBeVisible();
+      await page.getByRole("button", { name: /^New customer/ }).click();
+
+      const panel = page.getByRole("dialog", { name: "New customer" });
+      await expect(panel.getByRole("region", { name: "Customer", exact: true }).getByLabel("Name", { exact: true })).toHaveValue("Atelier Nord");
+      // The whole screen on a phone, 560 px from a tablet up.
+      expect((await panel.boundingBox())!.width).toBeCloseTo(width < 768 ? width : 560, 0);
+
+      await fillNewCustomer(panel, {});
+      await panel.getByRole("button", { name: "Create customer" }).click();
+      await expect(panel).toHaveCount(0);
+      // Still the same order, now with the new customer picked.
+      await expect(page).toHaveURL(/\/orders\/new$/);
+      await expect(page.getByRole("heading", { level: 1, name: "New order" })).toBeVisible();
+      await expect(page.getByRole("group", { name: "Customer" }).getByText("Atelier Nord", { exact: true })).toBeVisible();
+      await expect(createdNotice(page, "Atelier Nord")).toBeVisible();
+    });
+
+    test("the New customer page has two columns from 1024px and one below", async ({ page }) => {
+      await openNewCustomer(page);
+      const shipping = page.getByRole("region", { name: "Shipping address" });
+      const invoices = page.getByRole("region", { name: "Invoices" });
+      await expect(invoices).toBeVisible();
+      const left = (await shipping.boundingBox())!;
+      const right = (await invoices.boundingBox())!;
+      if (width >= 1024) expect(right.x).toBeGreaterThanOrEqual(left.x + left.width);
+      else expect(right.x).toBeCloseTo(left.x, 0);
+      // Create stays on screen: in the sticky bar on a desktop, fixed at the bottom on a phone.
+      await expect(page.getByRole("button", { name: "Create customer" })).toBeInViewport();
+    });
   });
 }
+
+test.describe("the first person's invitation, at 1280 px", () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  test("says it's on its way", async ({ page }) => {
+    await openNewCustomer(page);
+    await fillNewCustomer(page, { name: "Halden Audio", email: "sofia@halden.example" });
+    await page.getByRole("button", { name: "Create customer" }).click();
+    await expect(page).toHaveURL(CUSTOMER_PAGE);
+    const notice = createdNotice(page, "Halden Audio");
+    await expect(notice).toContainText("An invitation is on its way to sofia@halden.example.");
+    await expect(page.getByRole("button", { name: "Send again" })).toHaveCount(0);
+  });
+
+  test("says it wasn't sent while the workspace has no customer site, and sends it again", async ({ page, request }) => {
+    await request.post(`${FAKE_URL}/__invitation-email/no_customer_site`);
+    await openNewCustomer(page);
+    await fillNewCustomer(page, { name: "Halden Audio", email: "sofia@halden.example" });
+    await page.getByRole("button", { name: "Create customer" }).click();
+    await expect(page).toHaveURL(CUSTOMER_PAGE);
+    const notice = createdNotice(page, "Halden Audio");
+    await expect(notice).toContainText("The invitation to sofia@halden.example wasn't sent");
+
+    // The workspace has a customer site now: Send again goes, and the line says so.
+    await request.post(`${FAKE_URL}/__invitation-email/queued`);
+    await page.getByRole("button", { name: "Send again" }).click();
+    await expect(notice).toContainText("An invitation is on its way to sofia@halden.example.");
+    await expect(page.getByRole("button", { name: "Send again" })).toHaveCount(0);
+  });
+
+  test("keeps the order's customer when asked, and the panel still says the new one was made", async ({ page, request }) => {
+    await request.post(`${FAKE_URL}/__invitation-email/no_customer_site`);
+    await signedIn(page);
+    await openNewOrder(page);
+    await pickCustomer(page, "Luna Jewels");
+    await pickProduct(page, "Nameplate");
+
+    await page.getByRole("button", { name: "Change the customer" }).click();
+    await page.getByPlaceholder("Search customers by name").fill("Atelier Nord");
+    await page.getByRole("button", { name: /^New customer/ }).click();
+    const panel = page.getByRole("dialog", { name: "New customer" });
+    await fillNewCustomer(panel, { email: "sofia@atelier.example" });
+    await panel.getByRole("button", { name: "Create customer" }).click();
+
+    // Picking Atelier Nord would clear the order started for Luna, so it asks; Keep leaves the order as it was.
+    await page.getByRole("dialog", { name: "Change the customer?" }).getByRole("button", { name: "Keep" }).click();
+    const notice = createdNotice(page, "Atelier Nord");
+    await expect(notice).toContainText(
+      "The invitation to sofia@atelier.example wasn't sent: its link goes to the workspace's customer site, and this workspace doesn't have one yet. Send it again here once it does, before you leave this page.",
+    );
+    const link = panel.getByRole("link", { name: "Open Atelier Nord (opens in a new tab)" });
+    await expect(link).toHaveAttribute("target", "_blank");
+    await expect(link).toHaveAttribute("href", /^\/customers\/[0-9a-f-]{36}$/);
+
+    // Close never asks to discard; the order is still Luna's, at the same address.
+    await panel.getByRole("button", { name: "Close" }).click();
+    await expect(panel).toHaveCount(0);
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+    await expect(page).toHaveURL(/\/orders\/new$/);
+    await expect(page.getByRole("group", { name: "Customer" }).getByText("Luna Jewels", { exact: true })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Product" })).toHaveValue(/.+/);
+  });
+});
 
 test.describe("with a keyboard only, at 1280 px", () => {
   test.use({ viewport: { width: 1280, height: 900 } });
@@ -108,7 +251,8 @@ test.describe("with a keyboard only, at 1280 px", () => {
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "Edit customer" });
     await expect(dialog.getByLabel("Name")).toBeFocused();
-    await page.keyboard.press("End");
+    // Radix focuses Name with its text selected; ArrowRight drops the caret at the end on every platform ("End" doesn't on macOS).
+    await page.keyboard.press("ArrowRight");
     await page.keyboard.type(" SAS");
     await dialog.getByRole("button", { name: "Save" }).focus();
     await page.keyboard.press("Enter");
