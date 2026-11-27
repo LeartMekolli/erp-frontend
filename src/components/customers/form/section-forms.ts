@@ -4,9 +4,11 @@ import { COPY } from "@/components/new-order/copy";
 import {
   addressesProblems,
   customerProblems,
+  personProblems,
   termsProblems,
   type AddressesValues,
   type CustomerValues,
+  type NewCustomerValues,
   type TermsValues,
 } from "@/lib/customers/form";
 import { ADDRESS_LIMITS, type AddressField, type AddressProblem } from "@/lib/new-order/form";
@@ -57,6 +59,17 @@ export function addressesResolver(values: AddressesValues): ResolverResult<Addre
   return settle(values, errors);
 }
 
+/** The Customer, Addresses and First person sections' problems together, for New customer's one form. */
+export function newCustomerResolver(values: NewCustomerValues): ResolverResult<NewCustomerValues> {
+  const errors: FieldErrors<NewCustomerValues> = {
+    ...customerResolver(values).errors,
+    ...addressesResolver(values).errors,
+  };
+  const { email } = personProblems(values);
+  if (email) errors.email = problem(email);
+  return settle(values, errors);
+}
+
 export function termsResolver(values: TermsValues): ResolverResult<TermsValues> {
   const errors: FieldErrors<TermsValues> = {};
   const problems = termsProblems(values);
@@ -68,5 +81,8 @@ export function termsResolver(values: TermsValues): ResolverResult<TermsValues> 
 export const useCustomerForm = (start: CustomerValues) => useForm<CustomerValues>({ ...SECTION, defaultValues: start, resolver: customerResolver });
 
 export const useAddressesForm = (start: AddressesValues) => useForm<AddressesValues>({ ...SECTION, defaultValues: start, resolver: addressesResolver });
+
+export const useNewCustomerForm = (start: NewCustomerValues) =>
+  useForm<NewCustomerValues>({ ...SECTION, defaultValues: start, resolver: newCustomerResolver });
 
 export const useTermsForm = (start: TermsValues) => useForm<TermsValues>({ ...SECTION, defaultValues: start, resolver: termsResolver });
