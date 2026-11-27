@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import { useController, useFormContext, useFormState } from "react-hook-form";
 
 import { Field } from "@/components/auth/field";
@@ -13,9 +13,9 @@ import { NAME_LIMIT, type CustomerValues } from "@/lib/customers/form";
 /**
  * The Customer section: name, group and the workshop pick, in a `useCustomerForm` (`section-forms.ts`).
  * Shown in the header's Edit, and in part 2's New customer. The group picker is left out when the
- * groups can't be read (`groups` null).
+ * groups can't be read (`groups` null). `nameNote` goes under the name: New customer's name warning.
  */
-export function CustomerFields({ groups }: { groups: CustomerGroupChoice[] | null }) {
+export function CustomerFields({ groups, nameNote }: { groups: CustomerGroupChoice[] | null; nameNote?: ReactNode }) {
   const id = useId();
   const { control, register } = useFormContext<CustomerValues>();
   const { errors } = useFormState({ control });
@@ -24,7 +24,7 @@ export function CustomerFields({ groups }: { groups: CustomerGroupChoice[] | nul
 
   return (
     <div className="flex flex-col gap-4">
-      <Field id={`${id}-name`} label="Name" error={errors.name?.message}>
+      <Field id={`${id}-name`} label="Name" error={errors.name?.message} after={nameNote}>
         {(props) => <Input {...props} {...register("name")} maxLength={NAME_LIMIT} autoComplete="off" aria-required />}
       </Field>
       {groups && (
