@@ -3,20 +3,21 @@
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { LoadFailure } from "@/components/data/load-failure";
 import { CustomerInitials } from "@/components/orders/customer-initials";
 import { useMe } from "@/components/session/session-gate";
 import { Button } from "@/components/ui/button";
 import { isApiProblem } from "@/lib/api/problem";
-import type { Customer } from "@/lib/api/schema-types";
+import type { Customer, SentInvitation } from "@/lib/api/schema-types";
 import { can, useCanPlaceOrders } from "@/lib/auth/permissions";
 import { useCustomerDetail } from "@/lib/customers/queries";
 import { LOCALE } from "@/lib/format/money";
-import { leaveArrivalNote, opensHere } from "@/lib/navigation/arrival-note";
+import { leaveArrivalNote, opensHere, useArrivalNote } from "@/lib/navigation/arrival-note";
 import { useFormat } from "@/lib/format/use-format";
 
+import { CreatedNotice } from "./created-notice";
 import { EditCustomerButton, EditDetailsButton, EditTermsButton } from "./customer-edits";
 import { CustomerStatus } from "./customer-status";
 import { DetailsPanel } from "./details-panel";
@@ -38,6 +39,12 @@ export function CustomerPage() {
   const { id } = useParams<{ id: string }>();
   const { data: me } = useMe();
   const placeOrders = useCanPlaceOrders();
+  // New customer's note for this customer, read once; kept with its id, so another customer never reads it.
+  const [arrived, setArrived] = useState<{ id: string; invitation: SentInvitation | null } | null>(null);
+  useArrivalNote(`/customers/${id}`, (note) => {
+    if (note.created) setArrived({ id, invitation: note.created.invitation });
+  });
+  const created = arrived?.id === id ? arrived : null;
   if (!me) return null;
   if (!can(me, "customer.read")) notFound();
   const access: CustomerAccess = {
@@ -47,7 +54,7 @@ export function CustomerPage() {
     editTerms: can(me, "payment.write"),
     placeOrders,
   };
-  return <CustomerView id={id} access={access} />;
+  return <CustomerView id={id} access={access} created={created} />;
 }
 
 function BackToCustomers() {
@@ -58,7 +65,7 @@ function BackToCustomers() {
   );
 }
 
-function CustomerView({ id, access }: { id: string; access: CustomerAccess }) {
+function CustomerView({ id, access, created }: { id: string; access: CustomerAccess; created: { invitation: SentInvitation | null } | null }) {
   const query = useCustomerDetail(id);
 
   if (query.isPending) {
@@ -102,6 +109,7 @@ function CustomerView({ id, access }: { id: string; access: CustomerAccess }) {
   return (
     <>
       <BackToCustomers />
+      {created && <CreatedNotice customerId={customer.id} name={customer.name} invitation={created.invitation} />}
       <Header customer={customer} access={access} newOrder={newOrder} />
       {access.readOrders ? (
         <div className="grid items-start gap-3.5 xl:grid-cols-[minmax(0,1fr)_340px]">

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 
+import type { SentInvitation } from "@/lib/api/schema-types";
 import type { SignOutReason } from "@/lib/session/client-session";
 
 /**
@@ -17,6 +18,8 @@ export type ArrivalNote = {
   piece?: string;
   /** A customer's page opened New order for them (a customer id): New order starts with them picked. */
   customer?: string;
+  /** New customer made this customer: the page says so, and what became of the first person's invitation, if any. */
+  created?: { invitation: SentInvitation | null };
   /** The payment provider's answer after payout setup. */
   onboarding?: "done" | "expired";
   /** Sign-in: why this tab was signed out. */
