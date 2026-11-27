@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "cn";
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { notFound, useRouter } from "next/navigation";
 import { useState, type MouseEvent, type ReactNode } from "react";
@@ -27,10 +28,10 @@ export function CustomersPage() {
   const { data: me } = useMe();
   if (!me) return null;
   if (!can(me, "customer.read")) notFound();
-  return <CustomersList />;
+  return <CustomersList canCreate={can(me, "customer.write")} />;
 }
 
-function CustomersList() {
+function CustomersList({ canCreate }: { canCreate: boolean }) {
   const [view, setView] = useState<CustomersView>(DEFAULT_CUSTOMERS_VIEW);
   const list = useCustomersList(view);
   const groups = useCustomerGroups();
@@ -46,7 +47,17 @@ function CustomersList() {
 
   return (
     <>
-      <h1 className="pt-1 text-title font-semibold">Customers</h1>
+      <div className="flex items-center gap-3 pt-1">
+        <h1 className="text-title font-semibold">Customers</h1>
+        {canCreate && (
+          <Button asChild className="ml-auto min-h-11 md:min-h-0">
+            <Link href="/customers/new">
+              <Plus aria-hidden />
+              New customer
+            </Link>
+          </Button>
+        )}
+      </div>
       <section aria-label="Customers" className="flex flex-col rounded-[20px] bg-card p-2 md:p-3">
         <div className="border-b border-line px-1 pt-1 pb-3">
           {wide ? <WideCustomersFilters {...filterProps} /> : <PhoneCustomersFilters {...filterProps} />}
