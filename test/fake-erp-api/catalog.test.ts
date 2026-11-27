@@ -5,7 +5,8 @@ import type { Address, CatalogProduct, Customer, CustomerAddresses, SpeedChoice 
 import { CAST_RING_ID, DRAFT_PRODUCT_ID, GIFT_SET_ID, LUNA_LOGO_ID, NAMEPLATE_ID, TRADE_GROUP_ID } from "./catalog";
 import type { Answer, Page } from "./orders";
 import { CUSTOMERS } from "./orders-seed";
-import { FAKE_API_URL, FAKE_PASSWORD, LUNA_ID, MIRA_ID, ORDER_TAKER, WORKSPACE, type FakeUser } from "./seed";
+import { search } from "./search";
+import { FAKE_API_URL, FAKE_PASSWORD, LUNA_ID, MIRA_ID, ORDER_TAKER, STAFF, WORKSPACE, type FakeUser } from "./seed";
 import { fakeState } from "./state";
 
 async function get(user: FakeUser, path: string) {
@@ -114,6 +115,38 @@ describe("fake erp-api customer list", () => {
     expect(refusedPaths(list({ q: "   " }))).toEqual(["q"]);
   });
 
+  it("matches the whole name in any case, never a part of it", () => {
+    expect(names(list({ name: " luna JEWELS " }))).toEqual(["Luna Jewels"]);
+    expect(names(list({ name: "Luna" }))).toEqual([]);
+    expect(names(list({ name: "Luna Jewels Atelier" }))).toEqual([]);
+  });
+
+  it("keeps accents apart and takes % and _ as they are", () => {
+    fakeState().catalog.create({ name: "Café Nord" }, null, "staff-1");
+    expect(names(list({ name: "Cafe Nord" }))).toEqual([]);
+    expect(names(list({ name: "CAFÉ NORD" }))).toEqual(["Café Nord"]);
+    expect(names(list({ name: "Caf% Nord" }))).toEqual([]);
+    expect(names(list({ name: "Caf_ Nord" }))).toEqual([]);
+  });
+
+  it("finds an older exact match past newer partial ones, with a limit of 1", () => {
+    fakeState().catalog.create({ name: "Luna Jewels Atelier" }, null, "staff-1");
+    fakeState().catalog.create({ name: "Luna Jewels Studio" }, null, "staff-1");
+    expect(names(list({ name: "Luna Jewels", limit: "1" }))).toEqual(["Luna Jewels"]);
+  });
+
+  it("matches the whole name together with the other filters", () => {
+    expect(names(list({ name: "Old Works", status: "disabled" }))).toEqual(["Old Works"]);
+    expect(names(list({ name: "Old Works", status: "active" }))).toEqual([]);
+    expect(names(list({ name: "Luna Jewels", customer_group: TRADE_GROUP_ID }))).toEqual(["Luna Jewels"]);
+  });
+
+  it("refuses a whole name over 200 characters or of spaces only", () => {
+    expect(refusedPaths(list({ name: "x".repeat(201) }))).toEqual(["name"]);
+    expect(refusedPaths(list({ name: "   " }))).toEqual(["name"]);
+    expect(names(list({ name: "x".repeat(200) }))).toEqual([]);
+  });
+
   it("narrows by status, group and band", () => {
     expect(names(list({ status: "disabled" }))).toEqual(["Old Works"]);
     expect(names(list({ status: "active" }))).not.toContain("Old Works");
@@ -197,6 +230,120 @@ describe("fake erp-api customer changes", () => {
     expect(fakeState().catalog.update(unknown, { name: "X" })).toMatchObject({ ok: false, status: 404 });
     expect(fakeState().catalog.setAddresses(unknown, {})).toMatchObject({ ok: false, status: 404 });
     expect(fakeState().catalog.setTerms(unknown, { terms: "pay_first" })).toMatchObject({ ok: false, status: 404 });
+  });
+});
+
+describe("creating a customer", () => {
+  const FRANCE: Address = { name: "Atelier Nord", line1: "4 rue du Port", city: "Nantes", postal_code: "44000", country: "FR" };
+  const UNKNOWN_GROUP = "9a9a9a9a-0000-4000-8000-000000000000";
+
+  it("makes a pay-first customer with its addresses, first in the list", () => {
+    const answer = fakeState().catalog.create({ name: " Atelier Nord ", shipping_address: FRANCE, vat_number: "FR11" }, null, "staff-1");
+    expect(answer).toMatchObject({ ok: true, body: { name: "Atelier Nord", customer_group: null, may_pick_partner: false, payment_terms: { terms: "pay_first" } } });
+    const id = answer.ok ? answer.body.id : "";
+    const listed = list();
+    expect(listed.ok && listed.body.data[0]?.id).toBe(id);
+    const addresses = fakeState().catalog.addresses(id);
+    expect(addresses.ok && addresses.body).toEqual({ shipping_address: FRANCE, billing_address: null, vat_number: "FR11" });
+    const money = fakeState().catalog.money(id);
+    expect(money.ok && money.body).toMatchObject({ terms: "pay_first", exposure: "0.00" });
+  });
+
+  it("refuses a blank name, a bad email and an unknown role with their paths", () => {
+    const answer = fakeState().catalog.create({ name: "  ", invitation: { email: "nope", role: "boss" } }, null, "staff-1");
+    expect(answer).toMatchObject({ ok: false, status: 400 });
+    expect(refusedPaths(answer)).toEqual(["name", "invitation.email", "invitation.role"]);
+  });
+
+  it("answers 404 for a group that isn't the workspace's", () => {
+    expect(fakeState().catalog.create({ name: "Atelier Nord", customer_group_id: UNKNOWN_GROUP }, null, "staff-1")).toMatchObject({ ok: false, status: 404 });
+  });
+
+  it("answers 409 on invitation.email for a staff member's email", () => {
+    const answer = fakeState().catalog.create({ name: "Atelier Nord", invitation: { email: STAFF.email, role: "owner" } }, null, "staff-1");
+    expect(answer).toMatchObject({ ok: false, status: 409 });
+    expect(!answer.ok && answer.status === 409 && answer.errors?.[0]?.path).toBe("invitation.email");
+    expect(names(list())).not.toContain("Atelier Nord");
+  });
+
+  it("keeps the first invitation and the group", () => {
+    const answer = fakeState().catalog.create({ name: "Halden Audio", customer_group_id: TRADE_GROUP_ID, invitation: { email: " Anna@Halden.Example.Test ", role: "buyer" } }, null, "staff-1");
+    expect(answer.ok && answer.body.customer_group).toMatchObject({ key: "trade" });
+    expect(fakeState().catalog.invitations()).toEqual([{ customerId: answer.ok ? answer.body.id : "", email: "anna@halden.example.test", role: "buyer" }]);
+  });
+
+  it("replays the same key and input, and refuses the key with other input", () => {
+    const before = names(list()).length;
+    const first = fakeState().catalog.create({ name: "Atelier Nord" }, "key-1", "staff-1");
+    const again = fakeState().catalog.create({ name: "Atelier Nord" }, "key-1", "staff-1");
+    expect(first.ok && again.ok && again.body.id).toBe(first.ok ? first.body.id : "");
+    expect(names(list()).length).toBe(before + 1);
+    expect(fakeState().catalog.create({ name: "Halden Audio" }, "key-1", "staff-1")).toMatchObject({ ok: false, status: 409, code: "idempotency_key_reused" });
+  });
+
+  it("finds a new customer in the search", () => {
+    fakeState().catalog.create({ name: "Atelier Nord" }, null, "staff-1");
+    const found = search(STAFF, "atelier", [], fakeState().catalog.names());
+    expect(found.customers.map((customer) => customer.name)).toEqual(["Atelier Nord"]);
+  });
+
+  it("answers invitation null without one, and the invitation with its email queued with one", () => {
+    const none = fakeState().catalog.create({ name: "Atelier Nord" }, null, "staff-1");
+    expect(none.ok && none.body.invitation).toBeNull();
+    const before = Date.now();
+    const some = fakeState().catalog.create({ name: "Halden Audio", invitation: { email: "anna@halden.example.test", role: "buyer" } }, null, "staff-1");
+    expect(some.ok && some.body.invitation).toMatchObject({ email: "anna@halden.example.test", role: "buyer", email_status: "queued" });
+    const expires = some.ok && some.body.invitation ? Date.parse(some.body.invitation.expires_at) : 0;
+    expect(expires).toBeGreaterThanOrEqual(before + 7 * 24 * 60 * 60 * 1000);
+  });
+
+  it("says the email wasn't sent once the workspace is set to have no customer site", () => {
+    fakeState().catalog.setInvitationEmail("no_customer_site");
+    const answer = fakeState().catalog.create({ name: "Atelier Nord", invitation: { email: "sofia@atelier.example", role: "owner" } }, null, "staff-1");
+    expect(answer.ok && answer.body.invitation?.email_status).toBe("no_customer_site");
+  });
+
+  it("replays the whole answer, invitation included", () => {
+    const body = { name: "Atelier Nord", invitation: { email: "sofia@atelier.example", role: "owner" } };
+    const first = fakeState().catalog.create(body, "key-2", "staff-1");
+    const again = fakeState().catalog.create(body, "key-2", "staff-1");
+    expect(again.ok && again.body).toEqual(first.ok && first.body);
+    expect(fakeState().catalog.invitations()).toHaveLength(1);
+  });
+});
+
+describe("inviting someone to a customer", () => {
+  const SOFIA = { email: "sofia@atelier.example", role: "owner" };
+
+  it("replaces the invitation to the same email and answers what became of its email", () => {
+    const created = fakeState().catalog.create({ name: "Atelier Nord", invitation: SOFIA }, null, "staff-1");
+    const id = created.ok ? created.body.id : "";
+    fakeState().catalog.setInvitationEmail("failed");
+    const again = fakeState().catalog.invite(id, { email: " Sofia@Atelier.Example ", role: "admin" }, null, "staff-1");
+    expect(again).toMatchObject({ ok: true, body: { email: "sofia@atelier.example", role: "admin", email_status: "failed" } });
+    expect(fakeState().catalog.invitations()).toEqual([{ customerId: id, email: "sofia@atelier.example", role: "admin" }]);
+  });
+
+  it("replays the same key and input", () => {
+    const first = fakeState().catalog.invite(LUNA_ID, SOFIA, "key-3", "staff-1");
+    const again = fakeState().catalog.invite(LUNA_ID, SOFIA, "key-3", "staff-1");
+    expect(again.ok && again.body).toEqual(first.ok && first.body);
+    expect(fakeState().catalog.invite(LUNA_ID, { ...SOFIA, role: "buyer" }, "key-3", "staff-1")).toMatchObject({ ok: false, status: 409, code: "idempotency_key_reused" });
+  });
+
+  it("answers 404 for a customer that doesn't exist", () => {
+    expect(fakeState().catalog.invite("9a9a9a9a-0000-4000-8000-000000000001", SOFIA, null, "staff-1")).toMatchObject({ ok: false, status: 404 });
+  });
+
+  it("refuses a bad email and an unknown role with their paths", () => {
+    expect(refusedPaths(fakeState().catalog.invite(LUNA_ID, { email: "nope", role: "boss" }, null, "staff-1"))).toEqual(["email", "role"]);
+  });
+
+  it("answers 409 on email for a staff member's email", () => {
+    const answer = fakeState().catalog.invite(LUNA_ID, { email: STAFF.email, role: "owner" }, null, "staff-1");
+    expect(answer).toMatchObject({ ok: false, status: 409 });
+    expect(!answer.ok && answer.status === 409 && answer.errors?.[0]?.path).toBe("email");
+    expect(fakeState().catalog.invitations()).toEqual([]);
   });
 });
 

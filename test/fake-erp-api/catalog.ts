@@ -11,19 +11,22 @@ import type {
   Address,
   BandChoice,
   CatalogProduct,
+  CreatedCustomer,
   Customer,
   CustomerAddresses,
   CustomerGroupChoice,
   CustomerInvoice,
   CustomerMoney,
+  InvitationEmailStatus,
   Order,
   OptionGroup,
+  SentInvitation,
   SpeedChoice,
 } from "../../src/lib/api/schema-types";
 
 import type { Answer, FieldError, Page } from "./orders";
 import { CUSTOMERS } from "./orders-seed";
-import { LUNA_ID, MIRA_ID, OLD_WORKS_ID, WORKSPACE_INFO } from "./seed";
+import { LUNA_ID, MIRA_ID, OLD_WORKS_ID, USERS, WORKSPACE_INFO } from "./seed";
 
 /** The workspace's currency, which every customer's money is in (`workspace-currency.ts`, erp-api PR #39). */
 const CURRENCY = WORKSPACE_INFO.default_currency;
@@ -294,6 +297,36 @@ const CUSTOMER_NOT_FOUND = { ok: false, status: 404, detail: "Customer not found
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** erp-api's credit limit (`payment-response.ts:44-47`). */
 const AMOUNT = /^\d{1,16}(\.\d{1,2})?$/;
+/** An email, as far as these tests need (`identity/email.ts:4`). */
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Roles inside a customer organisation (`customer-roles.ts:2`). */
+const CUSTOMER_ROLES: readonly string[] = ["viewer", "buyer", "admin", "owner"];
+/** How long an invitation holds (`identity/invitations.ts`, `INVITATION_DAYS`). */
+const INVITATION_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Someone to invite, as erp-api's `inviteSchema` reads them (`customers.service.ts:37`). */
+type Invitee = { email: string; role: SentInvitation["role"] };
+
+/** erp-api's `inviteSchema`: the email trimmed and lower-cased, and a customer role; errors' paths start with `prefix`. */
+function inviteeOf(given: unknown, prefix: string): Invitee | { errors: FieldError[] } {
+  if (!isObject(given)) return { errors: [{ path: prefix ? prefix.slice(0, -1) : "", message: "Expected an object" }] };
+  const errors: FieldError[] = [];
+  const email = typeof given.email === "string" ? given.email.trim().toLowerCase() : null;
+  if (email === null || email.length > 320 || !EMAIL.test(email)) errors.push({ path: `${prefix}email`, message: "Invalid email address" });
+  const role = typeof given.role === "string" && CUSTOMER_ROLES.includes(given.role) ? (given.role as Invitee["role"]) : null;
+  if (role === null) errors.push({ path: `${prefix}role`, message: 'Expected "viewer", "buyer", "admin" or "owner"' });
+  return errors.length > 0 || email === null || role === null ? { errors } : { email, role };
+}
+
+const isStaffEmail = (email: string) => USERS.some((user) => user.kind === "staff" && user.email.toLowerCase() === email);
+
+/** A staff email can't act for a customer: a 409 naming the email field at `path`. */
+const staffEmailRefusal = (path: string): Answer<never> => ({
+  ok: false,
+  status: 409,
+  detail: "That email already has an account",
+  errors: [{ path, message: "That email already has an account" }],
+});
 
 const invalid = (errors: FieldError[]) => ({ ok: false, status: 400, errors }) as const;
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -337,9 +370,21 @@ const fromCents = (value: number) => `${Math.floor(value / 100)}.${String(value 
  */
 export function createCatalogStore(orders: () => Order[] = () => []) {
   const customers = seedCustomers();
+  const keys = new Map<string, { input: string; body: CreatedCustomer }>();
+  const inviteKeys = new Map<string, { input: string; body: SentInvitation }>();
+  const invited: { customerId: string; email: string; role: string; invitedBy: string }[] = [];
+  let emailStatus: InvitationEmailStatus = "queued";
+
+  /** Saves the invitation, replacing an earlier one to the same email, and answers it with what became of its email. */
+  function invite(customerId: string, { email, role }: Invitee, invitedBy: string): SentInvitation {
+    const earlier = invited.findIndex((entry) => entry.customerId === customerId && entry.email === email);
+    if (earlier !== -1) invited.splice(earlier, 1);
+    invited.push({ customerId, email, role, invitedBy });
+    return { id: crypto.randomUUID(), email, role, expires_at: new Date(Date.now() + INVITATION_MS).toISOString(), email_status: emailStatus };
+  }
 
   return {
-    /** `GET /customers`: newest first, searched by name and narrowed by status, group (or none) and band. */
+    /** `GET /customers`: newest first, searched by name or matched on the whole name, and narrowed by status, group (or none) and band. */
     list(params: URLSearchParams): Answer<Page<Customer>> {
       const errors: FieldError[] = [];
       const limit = Number(params.get("limit") ?? 50);
@@ -349,6 +394,10 @@ export function createCatalogStore(orders: () => Order[] = () => []) {
       const rawQ = params.get("q");
       const q = rawQ === null ? null : trimmed(rawQ, 100);
       if (rawQ !== null && q === null) errors.push({ path: "q", message: "Must be 1 to 100 characters" });
+      // The whole name, in any case but not ignoring accents, every character literal (erp-api PR #41).
+      const rawName = params.get("name");
+      const exactName = rawName === null ? null : trimmed(rawName, 200);
+      if (rawName !== null && exactName === null) errors.push({ path: "name", message: "Must be 1 to 200 characters" });
       const status = params.get("status");
       if (status !== null && status !== "active" && status !== "disabled") errors.push({ path: "status", message: 'Expected "active" or "disabled"' });
       const group = params.get("customer_group");
@@ -364,6 +413,7 @@ export function createCatalogStore(orders: () => Order[] = () => []) {
         .filter(
           (view) =>
             (q === null || view.name.toLowerCase().includes(q.toLowerCase())) &&
+            (exactName === null || view.name.localeCompare(exactName, undefined, { sensitivity: "accent" }) === 0) &&
             (status === null || view.status === status) &&
             (group === null || (group === "none" ? view.customer_group === null : view.customer_group?.id === group)) &&
             (band === null || view.band.key === band),
@@ -383,6 +433,105 @@ export function createCatalogStore(orders: () => Order[] = () => []) {
     /** `GET /customers/bands`: the default band first. */
     bands(): Answer<{ data: BandChoice[] }> {
       return { ok: true, body: { data: structuredClone(BANDS) } };
+    },
+
+    /**
+     * `POST /customers` (`customers.service.ts:38-51`, `:150-200`): a pay-first customer on the default plan,
+     * with the addresses and first invitation the body names. Unknown keys are dropped, as `z.object` does;
+     * `payment_terms` is never read, as AMI doesn't send it. The same key and input replays the first answer.
+     */
+    create(body: unknown, key: string | null, invitedBy: string): Answer<CreatedCustomer> {
+      const input = JSON.stringify(body);
+      const seen = key ? keys.get(key) : undefined;
+      if (seen) {
+        return seen.input === input
+          ? { ok: true, body: structuredClone(seen.body) }
+          : { ok: false, status: 409, code: "idempotency_key_reused", detail: "Idempotency key reused with a different request" };
+      }
+      if (!isObject(body)) return invalid([{ path: "", message: "Expected an object" }]);
+
+      const errors: FieldError[] = [];
+      const name = trimmed(body.name, 200);
+      if (name === null) errors.push({ path: "name", message: "Must be 1 to 200 characters" });
+      const groupId = body.customer_group_id;
+      if (groupId !== undefined && (typeof groupId !== "string" || !UUID.test(groupId))) errors.push({ path: "customer_group_id", message: "Expected a group id" });
+      if (body.may_pick_partner !== undefined && typeof body.may_pick_partner !== "boolean") errors.push({ path: "may_pick_partner", message: "Expected a boolean" });
+      for (const part of ["shipping_address", "billing_address"] as const) {
+        if (body[part] !== undefined && body[part] !== null) errors.push(...addressErrors(body[part], part));
+      }
+      const vat = body.vat_number === undefined || body.vat_number === null ? null : trimmed(body.vat_number, 40);
+      if (vat === null && body.vat_number !== undefined && body.vat_number !== null) errors.push({ path: "vat_number", message: "Must be 1 to 40 characters" });
+
+      let invitation: Invitee | null = null;
+      if (body.invitation !== undefined) {
+        const given = inviteeOf(body.invitation, "invitation.");
+        if ("errors" in given) errors.push(...given.errors);
+        else if (errors.length === 0) invitation = given;
+      }
+      if (errors.length > 0) return invalid(errors);
+
+      const group = typeof groupId === "string" ? GROUPS.find((choice) => choice.id === groupId) : undefined;
+      if (typeof groupId === "string" && !group) return { ok: false, status: 404, detail: "Customer group not found" };
+      // An email that already belongs to staff can't be invited (`:62-75`, `:182-187`).
+      if (invitation && isStaffEmail(invitation.email)) return staffEmailRefusal("invitation.email");
+
+      // Always the newest, so it heads the list whatever the clock says.
+      const latest = [...customers.values()].reduce((max, record) => (record.view.created_at > max ? record.view.created_at : max), "");
+      const now = new Date().toISOString();
+      const createdAt = now > latest ? now : new Date(Date.parse(latest) + 1).toISOString();
+      const id = crypto.randomUUID();
+      const record = customer(id, name as string, {
+        customer_group: group ? { ...group } : null,
+        may_pick_partner: body.may_pick_partner === true,
+        member_count: 0,
+        created_at: createdAt,
+      });
+      record.addresses = {
+        shipping_address: isObject(body.shipping_address) ? structuredClone(body.shipping_address as unknown as Address) : null,
+        billing_address: isObject(body.billing_address) ? structuredClone(body.billing_address as unknown as Address) : null,
+        vat_number: vat,
+      };
+      customers.set(id, record);
+      const created: CreatedCustomer = { ...structuredClone(record.view), invitation: invitation ? invite(id, invitation, invitedBy) : null };
+      if (key) keys.set(key, { input, body: structuredClone(created) });
+      return { ok: true, body: created };
+    },
+
+    /**
+     * `POST /customers/{id}/invitations` (`customer-invitations.service.ts`, `inviteAndReport`): invites
+     * someone by email, or the same email again, which replaces the earlier invitation. The answer's
+     * `email_status` is what `setInvitationEmail` chose. The same key and input replays the first answer.
+     */
+    invite(customerId: string, body: unknown, key: string | null, invitedBy: string): Answer<SentInvitation> {
+      const input = JSON.stringify({ customerId, body });
+      const seen = key ? inviteKeys.get(key) : undefined;
+      if (seen) {
+        return seen.input === input
+          ? { ok: true, body: structuredClone(seen.body) }
+          : { ok: false, status: 409, code: "idempotency_key_reused", detail: "Idempotency key reused with a different request" };
+      }
+      if (!customers.has(customerId)) return CUSTOMER_NOT_FOUND;
+      const given = inviteeOf(body, "");
+      if ("errors" in given) return invalid(given.errors);
+      if (isStaffEmail(given.email)) return staffEmailRefusal("email");
+      const sent = invite(customerId, given, invitedBy);
+      if (key) inviteKeys.set(key, { input, body: structuredClone(sent) });
+      return { ok: true, body: sent };
+    },
+
+    /** What becomes of the next invitation emails (`email_status`); "queued" until a test says otherwise. */
+    setInvitationEmail(status: InvitationEmailStatus): void {
+      emailStatus = status;
+    },
+
+    /** The invitations `create` and `invite` took, one per customer and email, for tests to read. */
+    invitations(): { customerId: string; email: string; role: string }[] {
+      return invited.map(({ customerId, email, role }) => ({ customerId, email, role }));
+    },
+
+    /** Every customer's id and name, for `GET /search`. */
+    names(): { id: string; name: string }[] {
+      return [...customers.values()].map(({ view }) => ({ id: view.id, name: view.name }));
     },
 
     /** `PATCH /customers/{id}`: only the fields sent change; unknown keys are dropped, as `z.object` does. */

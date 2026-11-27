@@ -7,7 +7,6 @@
 
 import type { Order, SearchResponse } from "../../src/lib/api/schema-types";
 
-import { CUSTOMERS } from "./orders-seed";
 import { PARTNER_NAMES, type FakeUser } from "./seed";
 
 const LIMIT = 5;
@@ -21,7 +20,7 @@ export const ARTICLES = [
 const contains = (name: string, q: string) => name.toLowerCase().includes(q.toLowerCase());
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
 
-export function search(user: FakeUser, q: string, orders: Order[]): SearchResponse {
+export function search(user: FakeUser, q: string, orders: Order[], customers: { id: string; name: string }[]): SearchResponse {
   const may = (permission: FakeUser["permissions"][number]) => user.permissions.includes(permission);
   return {
     orders:
@@ -33,7 +32,7 @@ export function search(user: FakeUser, q: string, orders: Order[]): SearchRespon
             .map(({ id, number, customer }) => ({ id, number, customer: { ...customer } }))
         : [],
     customers: may("customer.read")
-      ? Object.values(CUSTOMERS).filter((c) => contains(c.name, q)).map((c) => ({ ...c })).sort(byName).slice(0, LIMIT)
+      ? customers.filter((c) => contains(c.name, q)).map(({ id, name }) => ({ id, name })).sort(byName).slice(0, LIMIT)
       : [],
     partners: may("partner.read")
       ? Object.entries(PARTNER_NAMES).map(([id, name]) => ({ id, name })).filter((p) => contains(p.name, q)).sort(byName).slice(0, LIMIT)
