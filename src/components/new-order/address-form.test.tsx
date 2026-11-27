@@ -10,12 +10,13 @@ import { AddressForm } from "./address-form";
 
 let latest: Address = EMPTY_ADDRESS;
 
-function Harness({ errors }: { errors?: Partial<Record<AddressField, string>> }) {
+function Harness({ errors, compact }: { errors?: Partial<Record<AddressField, string>>; compact?: boolean }) {
   const [value, setValue] = useState<Address>(EMPTY_ADDRESS);
   return (
     <AddressForm
       value={value}
       errors={errors}
+      compact={compact}
       onChange={(next) => {
         latest = next;
         setValue(next);
@@ -25,6 +26,25 @@ function Harness({ errors }: { errors?: Partial<Record<AddressField, string>> })
 }
 
 describe("AddressForm", () => {
+  it("puts Phone after Name in the compact layout", () => {
+    render(<Harness compact />);
+    expect(screen.getAllByRole("textbox").map((input) => input.id.replace(/^.*-/, ""))).toEqual([
+      "name",
+      "phone",
+      "line1",
+      "line2",
+      "city",
+      "postal_code",
+      "region",
+      "country",
+    ]);
+  });
+
+  it("keeps the default order without compact", () => {
+    render(<Harness />);
+    expect(screen.getAllByRole("textbox").map((input) => input.id.replace(/^.*-/, "")).at(1)).toBe("line1");
+  });
+
   it("asks for each field with erp-api's limits", () => {
     render(<Harness />);
     const limits: [string, string][] = [

@@ -271,6 +271,18 @@ export type OptionGroup = JsonOk<"/catalog/option-groups", "get">["data"][number
 /** `GET /customers/{id}`: a customer with its group, payment terms and plan. */
 export type Customer = JsonOk<"/customers/{id}", "get">;
 
+/** `POST /customers`: a customer made in one go, with its addresses and a first person to invite. */
+export type CustomerCreate = JsonBody<"/customers", "post">;
+
+/** That post's 201: the customer, with the first person's invitation when the body asked for one (else null). */
+export type CreatedCustomer = JsonCreated<"/customers", "post">;
+
+/** An invitation staff just made, from `POST /customers` or `POST /customers/{id}/invitations`, with what became of its email. */
+export type SentInvitation = NonNullable<CreatedCustomer["invitation"]>;
+
+/** What became of an invitation's email: queued for sending, not sent for want of a customer site, or not sent. */
+export type InvitationEmailStatus = SentInvitation["email_status"];
+
 /** `GET /customers/{id}/addresses`: the saved shipping and billing addresses. */
 export type CustomerAddresses = JsonOk<"/customers/{id}/addresses", "get">;
 

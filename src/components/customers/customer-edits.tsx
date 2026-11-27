@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { FormProvider, type Path } from "react-hook-form";
+import { FormProvider } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import type { Customer, CustomerAddresses } from "@/lib/api/schema-types";
@@ -17,14 +17,13 @@ import {
   type TermsValues,
 } from "@/lib/customers/form";
 import { useCustomerAddressBook, useCustomerGroups, useSetAddresses, useSetTerms, useUpdateCustomer } from "@/lib/customers/queries";
-import { ADDRESS_FIELDS, type AddressField } from "@/lib/new-order/form";
 
 import { EditDialog } from "./edit-dialog";
 import { AddressesFields } from "./form/addresses-fields";
 import { CustomerFields } from "./form/customer-fields";
 import { useAddressesForm, useCustomerForm, useTermsForm } from "./form/section-forms";
 import { TermsFields } from "./form/terms-fields";
-import { applySaveErrors } from "./save-errors";
+import { addressesPath, applySaveErrors } from "./save-errors";
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -127,21 +126,6 @@ export function EditDetailsButton({ customer }: { customer: Customer }) {
       render={(close) => book.data && <EditDetailsDialog customer={customer} saved={book.data} onClose={close} />}
     />
   );
-}
-
-const isAddressField = (field: string | undefined): field is AddressField => (ADDRESS_FIELDS as readonly string[]).includes(field ?? "");
-
-/**
- * erp-api's `shipping_address.city` as the form's shipping city, `vat_number` as its VAT. A billing
- * field while "Bill to the shipping address" is ticked isn't on screen, so it's null and said above.
- */
-function addressesPath(path: string, values: AddressesValues): Path<AddressesValues> | null {
-  if (path === "vat_number") return "vat";
-  const [address, field] = path.split(".");
-  if (!isAddressField(field)) return null;
-  if (address === "shipping_address") return `shipping.${field}`;
-  if (address === "billing_address" && !values.billToShipping) return `billing.${field}`;
-  return null;
 }
 
 function EditDetailsDialog({ customer, saved, onClose }: { customer: Customer; saved: CustomerAddresses; onClose: () => void }) {

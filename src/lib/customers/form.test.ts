@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Address, Customer, CustomerAddresses } from "@/lib/api/schema-types";
+import { EMPTY_ADDRESS } from "@/lib/new-order/form";
 
 import {
   addressesBody,
@@ -9,6 +10,9 @@ import {
   customerBody,
   customerProblems,
   customerValues,
+  EMPTY_NEW_CUSTOMER,
+  newCustomerBody,
+  personProblems,
   termsBody,
   termsProblems,
   termsValues,
@@ -33,6 +37,49 @@ const LYON: Address = { name: "Luna Jewels", line1: "12 rue des Orfèvres", city
 const VIENNA: Address = { name: "Luna Jewels GmbH", line1: "Ringstraße 4", city: "Wien", postal_code: "1010", region: "Wien", country: "AT" };
 
 const SAVED: CustomerAddresses = { shipping_address: LYON, billing_address: VIENNA, vat_number: "FR00123456789" };
+
+describe("New customer", () => {
+  it("sends only what was filled in, never payment terms", () => {
+    expect(newCustomerBody({ ...EMPTY_NEW_CUSTOMER, name: " Atelier Nord " })).toEqual({ name: "Atelier Nord" });
+
+    const body = newCustomerBody({
+      ...EMPTY_NEW_CUSTOMER,
+      name: "Halden Audio",
+      groupId: TRADE.id,
+      mayPickPartner: true,
+      shipping: { ...EMPTY_ADDRESS, ...LYON },
+      billToShipping: false,
+      billing: { ...EMPTY_ADDRESS, ...VIENNA },
+      vat: " FR11 ",
+      email: " Sofia@Halden.Example ",
+      role: "owner",
+    });
+    expect(body).toEqual({
+      name: "Halden Audio",
+      customer_group_id: TRADE.id,
+      may_pick_partner: true,
+      shipping_address: LYON,
+      billing_address: VIENNA,
+      vat_number: "FR11",
+      invitation: { email: "sofia@halden.example", role: "owner" },
+    });
+    expect(body).not.toHaveProperty("payment_terms");
+  });
+
+  it("leaves the billing address out while it follows the shipping address", () => {
+    const body = newCustomerBody({ ...EMPTY_NEW_CUSTOMER, name: "Halden Audio", billing: { ...EMPTY_ADDRESS, ...VIENNA } });
+    expect(body).toEqual({ name: "Halden Audio" });
+  });
+
+  it("checks the first person's email only when one is typed", () => {
+    const message = "Enter an email such as name@example.com";
+    expect(personProblems({ email: "", role: "owner" })).toEqual({});
+    expect(personProblems({ email: "  ", role: "owner" })).toEqual({});
+    expect(personProblems({ email: "sofia@halden.example", role: "buyer" })).toEqual({});
+    expect(personProblems({ email: "sofia", role: "owner" })).toEqual({ email: message });
+    expect(personProblems({ email: `${"a".repeat(310)}@halden.example`, role: "owner" })).toEqual({ email: message });
+  });
+});
 
 describe("the Customer section", () => {
   it("sends only the name when only the name changed", () => {

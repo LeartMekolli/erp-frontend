@@ -4,7 +4,7 @@
  * clears another's fields.
  */
 
-import type { Address, AddressesUpdate, Customer, CustomerAddresses, CustomerUpdate, PaymentTermsBody } from "@/lib/api/schema-types";
+import type { Address, AddressesUpdate, Customer, CustomerAddresses, CustomerCreate, CustomerUpdate, PaymentTermsBody } from "@/lib/api/schema-types";
 import { type AddressField, type AddressProblem, ADDRESS_FIELDS, addressProblems, EMPTY_ADDRESS, orderAddress } from "@/lib/new-order/form";
 
 /** The Customer section: what `PATCH /customers/{id}` changes, apart from the status. */
@@ -30,6 +30,36 @@ export interface TermsValues {
   daysToPay: string;
   creditLimit: string;
 }
+
+/** What a person invited to a customer may do (`customer-roles.ts:2`). */
+export type CustomerRole = "viewer" | "buyer" | "admin" | "owner";
+
+/** The roles in the order the form lists them. */
+export const CUSTOMER_ROLES: readonly CustomerRole[] = ["owner", "admin", "buyer", "viewer"];
+
+/** The First person section: who gets an invitation email once the customer is created. A blank email means no invitation. */
+export interface PersonValues {
+  email: string;
+  role: CustomerRole;
+}
+
+/** New customer's form: the Customer, Addresses and First person sections side by side (their field names don't overlap). */
+export type NewCustomerValues = CustomerValues & AddressesValues & PersonValues;
+
+export const EMPTY_NEW_CUSTOMER: NewCustomerValues = {
+  name: "",
+  groupId: null,
+  mayPickPartner: false,
+  shipping: EMPTY_ADDRESS,
+  billToShipping: true,
+  billing: EMPTY_ADDRESS,
+  vat: "",
+  email: "",
+  role: "owner",
+};
+
+/** erp-api's longest email (`identity/email.ts:4`). */
+export const EMAIL_LIMIT = 320;
 
 /** erp-api's longest name and VAT number (`customers.service.ts:33`, `addresses.ts:12`). */
 export const NAME_LIMIT = 200;
@@ -91,7 +121,7 @@ export function addressesProblems(values: AddressesValues): AddressesProblems {
 }
 
 /** An address as erp-api takes it, or null for none. Throws on an address `addressesProblems` would refuse. */
-function sent(address: Address): Address | null {
+export function sentAddress(address: Address): Address | null {
   if (isBlank(address)) return null;
   const value = orderAddress(address);
   if (value === null) throw new Error("Check the address with addressesProblems before sending it");
@@ -106,13 +136,40 @@ const same = (a: Address | null, b: Address | null) => JSON.stringify(a) === JSO
  */
 export function addressesBody(before: AddressesValues, after: AddressesValues): AddressesUpdate {
   const body: AddressesUpdate = {};
-  const shipping = sent(after.shipping);
-  if (!same(sent(before.shipping), shipping)) body.shipping_address = shipping;
-  const billingOf = (values: AddressesValues) => (values.billToShipping ? null : sent(values.billing));
+  const shipping = sentAddress(after.shipping);
+  if (!same(sentAddress(before.shipping), shipping)) body.shipping_address = shipping;
+  const billingOf = (values: AddressesValues) => (values.billToShipping ? null : sentAddress(values.billing));
   const billing = billingOf(after);
   if (!same(billingOf(before), billing)) body.billing_address = billing;
   const vat = after.vat.trim() || null;
   if (vat !== (before.vat.trim() || null)) body.vat_number = vat;
+  return body;
+}
+
+/** What's wrong with the First person section; a blank email is fine (no invitation). */
+export function personProblems(values: PersonValues): Partial<Record<"email", string>> {
+  const email = values.email.trim();
+  if (email === "") return {};
+  if (email.length > EMAIL_LIMIT || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { email: "Enter an email such as name@example.com" };
+  return {};
+}
+
+/**
+ * What `POST /customers` takes: only what was filled in, so erp-api's defaults apply to the rest.
+ * Never `payment_terms`: a new customer starts on pay first. Throws on an address `addressesProblems` would refuse.
+ */
+export function newCustomerBody(values: NewCustomerValues): CustomerCreate {
+  const body: CustomerCreate = { name: values.name.trim() };
+  if (values.groupId !== null) body.customer_group_id = values.groupId;
+  if (values.mayPickPartner) body.may_pick_partner = true;
+  const shipping = sentAddress(values.shipping);
+  if (shipping !== null) body.shipping_address = shipping;
+  const billing = values.billToShipping ? null : sentAddress(values.billing);
+  if (billing !== null) body.billing_address = billing;
+  const vat = values.vat.trim();
+  if (vat !== "") body.vat_number = vat;
+  const email = values.email.trim().toLowerCase();
+  if (email !== "") body.invitation = { email, role: values.role };
   return body;
 }
 

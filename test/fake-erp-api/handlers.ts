@@ -752,6 +752,13 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
     }),
 
+    http.post("/customers", async ({ request, response }) => {
+      const caller = staffWith(request, "customer.write");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().catalog.create(await request.json(), request.headers.get("idempotency-key"), caller.id);
+      return answer.ok ? response(201).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
     // Before `/customers/{id}`, which would take "groups" and "bands" for an id.
     http.get("/customers/groups", ({ request, response }) => {
       const caller = staffWith(request, "customer.read");
@@ -793,6 +800,13 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       if (caller instanceof Response) return response.untyped(caller);
       const answer = fakeState().catalog.setAddresses(params.id, await request.json());
       return answer.ok ? response(200).json(answer.body) : response.untyped(refusal(answer));
+    }),
+
+    http.post("/customers/{id}/invitations", async ({ request, params, response }) => {
+      const caller = staffWith(request, "customer.write");
+      if (caller instanceof Response) return response.untyped(caller);
+      const answer = fakeState().catalog.invite(params.id, await request.json(), request.headers.get("idempotency-key"), caller.id);
+      return answer.ok ? response(201).json(answer.body) : response.untyped(refusal(answer));
     }),
 
     http.put("/customers/{id}/payment-terms", async ({ request, params, response }) => {
@@ -901,7 +915,7 @@ export function createHandlers(baseUrl: string): HttpHandler[] {
       if (q.length < 1 || q.length > 100)
         return response.untyped(validation([{ path: "q", message: "must be 1 to 100 characters" }]));
       if (user.kind !== "staff") return response.untyped(problem(403, "Search is for staff"));
-      return response(200).json(search(user, q, fakeState().orders.all()));
+      return response(200).json(search(user, q, fakeState().orders.all(), fakeState().catalog.names()));
     }),
 
     http.post("/ai/ask", async ({ request, response }) => {

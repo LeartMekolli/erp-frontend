@@ -439,7 +439,7 @@ export interface paths {
         put?: never;
         /**
          * Create a customer organisation (a brand, or one person on their own), with its addresses, payment terms and first invitation if given.
-         * @description Everything is saved together or not at all; the invitation email goes out once it is saved. `payment_terms` needs `payment.write` (403 without). A refused invitation, or pay later the plan does not allow, is a 409 whose `errors` name the field, such as `invitation.email` or `payment_terms.terms`.
+         * @description Everything is saved together or not at all; the invitation email goes out once it is saved. `payment_terms` needs `payment.write` (403 without). A refused invitation, or pay later the plan does not allow, is a 409 whose `errors` name the field, such as `invitation.email` or `payment_terms.terms`. `invitation` is null when the body asked for none. The invitation's `email_status` says what became of its email; a background worker sends it, so even `queued` does not mean it reached the inbox. `queued`: stored and queued, the worker sends it and retries a failed send. `no_customer_site`: not sent, since customer emails link to the workspace's customer site and it has none. `failed`: not sent, raising the email failed after the invitation was saved. The invitation is saved in every case; inviting the same email again replaces it and tries the email again.
          *
          *     Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
          *
@@ -533,7 +533,7 @@ export interface paths {
         put?: never;
         /**
          * Invite someone by email to act for the customer, with the role they get on accepting.
-         * @description The token goes only to the invitee's inbox; the link points at the workspace's customer site when it has one. Someone who already acts for another customer of the workspace accepts without a new password. Refused with 409 for a staff email, someone already acting for the customer, or a second owner; its `errors` name the field: `email`, or `role` for a second owner. The plan's member limit is a 409 on `email` too.
+         * @description The token goes only to the invitee's inbox, by a link to the workspace's customer site. Someone who already acts for another customer of the workspace accepts without a new password. Refused with 409 for a staff email, someone already acting for the customer, or a second owner; its `errors` name the field: `email`, or `role` for a second owner. The plan's member limit is a 409 on `email` too. The invitation's `email_status` says what became of its email; a background worker sends it, so even `queued` does not mean it reached the inbox. `queued`: stored and queued, the worker sends it and retries a failed send. `no_customer_site`: not sent, since customer emails link to the workspace's customer site and it has none. `failed`: not sent, raising the email failed after the invitation was saved. The invitation is saved in every case; inviting the same email again replaces it and tries the email again.
          *
          *     Accepts an `Idempotency-Key` header (1–255 visible ASCII characters): a repeat with the same key and request replays the first response; the same key with a different request is a 409.
          *
@@ -8237,6 +8237,16 @@ export interface operations {
                             name: string;
                         };
                         created_at: string;
+                        invitation: {
+                            /** Format: uuid */
+                            id: string;
+                            email: string;
+                            /** @enum {string} */
+                            role: "viewer" | "buyer" | "admin" | "owner";
+                            expires_at: string;
+                            /** @enum {string} */
+                            email_status: "queued" | "no_customer_site" | "failed";
+                        } | null;
                     };
                 };
             };
@@ -8601,6 +8611,8 @@ export interface operations {
                         /** @enum {string} */
                         role: "viewer" | "buyer" | "admin" | "owner";
                         expires_at: string;
+                        /** @enum {string} */
+                        email_status: "queued" | "no_customer_site" | "failed";
                     };
                 };
             };

@@ -21,6 +21,27 @@ export const COPY = {
     change: "Change",
     /** Change's accessible name: it starts with the visible word, and isn't confused with the address's Change. */
     changeLabel: "Change the customer",
+    /** Under "No customer matches", for staff who may make customers: "New customer “Atelier Nord”". */
+    newCustomer: "New customer",
+    newCustomerTyped: (text: string) => `“${text}”`,
+  },
+  /** The side panel that makes a customer from the search's typed text. */
+  newCustomer: {
+    title: "New customer",
+    description: "Picked for this order once it's created. The order stays as it is.",
+    close: "Close",
+    cancel: "Cancel",
+    discard: {
+      title: "Discard this customer?",
+      keep: "Keep editing",
+      discard: "Discard",
+    },
+    /** Created, while the order kept the customer it had. */
+    created: {
+      description: "The order keeps its customer unless you use this one.",
+      use: "Use for this order",
+      close: "Close",
+    },
   },
   /** Asked before another customer clears what was entered for this one. */
   changeCustomer: {

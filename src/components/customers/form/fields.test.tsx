@@ -1,14 +1,16 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { FormProvider } from "react-hook-form";
 import { describe, expect, it } from "vitest";
 
 import type { CustomerGroupChoice } from "@/lib/api/schema-types";
-import { addressesValues, type AddressesValues, type CustomerValues, type TermsValues } from "@/lib/customers/form";
+import { addressesValues, EMPTY_NEW_CUSTOMER, type AddressesValues, type CustomerValues, type TermsValues } from "@/lib/customers/form";
 
-import { AddressesFields } from "./addresses-fields";
+import { AddressesFields, InvoicesFields, ShippingFields } from "./addresses-fields";
 import { CustomerFields } from "./customer-fields";
-import { useAddressesForm, useCustomerForm, useTermsForm } from "./section-forms";
+import { PersonFields } from "./person-fields";
+import { useAddressesForm, useCustomerForm, useNewCustomerForm, useTermsForm } from "./section-forms";
 import { TermsFields } from "./terms-fields";
 
 const TRADE: CustomerGroupChoice = { id: "a4a4a4a4-0000-4000-8000-000000000010", key: "trade", name: "Trade" };
@@ -29,6 +31,11 @@ function Terms({ start }: { start: TermsValues }) {
       <TermsFields currency="EUR" />
     </FormProvider>
   );
+}
+
+function NewCustomer({ children }: { children: ReactNode }) {
+  const form = useNewCustomerForm(EMPTY_NEW_CUSTOMER);
+  return <FormProvider {...form}>{children}</FormProvider>;
 }
 
 const LUNA: CustomerValues = { name: "Luna Jewels", groupId: TRADE.id, mayPickPartner: true };
@@ -53,6 +60,44 @@ describe("the customer form's sections", () => {
     expect(within(billing).getByLabelText("Address line 1")).toBeInTheDocument();
     expect(screen.getByLabelText("VAT number (optional)")).not.toHaveAttribute("aria-required");
     expect(screen.getByLabelText("VAT number (optional)")).toHaveAttribute("maxLength", "40");
+  });
+
+  it("asks for a valid email only once one is typed, and offers four roles with Owner first", async () => {
+    render(<NewCustomer>{<PersonFields />}</NewCustomer>);
+    const email = screen.getByLabelText("Email");
+    await userEvent.click(email);
+    await userEvent.tab();
+    expect(screen.queryByText("Enter an email such as name@example.com")).not.toBeInTheDocument();
+
+    await userEvent.type(email, "sofia");
+    await userEvent.tab();
+    expect(await screen.findByText("Enter an email such as name@example.com")).toBeInTheDocument();
+    expect(email).toHaveAttribute("aria-invalid", "true");
+
+    const role = screen.getByLabelText("Role");
+    expect(within(role).getAllByRole("option").map((option) => option.textContent)).toEqual(["Owner", "Admin", "Buyer", "Viewer"]);
+    expect(role).toHaveValue("owner");
+    expect(screen.getByText("They'll get an email to set up their access, once the customer is created.")).toBeInTheDocument();
+  });
+
+  it("shows the shipping and invoice sections on their own", () => {
+    const { unmount } = render(
+      <NewCustomer>
+        <ShippingFields />
+      </NewCustomer>,
+    );
+    expect(screen.getByRole("group", { name: "Shipping address" })).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Bill to the shipping address" })).not.toBeInTheDocument();
+    unmount();
+
+    render(
+      <NewCustomer>
+        <InvoicesFields />
+      </NewCustomer>,
+    );
+    expect(screen.queryByRole("group", { name: "Shipping address" })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Bill to the shipping address" })).toBeInTheDocument();
+    expect(screen.getByLabelText("VAT number (optional)")).toBeInTheDocument();
   });
 
   it("hides days and limit for pay first, and keeps them for going back", async () => {

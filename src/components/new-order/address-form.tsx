@@ -14,6 +14,11 @@ const OPTIONAL: ReadonlySet<AddressField> = new Set<AddressField>(OPTIONAL_ADDRE
 /** Fields given the whole width from a tablet up; the others share a row in pairs. */
 const WIDE: ReadonlySet<AddressField> = new Set(["name", "line1", "line2"]);
 
+/** The compact layout's order, which is its visual order: Name beside Phone, the lines, then one row of four. */
+const COMPACT_ORDER: readonly AddressField[] = ["name", "phone", "line1", "line2", "city", "postal_code", "region", "country"];
+/** Fields that take half the compact row. */
+const HALF: ReadonlySet<AddressField> = new Set(["name", "phone", "line1", "line2"]);
+
 function problemText(problem: AddressProblem, field: AddressField): string {
   if (problem === "missing") return COPY.delivery.problems.missing;
   if (problem === "country") return COPY.delivery.problems.country;
@@ -29,15 +34,19 @@ export function AddressForm({
   value,
   onChange,
   errors = {},
+  compact = false,
 }: {
   value: Address;
   onChange: (next: Address) => void;
   /** erp-api's reasons for refusing a field, by field. */
   errors?: Partial<Record<AddressField, string>>;
+  /** From a tablet up, a four-column grid: Name beside Phone, line 1 beside line 2, then City, Postal code, Region and Country in one row. */
+  compact?: boolean;
 }) {
   const id = useId();
   const [left, setLeft] = useState<ReadonlySet<AddressField>>(() => new Set());
   const problems = addressProblems(value);
+  const fields: readonly AddressField[] = compact ? COMPACT_ORDER : ADDRESS_FIELDS;
 
   function change(field: AddressField, text: string) {
     onChange({ ...value, [field]: field === "country" ? text.toUpperCase() : text });
@@ -48,15 +57,15 @@ export function AddressForm({
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {ADDRESS_FIELDS.map((field) => {
+    <div className={cn("grid gap-3", compact ? "md:grid-cols-[1.4fr_1fr_1fr_0.8fr]" : "sm:grid-cols-2")}>
+      {fields.map((field) => {
         const inputId = `${id}-${field}`;
         const problem = problems[field];
         const message = errors[field] ?? (problem && left.has(field) ? problemText(problem, field) : undefined);
         const messageId = message ? `${inputId}-problem` : undefined;
         const hintId = field === "country" ? `${inputId}-hint` : undefined;
         return (
-          <div key={field} className={cn("flex min-w-0 flex-col gap-1.5", WIDE.has(field) && "sm:col-span-2")}>
+          <div key={field} className={cn("flex min-w-0 flex-col gap-1.5", compact ? HALF.has(field) && "md:col-span-2" : WIDE.has(field) && "sm:col-span-2")}>
             <Label htmlFor={inputId}>{COPY.delivery.fields[field]}</Label>
             <Input
               id={inputId}

@@ -3,9 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CustomerMoney, Order } from "@/lib/api/schema-types";
+import type { CustomerMoney, InvitationEmailStatus, Order, SentInvitation } from "@/lib/api/schema-types";
 
-import { resetArrivalNotes } from "@/lib/navigation/arrival-note";
+import { leaveArrivalNote, resetArrivalNotes } from "@/lib/navigation/arrival-note";
 
 import { takeArrivalNote } from "../../../test/arrival-note";
 import { CUSTOMERS } from "../../../test/fake-erp-api/orders-seed";
@@ -36,7 +36,26 @@ vi.mock("next/navigation", () => ({
 }));
 
 beforeEach(() => navigation.notFound.mockReset());
-afterEach(() => resetArrivalNotes());
+afterEach(() => {
+  resetArrivalNotes();
+  vi.restoreAllMocks();
+});
+
+/** Sofia's invitation as New customer hands it over, with what became of its email. */
+const invitation = (email_status: InvitationEmailStatus): SentInvitation => ({
+  id: "5e5e5e5e-0000-4000-8000-000000000001",
+  email: "sofia@atelier.example",
+  role: "owner",
+  expires_at: "2026-12-04T09:00:00.000Z",
+  email_status,
+});
+
+/** The live region that says the customer was created. */
+async function createdStatus(): Promise<HTMLElement> {
+  const status = (await screen.findByText("Luna Jewels was created.")).closest<HTMLElement>("[role=status]");
+  expect(status).not.toBeNull();
+  return status!;
+}
 
 const FAILED = (status: number) => HttpResponse.json({ type: "about:blank", title: "Error", status }, { status });
 
@@ -230,6 +249,86 @@ describe("CustomerPage", () => {
     link.addEventListener("click", (event) => event.preventDefault());
     fireEvent.click(link, { metaKey: true });
     expect(takeArrivalNote("/orders/new")).toBeNull();
+  });
+
+  it("says nothing about being created when opened another way", async () => {
+    open(LUNA_ID);
+    await screen.findByRole("heading", { level: 1, name: "Luna Jewels" });
+    expect(screen.queryByText(/was created/)).not.toBeInTheDocument();
+  });
+
+  it("says it was created, and who was invited, when New customer sent us here", async () => {
+    leaveArrivalNote(`/customers/${LUNA_ID}`, { created: { invitation: invitation("queued") } });
+    open(LUNA_ID);
+    const status = await createdStatus();
+    expect(status).toHaveTextContent("Luna Jewels was created.");
+    expect(status).toHaveTextContent("An invitation is on its way to sofia@atelier.example.");
+    expect(screen.queryByRole("button", { name: "Send again" })).not.toBeInTheDocument();
+  });
+
+  it("says only that it was created when nobody was invited", async () => {
+    leaveArrivalNote(`/customers/${LUNA_ID}`, { created: { invitation: null } });
+    open(LUNA_ID);
+    const status = await createdStatus();
+    expect(status).toHaveTextContent(/^Luna Jewels was created\.$/);
+    expect(screen.queryByRole("button", { name: "Send again" })).not.toBeInTheDocument();
+  });
+
+  it("says the invitation wasn't sent without a customer site, and sends it again", async () => {
+    leaveArrivalNote(`/customers/${LUNA_ID}`, { created: { invitation: invitation("no_customer_site") } });
+    open(LUNA_ID);
+    const status = await createdStatus();
+    expect(status).toHaveTextContent(
+      "The invitation to sofia@atelier.example wasn't sent: its link goes to the workspace's customer site, and this workspace doesn't have one yet. Send it again here once it does, before you leave this page.",
+    );
+    expect(status.querySelector("svg")).toHaveAttribute("aria-hidden");
+
+    fakeState().catalog.setInvitationEmail("queued");
+    await userEvent.click(screen.getByRole("button", { name: "Send again" }));
+
+    await waitFor(() => expect(status).toHaveTextContent("An invitation is on its way to sofia@atelier.example."));
+    expect(status).not.toHaveTextContent("wasn't sent");
+    expect(screen.queryByRole("button", { name: "Send again" })).not.toBeInTheDocument();
+    // Send again went with the answer, so focus is on the notice, not lost to the page body.
+    expect(status.parentElement).toHaveFocus();
+    expect(fakeState().catalog.invitations()).toEqual([{ customerId: LUNA_ID, email: "sofia@atelier.example", role: "owner" }]);
+  });
+
+  it("says Sending… while it sends again, and shows a second refusal again", async () => {
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    server.use(
+      http.post(`${FAKE_API_URL}/customers/:id/invitations`, async () => {
+        await held;
+        return HttpResponse.json(invitation("failed"), { status: 201 });
+      }),
+    );
+    leaveArrivalNote(`/customers/${LUNA_ID}`, { created: { invitation: invitation("failed") } });
+    open(LUNA_ID);
+    const status = await createdStatus();
+    expect(status).toHaveTextContent("The invitation to sofia@atelier.example couldn't be sent.");
+
+    await userEvent.click(screen.getByRole("button", { name: "Send again" }));
+    const sending = await screen.findByRole("button", { name: "Sending…" });
+    expect(sending).toBeDisabled();
+    expect(sending).toHaveAttribute("aria-busy", "true");
+
+    release();
+    expect(await screen.findByRole("button", { name: "Send again" })).toBeEnabled();
+    expect(status).toHaveTextContent("The invitation to sofia@atelier.example couldn't be sent.");
+  });
+
+  it("says when Send again got no answer while offline, and keeps the button", async () => {
+    server.use(http.post(`${FAKE_API_URL}/customers/:id/invitations`, () => HttpResponse.error(), { once: true }));
+    leaveArrivalNote(`/customers/${LUNA_ID}`, { created: { invitation: invitation("failed") } });
+    open(LUNA_ID);
+    await createdStatus();
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+
+    await userEvent.click(screen.getByRole("button", { name: "Send again" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("You're offline. Check your connection and try again.");
+    expect(screen.getByRole("button", { name: "Send again" })).toBeEnabled();
   });
 
   it("offers no New order on a disabled customer, and says why", async () => {

@@ -99,7 +99,7 @@ describe("CustomersPage", () => {
 
     await userEvent.selectOptions(screen.getByLabelText("Group"), "");
     await userEvent.selectOptions(screen.getByLabelText("Band"), "gold");
-    await waitFor(() => expect(screen.getAllByRole("link")).toHaveLength(1));
+    await waitFor(() => expect(within(screen.getByRole("table")).getAllByRole("link")).toHaveLength(1));
     expect(screen.getByRole("link", { name: "Mira Studio" })).toBeInTheDocument();
   });
 
@@ -179,6 +179,15 @@ describe("CustomersPage", () => {
     expect(await screen.findByRole("link", { name: "Old Works" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Filters · 1" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: "Filters · 1" })).toHaveFocus());
+  });
+
+  it("offers New customer only with customer.write", async () => {
+    const { unmount } = renderAs(STAFF, <CustomersPage />);
+    expect(await screen.findByRole("link", { name: "New customer" })).toHaveAttribute("href", "/customers/new");
+    unmount();
+    renderAs(SALES_LEAD, <CustomersPage />);
+    await screen.findByRole("link", { name: "Luna Jewels" });
+    expect(screen.queryByRole("link", { name: "New customer" })).not.toBeInTheDocument();
   });
 
   it("gives focus back to Filters when the sheet is closed with Escape", async () => {

@@ -3,23 +3,29 @@
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
+import { idempotencyHeader } from "@/lib/api/idempotency";
 import { problemFrom } from "@/lib/api/problem";
 import type {
   AddressesUpdate,
   BandChoice,
+  CreatedCustomer,
   Customer,
   CustomerAddresses,
+  CustomerCreate,
   CustomerGroupChoice,
   CustomerListQuery,
   CustomerMoney,
   CustomerUpdate,
   Order,
   PaymentTermsBody,
+  SentInvitation,
 } from "@/lib/api/schema-types";
 import { newOrderKeys } from "@/lib/new-order/queries";
 import { useApiMutation } from "@/lib/query/use-api-mutation";
 import { useCursorList } from "@/lib/query/use-cursor-list";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 
+import type { CustomerRole } from "./form";
 import { customersQuery, type CustomersView } from "./view";
 
 const LIST_PAGE = 50;
@@ -32,6 +38,7 @@ export const customersKeys = {
   addresses: (id: string) => ["customers", "addresses", id] as const,
   money: (id: string) => ["customers", "money", id] as const,
   orders: (id: string) => ["customers", "orders", id] as const,
+  nameTaken: (name: string) => ["customers", "name-taken", name] as const,
   groups: ["customers", "groups"] as const,
   bands: ["customers", "bands"] as const,
 };
@@ -131,6 +138,63 @@ export function useBands() {
       return data.data;
     },
   });
+}
+
+/**
+ * Makes a customer with its addresses and first person in one `POST /customers`. A retry of the same input
+ * reuses the `Idempotency-Key`, so erp-api makes one customer. Customers and the search read it afterwards.
+ */
+export function useCreateCustomer() {
+  const client = useQueryClient();
+  return useApiMutation<CustomerCreate, CreatedCustomer>(
+    async (body, key) => {
+      const { data, error, response } = await api.POST("/customers", { body, params: { header: idempotencyHeader(key) } });
+      if (!data) throw problemFrom(error, response);
+      return data;
+    },
+    { onSuccess: () => Promise.all([refresh(client), client.invalidateQueries({ queryKey: ["search"] })]) },
+  );
+}
+
+/**
+ * Invites someone to act for the customer, or invites the same email again, which replaces the earlier
+ * invitation and tries its email again. A retry of the same input reuses the `Idempotency-Key`.
+ * The answer's `email_status` says what became of the email.
+ */
+export function useSendInvitation(customerId: string) {
+  return useApiMutation<{ email: string; role: CustomerRole }, SentInvitation>(async (body, key) => {
+    const { data, error, response } = await api.POST("/customers/{id}/invitations", {
+      params: { path: { id: customerId }, header: idempotencyHeader(key) },
+      body,
+    });
+    if (!data) throw problemFrom(error, response);
+    return data;
+  });
+}
+
+/**
+ * The newest customer already named `name`, active or disabled, once the name has settled for 400 ms and has
+ * at least 2 characters; otherwise null. erp-api's `name` filter matches the whole name, in any case but
+ * not ignoring accents, so its first answer is the match. Its key holds the settled name, so an older answer
+ * never shows for newer text. It's a one-off hint, so a failed check isn't asked again and a settled one
+ * isn't refetched every minute.
+ */
+export function useNameTaken(name: string): Customer | null {
+  const settled = useDebouncedValue(name.trim(), 400);
+  const checkable = settled.length >= 2;
+  const { data } = useQuery({
+    queryKey: customersKeys.nameTaken(settled),
+    queryFn: async () => {
+      const { data, error, response } = await api.GET("/customers", { params: { query: { name: settled, limit: 1 } } });
+      if (!data) throw problemFrom(error, response);
+      return data.data;
+    },
+    enabled: checkable,
+    retry: false,
+    refetchInterval: false,
+  });
+  if (!checkable || settled !== name.trim()) return null;
+  return data?.[0] ?? null;
 }
 
 /** Changes the name, status, group or workshop pick; only what's sent changes. A PATCH, so no `Idempotency-Key`. */
